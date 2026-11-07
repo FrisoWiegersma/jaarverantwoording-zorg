@@ -57,15 +57,14 @@ export function trendSeries(rows: Figure[]) {
   return [...rows].sort((a, b) => a.year - b.year);
 }
 
-/** The question for a comparison over the latest years both filed; a short range keeps the answer quick. */
-export function compareQuestion(a: { name: string; years: number[] }, b: { name: string; years: number[] }, what: string) {
-  const both = a.years.filter((y) => b.years.includes(y));
-  if (!both.length) return `Vergelijk ${what} van ${a.name} en ${b.name} in hun laatste jaarverslagen.`;
-  const last = Math.max(...both);
-  const first = Math.max(Math.min(...both), last - 3);
-  return first < last
-    ? `Vergelijk ${what} van ${a.name} en ${b.name} van ${first} tot en met ${last} in een grafiek.`
-    : `Vergelijk ${what} van ${a.name} en ${b.name} in ${last}.`;
+/** The question for a comparison over the latest years all of them filed; a short range keeps the answer quick. */
+export function compareQuestion(orgs: { name: string; years: number[] }[], what: string) {
+  const names = `${orgs.slice(0, -1).map((o) => o.name).join(", ")} en ${orgs.at(-1)?.name}`;
+  const all = orgs[0].years.filter((y) => orgs.every((o) => o.years.includes(y)));
+  if (!all.length) return `Vergelijk ${what} van ${names} in hun laatste jaarverslagen.`;
+  const last = Math.max(...all);
+  const first = Math.max(Math.min(...all), last - 3);
+  return first < last ? `Vergelijk ${what} van ${names} van ${first} tot en met ${last} in een grafiek.` : `Vergelijk ${what} van ${names} in ${last}.`;
 }
 
 /** A chart group that compares organisations: two to four of them (one line and colour each), one row per organisation

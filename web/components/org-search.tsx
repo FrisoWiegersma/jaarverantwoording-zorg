@@ -1,15 +1,15 @@
 "use client";
 
 /**
- * Find an organisation by name, in a dialog over the page: in the header (⌘K) to open its page, and on an organisation's
- * page to compare it with another one.
+ * Find an organisation by name, in a dialog over the page: in the header (⌘K) to open its page, and to add one to a
+ * comparison.
  */
 
-import { ArrowRightLeft, Building2, Search } from "lucide-react";
+import { Building2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { compareQuestion } from "@/lib/rich-answer";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import ActionSearchBar, { type CommandItem, isPaletteCombo, Kbd, useIsMac } from "@/components/kokonutui/action-search-bar";
+import { cn } from "@/lib/utils";
 
 export type Org = { org_id: string; name: string; town: string | null; years: number[] };
 type Status = "hint" | "searching" | "none" | "error" | "done";
@@ -26,7 +26,7 @@ function OrgDialog({ label, placeholder, chooseLabel, exclude, item, onSelect, o
   label: string;
   placeholder: string;
   chooseLabel: string;
-  exclude?: string;
+  exclude?: string[];
   item: (org: Org) => CommandItem;
   onSelect: (value: string) => void;
   onClose: () => void;
@@ -63,7 +63,7 @@ function OrgDialog({ label, placeholder, chooseLabel, exclude, item, onSelect, o
         try {
           const r = await fetch(`/digimv/search?q=${encodeURIComponent(term)}&limit=8`, { signal: ctl.signal });
           if (!r.ok) throw new Error(String(r.status));
-          const orgs: Org[] = (await r.json()).filter((o: Org) => o.years.length > 0 && o.org_id !== exclude);
+          const orgs: Org[] = (await r.json()).filter((o: Org) => o.years.length > 0 && !exclude?.includes(o.org_id));
           setItems(orgs.map(item));
           setStatus(orgs.length ? "done" : "none");
         } catch {
@@ -169,49 +169,37 @@ export function OrgSearch() {
   );
 }
 
-const FIGURES = [
-  { key: "omzet", label: "Omzet", what: "de omzet" },
-  { key: "resultaat", label: "Resultaat", what: "het resultaat" },
-  { key: "eigen-vermogen", label: "Eigen vermogen", what: "het eigen vermogen" },
-  { key: "personeel", label: "Personeel in fte", what: "het personeel in fte" },
-];
+/** The comparison page for these organisations, in this order. */
+export const comparePath = (ids: string[]) => `/vergelijk/${ids.map(encodeURIComponent).join("/")}`;
 
-/** "Vergelijk met…": choose another organisation, then a figure, and the comparison is asked. */
-export function CompareWith({ org, onAsk }: { org: Org; onAsk: (question: string) => void }) {
+/** A button that asks for one more organisation and opens the comparison with it: "Vergelijk met…", "Toevoegen". */
+export function CompareWith({ ids, label, children, className }: { ids: string[]; label: string; children: ReactNode; className?: string }) {
+  const router = useRouter();
   const { open, setOpen, trigger, close } = useDialog();
-  const item = useCallback(
-    (other: Org): CommandItem => {
-      const both = org.years.filter((y) => other.years.includes(y));
-      return {
-        ...base(other),
-        detail: [other.town, both.length ? `samen ${span(both)}` : "geen jaar samen"].filter(Boolean).join(" · "),
-        placeholder: "Welk cijfer?",
-        children: FIGURES.map((f) => ({ id: `${other.org_id}-${f.key}`, label: f.label, value: compareQuestion(org, other, f.what) })),
-      };
-    },
-    [org]
-  );
+  const item = useCallback((other: Org): CommandItem => ({ ...base(other), value: comparePath([...ids, other.org_id]) }), [ids]);
   return (
     <>
       <button
         aria-haspopup="dialog"
-        className="raised inline-flex min-h-11 items-center gap-2 rounded-full px-4 transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "raised inline-flex min-h-11 items-center gap-2 rounded-full px-4 transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+          className
+        )}
         onClick={() => setOpen(true)}
         ref={trigger}
         type="button"
       >
-        <ArrowRightLeft aria-hidden="true" className="size-[18px]" />
-        Vergelijk met…
+        {children}
       </button>
       {open && (
         <OrgDialog
           chooseLabel="Vergelijken"
-          exclude={org.org_id}
+          exclude={ids}
           item={item}
-          label={`Vergelijk ${org.name} met`}
+          label={label}
           onClose={close}
-          onSelect={onAsk}
-          placeholder="Vergelijk met welke organisatie?"
+          onSelect={(path) => router.push(path)}
+          placeholder="Naam van de organisatie…"
         />
       )}
     </>

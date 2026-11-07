@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, CornerDownLeft, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, CornerDownLeft, FileText } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { CitationChip } from "@/components/answer";
 import { CitationPreviewProvider } from "@/components/citation-preview";
 import { Evidence } from "@/components/evidence";
@@ -11,22 +11,7 @@ import MetricCard, { type TrendPoint } from "@/components/kokonutui/metric-card"
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
 import { CompareWith, type Org, OrgSearch } from "@/components/org-search";
-import { type Citation, citationKey, parseHref } from "@/lib/citations";
-
-type Doc = { year: number; id: number; type: string; file_name: string; published: string | null };
-type Field = { label: string; value: string; unit: string; var: string };
-type Year = { year: number; consolidated: boolean; figures: Record<string, Field> };
-
-// The questionnaire's structured figures start in 2020; 2019 is only in the reports themselves.
-const FIGURES_FROM = 2020;
-const METRICS = [
-  { key: "omzet", label: "Omzet", unit: "euro" },
-  { key: "resultaat", label: "Resultaat", unit: "euro" },
-  { key: "eigen_vermogen", label: "Eigen vermogen", unit: "euro" },
-  { key: "totaal_activa", label: "Balanstotaal", unit: "euro" },
-  { key: "fte", label: "Personeel in fte", unit: "fte" },
-  { key: "personen", label: "Medewerkers, gemiddeld", unit: "personen" },
-];
+import { citationOf, dutch, METRICS, useKeyFigures } from "@/lib/key-figures";
 
 /** Questions the agent answers well, over the latest years filed; ranges stay short so answers stay quick. */
 function questions({ name, years }: Org) {
@@ -40,16 +25,6 @@ function questions({ name, years }: Org) {
   ];
 }
 
-const dutch = (value: string) => Number(value).toLocaleString("nl-NL", { maximumFractionDigits: 2 });
-
-/** The cited questionnaire field, as an answer would cite it: the label and the value as filed. */
-function citationOf(orgId: string, year: number, f: Field): Citation {
-  const href = `/bron/vragenlijst/${year}/${encodeURIComponent(orgId)}/${encodeURIComponent(f.var)}`;
-  const label = f.label.split(" › ").at(-2) ?? f.label;
-  const quote = `${label.length > 60 ? `${label.slice(0, 59)}…` : label} ${f.value}`;
-  return { ...parseHref(href)!, key: citationKey(href, quote), href, quote };
-}
-
 export function ProfileView() {
   const { id } = useParams<{ id: string }>();
   // Another organisation is another page: nothing carries over.
@@ -58,38 +33,15 @@ export function ProfileView() {
 
 function Profile({ id }: { id: string }) {
   const router = useRouter();
-  const [org, setOrg] = useState<(Org & { former_names: string[]; documents: Doc[] }) | "missing" | "error" | null>(null);
-  const [years, setYears] = useState<Record<number, Year | "error">>({});
+  const [{ org, ready, loading, failed }] = useKeyFigures([id]);
   const [shown, setShown] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch(`/digimv/orgs/${encodeURIComponent(id)}`)
-      .then((r) => (r.ok ? r.json() : r.status === 404 ? "missing" : Promise.reject(new Error(String(r.status)))))
-      .then(setOrg, () => setOrg("error"));
-  }, [id]);
-
-  const filed = useMemo(() => (org && typeof org === "object" ? org.years.filter((y) => y >= FIGURES_FROM) : []), [org]);
-  // One request per year, all at once: each fills in as it comes. A first visit fetches each year from DigiMV
-  // (10 to 20 seconds); after that it is instant.
-  useEffect(() => {
-    for (const year of filed) {
-      fetch(`/digimv/orgs/${encodeURIComponent(id)}/key-figures/${year}`)
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-        .then(
-          (y: Year) => setYears((all) => ({ ...all, [year]: y })),
-          () => setYears((all) => ({ ...all, [year]: "error" }))
-        );
-    }
-  }, [id, filed]);
+  const filed = ready.length + loading + failed;
 
   const name = org && typeof org === "object" ? org.name : null;
   useEffect(() => {
     if (name) document.title = `${name} · Jaarverslagen zorg`;
   }, [name]);
 
-  const ready = Object.values(years).filter((y): y is Year => y !== "error").sort((a, b) => a.year - b.year);
-  const failed = Object.values(years).filter((y) => y === "error").length;
-  const loading = filed.length - Object.keys(years).length;
   const series = METRICS.map((m) => ({
     ...m,
     points: ready.flatMap((y) => (y.figures[m.key] ? [{ year: y.year, field: y.figures[m.key] }] : [])),
@@ -133,15 +85,18 @@ function Profile({ id }: { id: string }) {
                     {org.former_names.length > 0 && <> · eerder {org.former_names.join(", ")}</>}
                   </p>
                   <div className="mt-5">
-                    <CompareWith onAsk={ask} org={org} />
+                    <CompareWith ids={[org.org_id]} label={`Vergelijk ${org.name} met`}>
+                      <ArrowRightLeft aria-hidden="true" className="size-[18px]" />
+                      Vergelijk met…
+                    </CompareWith>
                   </div>
 
                   <p aria-live="polite" className="mt-6 min-h-6 text-[0.95rem] text-muted-foreground">
                     {loading > 0
-                      ? `Kerncijfers ophalen uit DigiMV: ${filed.length - loading} van ${filed.length} jaar. De eerste keer duurt dat even.`
+                      ? `Kerncijfers ophalen uit DigiMV: ${filed - loading} van ${filed} jaar. De eerste keer duurt dat even.`
                       : failed > 0
                         ? `${failed} ${failed === 1 ? "jaar kon" : "jaren konden"} niet worden opgehaald. Probeer het later nog eens.`
-                        : filed.length
+                        : filed
                           ? `Zo ingevuld in de DigiMV-vragenlijst${group ? "; bij een groep de cijfers van de hele groep (geconsolideerd)" : ""}. Klik op DigiMV voor het veld.`
                           : "Deze organisatie heeft geen DigiMV-vragenlijst vanaf 2020. Vraag het de jaarverslagen."}
                   </p>
@@ -168,7 +123,7 @@ function Profile({ id }: { id: string }) {
                       ) : null
                     )}
                   </section>
-                  {filed.length > 0 && org.years.includes(2019) && (
+                  {filed > 0 && org.years.includes(2019) && (
                     <p className="mt-3 text-[0.9rem] text-muted-foreground">2019 staat alleen in de jaarverslagen zelf. Vraag ernaar, dan zoekt de assistent het op.</p>
                   )}
 

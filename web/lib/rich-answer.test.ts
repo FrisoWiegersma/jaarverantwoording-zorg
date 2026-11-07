@@ -61,7 +61,8 @@ test("a comparison needs two to four organisations over two or more years, one r
 
 test("compareQuestion asks over the latest years both organisations filed", () => {
   const a = { name: "A", years: [2019, 2020, 2021, 2022, 2023, 2024, 2025] };
-  assert.equal(compareQuestion(a, { name: "B", years: [2020, 2021, 2022, 2023, 2024] }, "de omzet"), "Vergelijk de omzet van A en B van 2021 tot en met 2024 in een grafiek.");
-  assert.equal(compareQuestion(a, { name: "B", years: [2025] }, "de omzet"), "Vergelijk de omzet van A en B in 2025.");
-  assert.equal(compareQuestion(a, { name: "B", years: [2018] }, "de omzet"), "Vergelijk de omzet van A en B in hun laatste jaarverslagen.");
+  assert.equal(compareQuestion([a, { name: "B", years: [2020, 2021, 2022, 2023, 2024] }], "de omzet"), "Vergelijk de omzet van A en B van 2021 tot en met 2024 in een grafiek.");
+  assert.equal(compareQuestion([a, { name: "B", years: [2025] }], "de omzet"), "Vergelijk de omzet van A en B in 2025.");
+  assert.equal(compareQuestion([a, { name: "B", years: [2018] }], "de omzet"), "Vergelijk de omzet van A en B in hun laatste jaarverslagen.");
+  assert.equal(compareQuestion([a, { name: "B", years: [2024, 2025] }, { name: "C", years: [2023, 2024, 2025] }], "het resultaat"), "Vergelijk het resultaat van A, B en C van 2024 tot en met 2025 in een grafiek.");
 });

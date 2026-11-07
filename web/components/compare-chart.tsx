@@ -32,6 +32,8 @@ function scale(values: number[]) {
 export interface Series {
   organization: string;
   points: Figure[];
+  /** Its colour, when the organisations have a fixed order across several charts. */
+  slot?: number;
 }
 
 export default function CompareChart({ title, unit, years, series, source }: {
@@ -50,7 +52,7 @@ export default function CompareChart({ title, unit, years, series, source }: {
   const last = years.length - 1;
   const xPct = (i: number) => (last ? (i / last) * 100 : 50);
   const yPct = (v: number) => (1 - (v - min) / (max - min)) * 100;
-  const color = (i: number) => `var(--series-${i + 1})`;
+  const color = (i: number) => `var(--series-${(series[i].slot ?? i) + 1})`;
   // A year an organisation skipped breaks its line rather than bridging it.
   const path = (s: Series) =>
     s.points
