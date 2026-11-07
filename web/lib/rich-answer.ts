@@ -49,3 +49,10 @@ export function chartGroups(figures: Figure[]) {
   }
   return [...groups];
 }
+
+/** A chart group that reads as one line over time: one organisation, at least three distinct years. Sorted by year. */
+export function trendSeries(rows: Figure[]) {
+  const years = new Set(rows.map((f) => f.year));
+  if (new Set(rows.map((f) => f.organization)).size !== 1 || years.size !== rows.length || years.size < 3) return null;
+  return [...rows].sort((a, b) => a.year - b.year);
+}

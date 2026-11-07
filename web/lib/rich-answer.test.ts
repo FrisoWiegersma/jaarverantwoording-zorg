@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createParser } from "@openuidev/lang-core";
 import { z } from "zod";
-import { chartGroups, presentAnswer, richAnswerSchema, type Figure } from "./rich-answer.ts";
+import { chartGroups, presentAnswer, richAnswerSchema, trendSeries, type Figure } from "./rich-answer.ts";
 import { parseCitations, safeEvidenceLink } from "./citations.ts";
 import { parseNumber } from "./excel.ts";
 
@@ -38,4 +38,12 @@ test("Excel links must point to a real evidence path on the public app origin", 
   for (const link of ["https://evil.test/bron/2023/1/1", "javascript:alert(1)", "/bron/not-a-source", "https://user@zorg.example/bron/2023/1/1"]) {
     assert.equal(safeEvidenceLink(link, origin), null);
   }
+});
+
+test("a trend needs one organisation and three or more distinct years, sorted", () => {
+  const years = [2024, 2022, 2023].map((year) => ({ ...figure, year }));
+  assert.deepEqual(trendSeries(years)?.map((f) => f.year), [2022, 2023, 2024]);
+  assert.equal(trendSeries(years.slice(0, 2)), null);
+  assert.equal(trendSeries([...years.slice(0, 2), { ...figure, year: 2022 }]), null);
+  assert.equal(trendSeries([...years.slice(0, 2), { ...figure, organization: "Alrijne", year: 2021 }]), null);
 });
