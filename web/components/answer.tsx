@@ -4,11 +4,13 @@ import { Check, ClipboardCopy, Download } from "lucide-react";
 import { memo, type ReactNode, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useCitationPreview } from "@/components/citation-preview";
 import { citationKey, parseHref } from "@/lib/citations";
 import { copyRows, readTable, toRows } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 
-/** "p. 10" or "DigiMV" in marker yellow: the same yellow the panel shows where it says so. Styled after Kokonut AI Citations. */
+/** "p. 10" or "DigiMV" in marker yellow: the same yellow the panel shows where it says so. Styled after Kokonut AI
+ * Citations; hover or keyboard focus previews the passage, a click opens it in the panel. */
 export function CitationChip({
   href,
   label,
@@ -22,8 +24,13 @@ export function CitationChip({
   active: boolean;
   onClick: () => void;
 }) {
+  const preview = useCitationPreview();
+  const source = parseHref(href);
+  const key = citationKey(href, quote);
+  const citation = source && { ...source, key, href, quote: quote ?? "" };
   return (
     <button
+      aria-describedby={preview.openKey === key ? preview.id : undefined}
       aria-label={label === "DigiMV" ? "Bekijk de bron in de DigiMV-vragenlijst" : `Bekijk de bron, pagina ${label.slice(3)}`}
       aria-pressed={active}
       className={cn(
@@ -34,9 +41,15 @@ export function CitationChip({
       data-citation=""
       data-href={href}
       data-quote={quote}
-      onClick={onClick}
-      // ponytail: native tooltip for the quote; the panel is the real preview
-      title={quote ? `“${quote}”` : undefined}
+      onBlur={() => preview.hide(true)}
+      onClick={() => {
+        preview.hide(true);
+        onClick();
+      }}
+      // Keyboard focus previews at once; a mouse click's focus doesn't, the click opens the panel.
+      onFocus={(e) => citation && e.currentTarget.matches(":focus-visible") && preview.show(e.currentTarget, citation, true)}
+      onPointerEnter={(e) => citation && e.pointerType === "mouse" && preview.show(e.currentTarget, citation)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && preview.hide()}
       type="button"
     >
       {label}

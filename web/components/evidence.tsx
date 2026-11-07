@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 export type DocMeta = { org: string; type: string };
 
 type Mark = [number, number, number, number];
-type Shot = { kind: "page"; src: string; mark: Mark | null; found: "all" | "partial" | "none" };
-type Filed = { kind: "figure"; org: string; field: { label: string; value: string; unit: string } | null };
+export type Shot = { kind: "page"; src: string; mark: Mark | null; found: "all" | "partial" | "none" };
+export type Filed = { kind: "figure"; org: string; field: { label: string; value: string; unit: string } | null };
 type Loaded = Shot | Filed | "error";
 type PageCitation = Extract<Citation, { kind: "page" }>;
 type FigureCitation = Extract<Citation, { kind: "figure" }>;
@@ -53,7 +53,7 @@ function load(c: Citation): Promise<Loaded> {
   return p;
 }
 
-function useLoaded(c: Citation | undefined) {
+export function useLoaded(c: Citation | undefined) {
   const [state, setState] = useState<{ key: string; value: Loaded } | null>(null);
   useEffect(() => {
     if (!c) return;
@@ -69,14 +69,14 @@ function useLoaded(c: Citation | undefined) {
 // The page shown as a window around the marked passage, a little enlarged, so it reads in place.
 // Same math as the strohmgpt sources panel: zoom to ~90% of the window width, keep the page edges inside.
 const WINDOW = "20rem";
-function pageWindow(mark: Mark): CSSProperties {
+export function pageWindow(mark: Mark, height = WINDOW): CSSProperties {
   const [top, left, bottom, right] = mark;
   const zoom = Math.min(Math.max(0.9 / (right - left), 1), 1.8);
   const x = Math.min(Math.max(0.5 / zoom - (left + right) / 2, 1 / zoom - 1), 0);
   const y = (top + bottom) / 2;
   return {
     width: `${zoom * 100}%`,
-    transform: `translate(${x * 100}%, clamp(calc(${WINDOW} - 100%), calc(${WINDOW} / 2 - ${y * 100}%), 0px))`,
+    transform: `translate(${x * 100}%, clamp(calc(${height} - 100%), calc(${height} / 2 - ${y * 100}%), 0px))`,
   };
 }
 
@@ -183,7 +183,7 @@ function PageEvidence({ c, shot, doc }: { c: PageCitation; shot: Shot | "error" 
 }
 
 /** A filed value as the questionnaire means it: whole euros, a percentage, fte. */
-function formatFiled({ value, unit }: { value: string; unit: string }) {
+export function formatFiled({ value, unit }: { value: string; unit: string }) {
   if (!/^-?\d+(\.\d+)?$/.test(value)) return [value, unit].filter(Boolean).join(" ");
   const n = Number(value).toLocaleString("nl-NL", { maximumFractionDigits: 4 });
   if (unit === "€") return `€ ${n}`;

@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Answer } from "@/components/answer";
+import { CitationPreviewProvider } from "@/components/citation-preview";
 import { RichAnswer } from "@/components/rich-answer";
 import type { presentAnswer } from "@/lib/rich-answer";
 import { type DocMeta, Evidence } from "@/components/evidence";
@@ -131,117 +132,119 @@ export default function Page() {
   const waiting = status === "submitted" && last?.role === "user";
 
   return (
-    <div className="flex h-dvh">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center justify-between px-5 sm:px-8">
-          <Logo />
-          <div className="flex items-center gap-2">
-            <SwitchButton />
-            {messages.length > 0 && (
-              <button
-                className="raised min-h-11 shrink-0 whitespace-nowrap rounded-full px-3 text-sm transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4 sm:text-base"
-                onClick={restart}
-                type="button"
-              >
-                Nieuwe vraag
-              </button>
-            )}
-          </div>
-        </header>
+    <CitationPreviewProvider docs={docs}>
+      <div className="flex h-dvh">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-16 shrink-0 items-center justify-between px-5 sm:px-8">
+            <Logo />
+            <div className="flex items-center gap-2">
+              <SwitchButton />
+              {messages.length > 0 && (
+                <button
+                  className="raised min-h-11 shrink-0 whitespace-nowrap rounded-full px-3 text-sm transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4 sm:text-base"
+                  onClick={restart}
+                  type="button"
+                >
+                  Nieuwe vraag
+                </button>
+              )}
+            </div>
+          </header>
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto h-full w-full max-w-[46rem] px-5 sm:px-8">
-            {messages.length === 0 ? (
-              <Welcome onAsk={ask} />
-            ) : (
-              <div className="pb-10">
-                {messages.map((m, i) => {
-                  const isLastTurn = i >= messages.length - 2;
-                  if (m.role === "user") {
+          <main className="flex-1 overflow-y-auto">
+            <div className="mx-auto h-full w-full max-w-[46rem] px-5 sm:px-8">
+              {messages.length === 0 ? (
+                <Welcome onAsk={ask} />
+              ) : (
+                <div className="pb-10">
+                  {messages.map((m, i) => {
+                    const isLastTurn = i >= messages.length - 2;
+                    if (m.role === "user") {
+                      return (
+                        <h2
+                          className={cn(
+                            "scroll-mt-6 text-balance font-semibold text-[1.3rem] leading-snug",
+                            i === 0 ? "pt-6" : "mt-12 border-t pt-10"
+                          )}
+                          key={m.id}
+                          ref={i === messages.findLastIndex((x) => x.role === "user") ? lastQuestion : undefined}
+                        >
+                          {textOf(m)}
+                        </h2>
+                      );
+                    }
+                    const steps = stepsOf(m);
+                    const streaming = busy && m === last;
+                    const plainText = m.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n\n");
+                    const text = streaming ? hidePartialLink(plainText) : plainText;
+                    // Between tool calls the agent is still at work: never let the list read as finished.
+                    if (streaming && steps.length && !steps.some((s) => s.status === "running")) {
+                      steps.push({ id: "next", label: text ? "Antwoord schrijven" : "Verder zoeken", status: "running" });
+                    }
+                    const thinking = streaming && !text && !steps.some((s) => s.status === "running");
                     return (
-                      <h2
-                        className={cn(
-                          "scroll-mt-6 text-balance font-semibold text-[1.3rem] leading-snug",
-                          i === 0 ? "pt-6" : "mt-12 border-t pt-10"
+                      // The last turn fills the screen, so its question can sit at the top while the answer streams.
+                      <section className={cn("mt-5", isLastTurn && "min-h-[calc(100dvh-20rem)]")} key={m.id}>
+                        {steps.length > 0 && <AILoadingState className="mb-5" steps={steps} />}
+                        {thinking && <Thinking />}
+                        {text && (
+                          <Answer
+                            activeKey={evidence?.messageId === m.id ? evidence.key : null}
+                            onCite={(key) => setEvidence({ messageId: m.id, key })}
+                            question={messages[i - 1] ? textOf(messages[i - 1]) : ""}
+                            text={text}
+                          />
                         )}
-                        key={m.id}
-                        ref={i === messages.findLastIndex((x) => x.role === "user") ? lastQuestion : undefined}
-                      >
-                        {textOf(m)}
-                      </h2>
+                        {richOf(m).map((data, j) => (
+                          <RichAnswer activeKey={evidence?.messageId === m.id ? evidence.key : null} data={data} key={j}
+                            onCite={(key) => setEvidence({ messageId: m.id, key })}
+                            question={messages[i - 1] ? textOf(messages[i - 1]) : ""} />
+                        ))}
+                      </section>
                     );
-                  }
-                  const steps = stepsOf(m);
-                  const streaming = busy && m === last;
-                  const plainText = m.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n\n");
-                  const text = streaming ? hidePartialLink(plainText) : plainText;
-                  // Between tool calls the agent is still at work: never let the list read as finished.
-                  if (streaming && steps.length && !steps.some((s) => s.status === "running")) {
-                    steps.push({ id: "next", label: text ? "Antwoord schrijven" : "Verder zoeken", status: "running" });
-                  }
-                  const thinking = streaming && !text && !steps.some((s) => s.status === "running");
-                  return (
-                    // The last turn fills the screen, so its question can sit at the top while the answer streams.
-                    <section className={cn("mt-5", isLastTurn && "min-h-[calc(100dvh-20rem)]")} key={m.id}>
-                      {steps.length > 0 && <AILoadingState className="mb-5" steps={steps} />}
-                      {thinking && <Thinking />}
-                      {text && (
-                        <Answer
-                          activeKey={evidence?.messageId === m.id ? evidence.key : null}
-                          onCite={(key) => setEvidence({ messageId: m.id, key })}
-                          question={messages[i - 1] ? textOf(messages[i - 1]) : ""}
-                          text={text}
-                        />
-                      )}
-                      {richOf(m).map((data, j) => (
-                        <RichAnswer activeKey={evidence?.messageId === m.id ? evidence.key : null} data={data} key={j}
-                          onCite={(key) => setEvidence({ messageId: m.id, key })}
-                          question={messages[i - 1] ? textOf(messages[i - 1]) : ""} />
-                      ))}
+                  })}
+                  {waiting && (
+                    <section className="mt-5 min-h-[calc(100dvh-20rem)]">
+                      <Thinking />
                     </section>
-                  );
-                })}
-                {waiting && (
-                  <section className="mt-5 min-h-[calc(100dvh-20rem)]">
-                    <Thinking />
-                  </section>
-                )}
-                {error && (
-                  <div className="mt-6 rounded-xl px-4 py-3 ring-1 ring-destructive/40" role="alert">
-                    <p>Het antwoord kon niet worden opgehaald. {error.message}</p>
-                    <button
-                      className="mt-2 min-h-11 rounded-full px-4 font-semibold ring-1 ring-border hover:bg-card"
-                      onClick={() => regenerate()}
-                      type="button"
-                    >
-                      Probeer opnieuw
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </main>
+                  )}
+                  {error && (
+                    <div className="mt-6 rounded-xl px-4 py-3 ring-1 ring-destructive/40" role="alert">
+                      <p>Het antwoord kon niet worden opgehaald. {error.message}</p>
+                      <button
+                        className="mt-2 min-h-11 rounded-full px-4 font-semibold ring-1 ring-border hover:bg-card"
+                        onClick={() => regenerate()}
+                        type="button"
+                      >
+                        Probeer opnieuw
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </main>
 
-        <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
-          <div className="mx-auto max-w-[46rem]">
-            <AI_Prompt busy={busy} onStop={stop} onSubmit={ask} />
-            <p className="mt-2 text-center text-[0.85rem] text-muted-foreground">
-              Klik op een geel paginanummer om te zien waar het staat.
-            </p>
+          <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
+            <div className="mx-auto max-w-[46rem]">
+              <AI_Prompt busy={busy} onStop={stop} onSubmit={ask} />
+              <p className="mt-2 text-center text-[0.85rem] text-muted-foreground">
+                Klik op een geel paginanummer om te zien waar het staat.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <Evidence
-        citations={citations}
-        docs={docs}
-        index={index}
-        onClose={() => setEvidence(null)}
-        onIndex={onIndex}
-        open={Boolean(evidence && citations.length)}
-      />
-    </div>
+        <Evidence
+          citations={citations}
+          docs={docs}
+          index={index}
+          onClose={() => setEvidence(null)}
+          onIndex={onIndex}
+          open={Boolean(evidence && citations.length)}
+        />
+      </div>
+    </CitationPreviewProvider>
   );
 }
 
