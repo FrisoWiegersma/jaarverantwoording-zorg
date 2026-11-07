@@ -2,8 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* ponytail: dark mode follows the OS; add a .dark class toggle if someone asks for a switch */
-@custom-variant dark (@media (prefers-color-scheme: dark));
+/* .dark on <html>: set before paint by the script in layout.tsx (saved choice, else the OS). */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
   --color-background: var(--background);
@@ -57,26 +57,26 @@
   --raise-top: rgb(255 255 255 / 0.9);
   --raise-shadow: 0 1px 2px rgb(14 22 38 / 0.04), 0 18px 40px -22px rgb(14 22 38 / 0.28);
   --radius: 0.75rem;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #080d18;
-    --foreground: #eef1f8;
-    --card: #101829;
-    --muted: #172238;
-    --muted-foreground: #8e9ab3;
-    --border: #1d2940;
-    --primary: #eef1f8;
-    --primary-foreground: #080d18;
-    --ring: #8ea6ff;
-    --destructive: #f97066;
-    --marker: #f6cf45;
-    --marker-edge: #b8901a;
-    --raise-line: rgb(148 170 220 / 0.12);
-    --raise-top: rgb(255 255 255 / 0.06);
-    --raise-shadow: 0 1px 0 rgb(0 0 0 / 0.4), 0 24px 60px -28px rgb(0 0 0 / 0.9);
-  }
+:root.dark {
+  --background: #080d18;
+  --foreground: #eef1f8;
+  --card: #101829;
+  --muted: #172238;
+  --muted-foreground: #8e9ab3;
+  --border: #1d2940;
+  --primary: #eef1f8;
+  --primary-foreground: #080d18;
+  --ring: #8ea6ff;
+  --destructive: #f97066;
+  --marker: #f6cf45;
+  --marker-edge: #b8901a;
+  --raise-line: rgb(148 170 220 / 0.12);
+  --raise-top: rgb(255 255 255 / 0.06);
+  --raise-shadow: 0 1px 0 rgb(0 0 0 / 0.4), 0 24px 60px -28px rgb(0 0 0 / 0.9);
+  color-scheme: dark;
 }
 
 @utility raised {

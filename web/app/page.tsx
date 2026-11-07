@@ -10,6 +10,7 @@ import { type DocMeta, Evidence } from "@/components/evidence";
 import AILoadingState, { type AgentStep } from "@/components/kokonutui/ai-loading";
 import AI_Prompt from "@/components/kokonutui/ai-prompt";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
+import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
 import { Welcome } from "@/components/welcome";
 import { hidePartialLink, parseCitations } from "@/lib/citations";
@@ -134,15 +135,18 @@ export default function Page() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center justify-between px-5 sm:px-8">
           <Logo />
-          {messages.length > 0 && (
-            <button
-              className="raised min-h-11 shrink-0 whitespace-nowrap rounded-full px-3 text-sm transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4 sm:text-base"
-              onClick={restart}
-              type="button"
-            >
-              Nieuwe vraag
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <SwitchButton />
+            {messages.length > 0 && (
+              <button
+                className="raised min-h-11 shrink-0 whitespace-nowrap rounded-full px-3 text-sm transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4 sm:text-base"
+                onClick={restart}
+                type="button"
+              >
+                Nieuwe vraag
+              </button>
+            )}
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto">
