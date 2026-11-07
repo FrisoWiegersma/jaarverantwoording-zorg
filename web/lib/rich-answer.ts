@@ -56,3 +56,19 @@ export function trendSeries(rows: Figure[]) {
   if (new Set(rows.map((f) => f.organization)).size !== 1 || years.size !== rows.length || years.size < 3) return null;
   return [...rows].sort((a, b) => a.year - b.year);
 }
+
+/** A chart group that compares organisations: two to four of them (one line and colour each), one row per organisation
+ * per year, two or more years in all. Years ascending, organisations in the answer's order. */
+export function compareSeries(rows: Figure[]) {
+  const organizations = [...new Set(rows.map((f) => f.organization))];
+  const years = [...new Set(rows.map((f) => f.year))].sort((a, b) => a - b);
+  if (organizations.length < 2 || organizations.length > 4 || years.length < 2) return null;
+  if (new Set(rows.map((f) => `${f.organization}\n${f.year}`)).size !== rows.length) return null;
+  return {
+    years,
+    series: organizations.map((organization) => ({
+      organization,
+      points: rows.filter((f) => f.organization === organization).sort((a, b) => a.year - b.year),
+    })),
+  };
+}

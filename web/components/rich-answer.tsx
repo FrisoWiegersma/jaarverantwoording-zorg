@@ -4,11 +4,12 @@ import { createContext, useContext, useState } from "react";
 import { createLibrary, defineComponent, Renderer } from "@openuidev/react-lang";
 import { ChartLine, LayoutGrid, Table2 } from "lucide-react";
 import { Answer, CitationChip } from "@/components/answer";
+import CompareChart from "@/components/compare-chart";
 import MetricCard from "@/components/kokonutui/metric-card";
 import SmoothTab, { type SwipeTabItem } from "@/components/kokonutui/smooth-tab";
 import { citationKey } from "@/lib/citations";
 import { parseNumber } from "@/lib/excel";
-import { chartGroups, figureTable, richAnswerSchema, trendSeries, type Figure, type presentAnswer } from "@/lib/rich-answer";
+import { chartGroups, compareSeries, figureTable, richAnswerSchema, trendSeries, type Figure, type presentAnswer } from "@/lib/rich-answer";
 
 const EvidenceContext = createContext<{ question: string; activeKey: string | null; onCite: (key: string) => void }>({ question: "", activeKey: null, onCite: () => {} });
 
@@ -47,6 +48,10 @@ function FinancialAnswer({ summary, figures, view }: typeof richAnswerSchema._ou
               unit={trend[0].unit}
             />
           );
+        }
+        const compare = compareSeries(rows);
+        if (compare) {
+          return <CompareChart key={title} source={(f) => <Source figure={f} />} title={title} unit={rows[0].unit} {...compare} />;
         }
         const max = Math.max(...rows.map((f) => Math.abs(parseNumber(f.amount)!.num)), 1);
         return (

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createParser } from "@openuidev/lang-core";
 import { z } from "zod";
-import { chartGroups, presentAnswer, richAnswerSchema, trendSeries, type Figure } from "./rich-answer.ts";
+import { chartGroups, compareSeries, presentAnswer, richAnswerSchema, trendSeries, type Figure } from "./rich-answer.ts";
 import { parseCitations, safeEvidenceLink } from "./citations.ts";
 import { parseNumber } from "./excel.ts";
 
@@ -46,4 +46,15 @@ test("a trend needs one organisation and three or more distinct years, sorted", 
   assert.equal(trendSeries(years.slice(0, 2)), null);
   assert.equal(trendSeries([...years.slice(0, 2), { ...figure, year: 2022 }]), null);
   assert.equal(trendSeries([...years.slice(0, 2), { ...figure, organization: "Alrijne", year: 2021 }]), null);
+});
+
+test("a comparison needs two to four organisations over two or more years, one row each", () => {
+  const rows = [2023, 2022].flatMap((year) => ["Basalt", "Alrijne"].map((organization) => ({ ...figure, organization, year })));
+  const c = compareSeries(rows);
+  assert.deepEqual(c?.years, [2022, 2023]);
+  assert.deepEqual(c?.series.map((s) => [s.organization, s.points.map((f) => f.year)]), [["Basalt", [2022, 2023]], ["Alrijne", [2022, 2023]]]);
+  assert.equal(compareSeries(rows.filter((f) => f.year === 2023)), null);
+  assert.equal(compareSeries(rows.filter((f) => f.organization === "Basalt")), null);
+  assert.equal(compareSeries([...rows, { ...figure, organization: "Basalt", year: 2022 }]), null);
+  assert.equal(compareSeries(["A", "B", "C", "D", "E"].flatMap((organization) => [2022, 2023].map((year) => ({ ...figure, organization, year })))), null);
 });

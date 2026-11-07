@@ -156,7 +156,7 @@ export async function POST(req: Request) {
   const keep = users.length > 1 ? history.length - users[users.length - 2] : history.length;
   const result = streamText({
     model: google(process.env.CHAT_MODEL ?? "gemini-3.8-flash"),
-    instructions: INSTRUCTIONS + "\nGebruik present_answer voor je uiteindelijke antwoord met cijfers, in plaats van zelf de eindtabel te schrijven. Kies chart bij een vergelijking of trend, cards bij enkele kerncijfers, anders table. De tool toont altijd de brontabel met Excel-knoppen. Geef elke rij de organisatie, post, het jaar, bedrag in Nederlandse notatie, eenheid, /bron/-link en letterlijk broncitaat. Schrijf na present_answer geen herhaling van de tabel.",
+    instructions: INSTRUCTIONS + "\nGebruik present_answer voor je uiteindelijke antwoord met cijfers, in plaats van zelf de eindtabel te schrijven. Kies chart bij een vergelijking of trend, cards bij enkele kerncijfers, anders table. De tool toont altijd de brontabel met Excel-knoppen. Geef elke rij de organisatie, post, het jaar, bedrag in Nederlandse notatie, eenheid, /bron/-link en letterlijk broncitaat. Schrijf na present_answer geen herhaling van de tabel.\nVergelijk je organisaties, geef dan hetzelfde cijfer bij elke organisatie precies dezelfde Post en Eenheid, liefst uit de DigiMV-vragenlijst (hele euro's): dan staan ze in één grafiek naast elkaar.",
     messages: pruneMessages({ messages: history, toolCalls: `before-last-${keep}-messages` }),
     tools,
     stopWhen: [isStepCount(14), hasToolCall("present_answer")],
