@@ -12,6 +12,7 @@ Notes on the data (verified against the live API):
 
 import argparse
 import base64
+import html
 import json
 import os
 import re
@@ -50,6 +51,11 @@ CREATE TABLE IF NOT EXISTS kb(
 CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
   md, year UNINDEXED, doc_id UNINDEXED, page UNINDEXED, org_id UNINDEXED,
   tokenize='unicode61 remove_diacritics 2');
+CREATE TABLE IF NOT EXISTS figures_log(
+  year INT, org_id TEXT, fetched_at TEXT, name TEXT, finished TEXT, n INT, v INT, PRIMARY KEY(year, org_id));
+CREATE VIRTUAL TABLE IF NOT EXISTS figures_fts USING fts5(
+  label, var, value UNINDEXED, unit UNINDEXED, year UNINDEXED, org_id UNINDEXED, category_id UNINDEXED,
+  rgi UNINDEXED, tokenize='trigram remove_diacritics 1');
 """
 
 
@@ -444,6 +450,139 @@ def page_heading(md):
     return " › ".join(dict.fromkeys(h for h in heads if h)).strip()[:200] or None
 
 
+# ---------------------------------------------------------------- structured figures (DigiMV questionnaire)
+
+FIGURES_FROM = 2020  # the archive serves questionnaires from DigiMV2020 on; older years answer HTTP 500
+FIGURES_V = 2  # bump when labels/filtering change: cached org-years from older versions are refetched
+ARCHIVE = "https://digimv13.desan.nl/api/Archive/GetArchiveData"
+
+
+def render_label(text):
+    """Questionnaire labels embed JS such as ${isTrue(q.isGroepshoofd) ? ' - enkelvoudig' : ''}. The flags
+    aren't public, so show every branch: 'A / B', and an optional part in [brackets]. Never guess a branch."""
+    out, i = [], 0
+    while (j := text.find("${", i)) >= 0:
+        out.append(text[i:j])
+        depth, k, quote = 0, j + 1, None
+        while k < len(text):  # matching brace, skipping quoted strings
+            ch = text[k]
+            if quote:
+                if ch == "\\":
+                    k += 1
+                elif ch == quote:
+                    quote = None
+            elif ch in "'\"":
+                quote = ch
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            k += 1
+        branches = [a if a is not None else b for a, b in
+                    re.findall(r"[?:]\s*(?:'((?:[^'\\]|\\.)*)'|\"((?:[^\"\\]|\\.)*)\")", text[j:k])]
+        alts = list(dict.fromkeys(b.strip() for b in branches if b.strip()))
+        part = " / ".join(alts)
+        out.append(f" [{part}]" if part and len(alts) < len(branches) else f" {part}" if part else "")
+        i = k + 1
+    out.append(text[i:])
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", "".join(out)))).strip()
+
+
+def figure_rows(data):
+    """GetArchiveData response -> [(category_id, rgi, var, label, unit, value)] for every answer the public
+    archive shows: isVisible and not reportSettings.archiveHidden (same rule as DigiMV's own archive page).
+    Values stay verbatim strings."""
+    byid = {n["id"]: n for n in data["nodes"]}
+    cat = {c["id"]: (n, c) for n in data["nodes"] for c in n.get("categories") or []}
+    rows = []
+    for r in data["responses"]:
+        if r["value"] in (None, "") or not r["isVisible"]:
+            continue
+        n, c = cat.get(r["categoryId"], (None, None))
+        if n is None:  # an answer without a question: keep it rather than lose data silently
+            rows.append((r["categoryId"], "", None, f"(unlabelled field {r['categoryId']})", "", r["value"]))
+            continue
+        if (n.get("reportSettings") or {}).get("archiveHidden") == "1":
+            continue
+        chain, p = [], n
+        while p and len(chain) < 5:
+            t = render_label(p.get("text") or "")
+            if t and (not chain or chain[-1] != t):
+                chain.append(t)
+            p = byid.get(p.get("parentId"))
+        label = " › ".join(reversed(chain))
+        if c.get("text"):
+            label += f": {render_label(c['text'])}"
+        rgi = ",".join(str(x) for x in r["repeatingGroupIndexes"] or [])
+        if rgi:
+            label += f" (#{rgi})"
+        fs = n.get("frontendSettings") or {}
+        unit = " ".join(x.strip() for x in (fs.get("prefix"), fs.get("suffix")) if x and x.strip())
+        rows.append((r["categoryId"], rgi, n["typescriptVariable"], label, unit, r["value"]))
+    return rows
+
+
+def _is_zero(value):
+    try:
+        return float(value.replace(",", ".")) == 0
+    except ValueError:
+        return False
+
+
+def _fetch_figures(db, org_id, year):
+    url = f"{ARCHIVE}?" + urllib.parse.urlencode({"externalOrganizationId": org_id, "questionnaireName": f"DigiMV{year}"})
+    raw = _http(url, headers={"Accept": "application/json"})
+    data = json.loads(raw) if raw.strip() else None  # empty body: no questionnaire for this org/year
+    rows = figure_rows(data) if data else []
+    keys = [(r[0], r[1]) for r in rows]
+    if len(set(keys)) != len(keys):
+        raise ValueError(f"{org_id}/{year}: duplicate (category, group index) answers in DigiMV response")
+    sc = (data or {}).get("sampleCandidateModel") or {}
+    with db:
+        # ponytail: delete on UNINDEXED columns = full scan; fine until ~10k org-years are cached
+        db.execute("DELETE FROM figures_fts WHERE year=? AND org_id=?", (year, org_id))
+        db.executemany("INSERT INTO figures_fts(label, var, value, unit, year, org_id, category_id, rgi) "
+                       "VALUES (?,?,?,?,?,?,?,?)",
+                       [(lab, var, val, unit, year, org_id, cid, rgi) for cid, rgi, var, lab, unit, val in rows])
+        db.execute("INSERT OR REPLACE INTO figures_log VALUES (?,?,?,?,?,?,?)",
+                   (year, org_id, datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    sc.get("name"), sc.get("dateFinished"), len(rows), FIGURES_V))
+
+
+def get_figures(org_id, year, query=None, limit=100, refresh=False, db=None):
+    """Every figure an organisation filed in its DigiMV questionnaire for `year` (2020+), cached in SQLite.
+
+    Values are verbatim as filed, for the legal entity itself (enkelvoudig), not the consolidated group.
+    `query` keeps fields whose label or variable contains every word (substring, accents ignored),
+    e.g. "som der bedrijfsopbrengsten", "totaal activa", "fte". Refetched when the org re-publishes.
+    """
+    db = db or connect()
+    year = int(year)
+    if year < FIGURES_FROM:
+        raise ValueError(f"structured DigiMV data starts at {FIGURES_FROM}; use the documents for {year}")
+    log = db.execute("SELECT * FROM figures_log WHERE year=? AND org_id=?", (year, org_id)).fetchone()
+    newest = db.execute("SELECT max(published) FROM docs WHERE year=? AND org_id=?", (year, org_id)).fetchone()[0]
+    if refresh or not log or log["v"] != FIGURES_V or (newest and newest > log["fetched_at"]):
+        _fetch_figures(db, org_id, year)
+        log = db.execute("SELECT * FROM figures_log WHERE year=? AND org_id=?", (year, org_id)).fetchone()
+    sql, args = "SELECT label, value, unit, var FROM figures_fts WHERE year=? AND org_id=?", [year, org_id]
+    if query:
+        match = _org_query(query)
+        if not match:
+            raise ValueError("query needs at least one word of 3+ characters")
+        sql += " AND figures_fts MATCH ?"
+        args.append(match)
+    rows = [dict(r) for r in db.execute(sql + " ORDER BY rowid", args)]
+    rows.sort(key=lambda r: _is_zero(r["value"]))  # stable: filed zeros after real figures, order kept
+    return {"org_id": org_id, "year": year, "name": log["name"], "found": bool(log["n"]), "filed": log["finished"],
+            "scope": "legal entity (enkelvoudig) as filed in the DigiMV questionnaire; consolidated group "
+                     "figures are only in the documents",
+            "source": f"{ARCHIVE}?externalOrganizationId={org_id}&questionnaireName=DigiMV{year}",
+            "total_fields": log["n"], "matched": len(rows), "figures": rows[:limit]}
+
+
 # ---------------------------------------------------------------- CLI
 
 def _fmt_size(n):
@@ -471,6 +610,11 @@ def main(argv=None):
     s.add_argument("--org")
     s.add_argument("--year", type=int)
     s.add_argument("--limit", type=int, default=20)
+    s = sub.add_parser("figures", help="figures an org filed in its DigiMV questionnaire (2020+)")
+    s.add_argument("org")
+    s.add_argument("year", type=int)
+    s.add_argument("q", nargs="?", help="label words, e.g. 'som der bedrijfsopbrengsten'")
+    s.add_argument("--limit", type=int, default=50)
     a = ap.parse_args(argv)
 
     if a.cmd == "sync":
@@ -508,6 +652,13 @@ def main(argv=None):
     if a.cmd == "text":
         for r in search_text(a.q, a.org, a.year, limit=a.limit):
             print(f"{r['year']}/{r['doc_id']} p{r['page']}  {r['org_id']}  {r['type']}\n    {r['snippet']}")
+        return 0
+
+    if a.cmd == "figures":
+        r = get_figures(a.org, a.year, a.q, a.limit)
+        print(f"{r['name']} {r['year']}  filed {r['filed']}  {r['matched']} of {r['total_fields']} fields")
+        for f in r["figures"]:
+            print(f"  {f['value']:>16} {f['unit']:<4} {f['label']}")
         return 0
 
 
