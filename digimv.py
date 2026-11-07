@@ -583,6 +583,40 @@ def get_figures(org_id, year, query=None, limit=100, refresh=False, db=None):
             "total_fields": log["n"], "matched": len(rows), "figures": rows[:limit]}
 
 
+# ---------------------------------------------------------------- integrity
+
+def verify(db=None):
+    """Check every cached file against the index. Returns a list of problems (empty = clean)."""
+    db = db or connect()
+    problems = []
+    for p in sorted(DATA.glob("**/*.part")):
+        problems.append(f"leftover partial file: {p}")
+    for p in sorted((DATA / "pdf").glob("*/*.pdf")):
+        year, doc_id = int(p.parent.name), int(p.stem)
+        r = db.execute("SELECT file_size FROM docs WHERE year=? AND id=?", (year, doc_id)).fetchone()
+        if not r:
+            problems.append(f"pdf {year}/{doc_id}: not in index any more (withdrawn?)")
+        elif not _pdf_ok(p.read_bytes(), r[0]):
+            problems.append(f"pdf {year}/{doc_id}: size or header does not match index ({r[0]} bytes)")
+    for f in sorted((DATA / "md").glob("*/*/*.pages.json")):
+        year, doc_id = int(f.parent.name), int(f.name.split(".")[0])
+        cached = json.loads(f.read_text())
+        r = db.execute("SELECT published FROM docs WHERE year=? AND id=?", (year, doc_id)).fetchone()
+        kb = db.execute("SELECT published, pages FROM kb WHERE year=? AND doc_id=?", (year, doc_id)).fetchone()
+        n = len(cached["pages"])
+        if not r:
+            problems.append(f"md {year}/{doc_id}: not in index any more (withdrawn?)")
+        elif r[0] != cached["published"]:
+            problems.append(f"md {year}/{doc_id}: stale, re-published {r[0]} (cached {cached['published']})")
+        if cached.get("extractor") != EXTRACTOR:
+            problems.append(f"md {year}/{doc_id}: extracted by an older extractor, re-run fetch")
+        if not f.with_name(f"{doc_id}.md").exists():
+            problems.append(f"md {year}/{doc_id}: .md missing")
+        if not kb or kb["published"] != cached["published"] or kb["pages"] != n:
+            problems.append(f"md {year}/{doc_id}: not (or wrongly) indexed for full-text search")
+    return problems
+
+
 # ---------------------------------------------------------------- CLI
 
 def _fmt_size(n):
@@ -615,6 +649,7 @@ def main(argv=None):
     s.add_argument("year", type=int)
     s.add_argument("q", nargs="?", help="label words, e.g. 'som der bedrijfsopbrengsten'")
     s.add_argument("--limit", type=int, default=50)
+    sub.add_parser("verify", help="check cached files against the index")
     a = ap.parse_args(argv)
 
     if a.cmd == "sync":
@@ -660,6 +695,11 @@ def main(argv=None):
         for f in r["figures"]:
             print(f"  {f['value']:>16} {f['unit']:<4} {f['label']}")
         return 0
+
+    if a.cmd == "verify":
+        problems = verify()
+        print("\n".join(problems) or "cache is clean")
+        return 1 if problems else 0
 
 
 if __name__ == "__main__":
