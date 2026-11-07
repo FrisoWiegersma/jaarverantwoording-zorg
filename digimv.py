@@ -205,6 +205,36 @@ def get_doc(year, doc_id, db=None):
     return _doc_dict(r)
 
 
+# ---------------------------------------------------------------- PDF cache
+
+def pdf_path(year, doc_id):
+    return DATA / "pdf" / str(year) / f"{doc_id}.pdf"
+
+
+def _pdf_ok(data, size):
+    return data[:5] == b"%PDF-" and len(data) == size
+
+
+def get_pdf(year, doc_id, db=None):
+    """Cached PDF path; downloads it when missing. Verifies magic bytes and the index's fileSize."""
+    d = get_doc(year, doc_id, db)
+    p = pdf_path(year, doc_id)
+    if p.exists() and p.stat().st_size == d["file_size"]:
+        return p
+    for _ in range(2):
+        data = _http(d["url"])
+        if _pdf_ok(data, d["file_size"]):
+            break
+    else:
+        raise ValueError(f"{year}/{doc_id}: got {len(data)} bytes starting {data[:5]!r}, "
+                         f"index says {d['file_size']} bytes of PDF")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".part")
+    tmp.write_bytes(data)
+    tmp.replace(p)
+    return p
+
+
 # ---------------------------------------------------------------- CLI
 
 def _fmt_size(n):
