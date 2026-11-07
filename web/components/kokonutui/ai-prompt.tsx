@@ -14,16 +14,20 @@
  */
 
 import { ArrowUp } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { type Ref, useId, useImperativeHandle, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 interface AIPromptProps {
+  /** The text in the box, held by the page so it can fill it in (a question template). */
+  value: string;
+  onValueChange: (value: string) => void;
   onSubmit: (value: string) => void;
   onStop: () => void;
   busy: boolean;
   placeholder?: string;
   className?: string;
+  ref?: Ref<HTMLTextAreaElement>;
 }
 
 function SendButton({
@@ -67,16 +71,19 @@ function SendButton({
 }
 
 export default function AI_Prompt({
+  value,
+  onValueChange: setValue,
   onSubmit,
   onStop,
   busy,
   placeholder = "Stel een vraag over een jaarverslag",
   className,
+  ref,
 }: AIPromptProps) {
-  const [value, setValue] = useState("");
   // The last question sent, for ↑ in an empty box (as in a terminal).
   const lastSentRef = useRef("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useImperativeHandle(ref, () => textareaRef.current!, []);
   const textareaId = useId();
   const canSend = value.trim().length > 0 && !busy;
 

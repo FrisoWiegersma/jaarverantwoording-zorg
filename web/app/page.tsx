@@ -14,6 +14,7 @@ import AITextLoading from "@/components/kokonutui/ai-text-loading";
 import ScrollIndex from "@/components/kokonutui/scroll-index";
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
+import { OrgSearch } from "@/components/org-search";
 import { Welcome } from "@/components/welcome";
 import { hidePartialLink, parseCitations } from "@/lib/citations";
 import { cn } from "@/lib/utils";
@@ -106,6 +107,8 @@ export default function Page() {
   const [evidence, setEvidence] = useState<{ messageId: string; key: string } | null>(null);
   const busy = status === "submitted" || status === "streaming";
   const lastQuestion = useRef<HTMLHeadingElement>(null);
+  const [draft, setDraft] = useState("");
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const docs = useMemo(() => docsOf(messages), [messages]);
 
   const shownMessage = evidence ? messages.find((m) => m.id === evidence.messageId) : undefined;
@@ -114,6 +117,15 @@ export default function Page() {
   const index = Math.max(0, citations.findIndex((c) => c.key === evidence?.key));
 
   const ask = (text: string) => sendMessage({ text });
+  // A chosen template lands in the box to be read and adjusted before it is sent.
+  const fill = (text: string) => {
+    setDraft(text);
+    requestAnimationFrame(() => {
+      const el = promptRef.current;
+      el?.focus();
+      el?.setSelectionRange(text.length, text.length);
+    });
+  };
   const restart = () => {
     stop();
     setMessages([]);
@@ -137,8 +149,10 @@ export default function Page() {
     <CitationPreviewProvider docs={docs}>
       <div className="flex h-dvh">
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 shrink-0 items-center justify-between px-5 sm:px-8">
+          <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
             <Logo />
+            {/* ponytail: no room beside the logo on a phone; there the question box takes the name too. */}
+            <OrgSearch className="hidden md:block" onPick={fill} />
             <div className="flex items-center gap-2">
               <SwitchButton />
               {messages.length > 0 && (
@@ -230,7 +244,7 @@ export default function Page() {
 
           <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
             <div className="mx-auto max-w-[46rem]">
-              <AI_Prompt busy={busy} onStop={stop} onSubmit={ask} />
+              <AI_Prompt busy={busy} onStop={stop} onSubmit={ask} onValueChange={setDraft} ref={promptRef} value={draft} />
               <p className="mt-2 text-center text-[0.85rem] text-muted-foreground">
                 Klik op een geel paginanummer om te zien waar het staat.
               </p>
