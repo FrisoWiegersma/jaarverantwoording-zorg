@@ -21,7 +21,7 @@ services:
     env_file: .env
     environment:
       DIGIMV_API: http://api:8000
-      APP_ORIGIN: https://jaarverantwoording-zorg.frisowiegersma.com
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3210}
     ports:
       - "127.0.0.1:3210:3000"
     depends_on:

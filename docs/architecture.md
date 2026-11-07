@@ -1,0 +1,54 @@
+# Architecture
+
+[Back to the README](../README.md)
+
+## Request flow
+
+1. The Next.js chat route runs Gemini through the AI SDK. The browser receives tool progress and answer parts over the same stream.
+2. `search_organizations` identifies the organisation and its documents. Document keys include both year and document ID because IDs restart each year.
+3. `get_figures` retrieves questionnaire fields with their label paths, values, units, and variable names. The result distinguishes group accounts from single-entity filings. Field names vary across years, so searches use labels.
+4. `get_document` downloads and extracts a document on its first read, then returns requested pages. `search_documents` searches pages already indexed in the cache.
+5. `present_answer` accepts a short summary and sourced figure rows. Zod checks the input shape, Dutch numeric notation, and citation paths. The server serializes validated arguments into an OpenUI `FinancialAnswer` program.
+6. The client renders a table, cards, or chart. All views retain a source table and Excel controls. The Markdown fallback is generated from the same rows.
+
+OpenUI supplies the renderer inside the existing chat. The healthcare app does not use the separate LangGraph experiment or an OpenUI Gateway. Chart groups separate posts and units; negative values keep their sign and use a different bar colour.
+
+## Retrieval and storage
+
+```mermaid
+flowchart TD
+    I[DigiMV archive metadata] --> S[Index sync]
+    S --> O[(Organisations & documents)]
+    Q[Questionnaire request] --> F[(Filed fields & label search)]
+    D[Document request] --> C{Cached extraction current?}
+    C -->|yes| M[Requested Markdown pages]
+    C -->|no| P[Download and validate PDF]
+    P --> V{Visible text on page?}
+    V -->|yes| L[Local PyMuPDF extraction]
+    V -->|no| G[Gemini OCR]
+    L --> K[(Markdown pages & text search)]
+    G --> K
+    K --> M
+```
+
+SQLite uses WAL mode so cached reads can continue during an index refresh. Organisation and questionnaire searches use an accent-insensitive trigram index; extracted pages use word-prefix search. The Docker image includes a SQLite runtime supporting those tokenizers, runs the offline self-check at build time, and probes a real search at API startup.
+
+Metadata refreshes in the background when older than 24 hours. The document cache records publication information and extractor version, so updated filings or extraction changes can trigger a new conversion. An empty upstream year does not overwrite a populated index year.
+
+PDF pages with an image and little visible text go through OCR. Invisible scanner text and short auditor stamps should not cause a scanned page to be treated as ordinary text. Each extracted page records its source; OCR output remains an interpretation of the image.
+
+## Evidence and export
+
+A PDF citation identifies a year, document, page, and quote. The API renders the page with matching text highlighted and reports `all`, `partial`, or `none`. A questionnaire citation identifies the organisation, year, and filed variable; the panel shows the label path and original value.
+
+Neither mechanism proves the model selected the right entity, period, unit, or accounting concept. Those remain interpretation risks. Domain instructions guide the model to prefer group totals where relevant and to surface discrepancies between questionnaire and PDF values.
+
+For Excel, the client extracts table rows and parses Dutch numeric notation. Clipboard output contains HTML numeric metadata and a text fallback. The download route validates the table and writes an ExcelJS workbook with numeric cells, formatting, a frozen header, source hyperlinks, and a question/source note. Hyperlinks must resolve to valid evidence paths on the configured app origin. Text beginning with `=` remains text in the workbook.
+
+## Operating boundaries
+
+- The tool loop stops after the presentation tool or the configured step limit. Older tool results are pruned from later turns to limit repeated document context; earlier answer links remain available.
+- The prompt tells the model to re-read figures when their tool evidence is no longer in context. This is an instruction, not a guarantee of factual correctness.
+- The API is internal to the Compose network. The frontend binds to host loopback. A remotely accessible deployment needs an authenticated reverse proxy; the application itself does not implement user accounts or rate limits.
+- Provider credentials remain on the server. Extracted pages sent to Gemini are public report content, but questions and model context also reach the provider.
+- The system has offline regression checks and manual browser validation, rather than a scored dataset of financial questions. Reported behaviour should be assessed with that limit in mind.
