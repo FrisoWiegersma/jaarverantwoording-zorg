@@ -1,0 +1,160 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* ponytail: dark mode follows the OS; add a .dark class toggle if someone asks for a switch */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--muted);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--muted);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--ring);
+  --color-marker: var(--marker);
+  --color-marker-edge: var(--marker-edge);
+  --color-marker-ink: var(--marker-ink);
+  --font-sans: var(--font-atkinson);
+  --font-heading: var(--font-atkinson);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+/* Paper, ink and one marker. Yellow only ever means "this is where it says so".
+   Night: deep ink navy, surfaces lifted by light rather than by grey. Day: blue-white paper. */
+:root {
+  --background: #f3f5f9;
+  --foreground: #0e1626;
+  --card: #ffffff;
+  --muted: #e9edf4;
+  --muted-foreground: #586378;
+  --border: #dfe4ee;
+  --primary: #0e1626;
+  --primary-foreground: #ffffff;
+  --ring: #4c6fff;
+  --destructive: #b42318;
+  --marker: #ffd84a;
+  --marker-edge: #d9ab00;
+  --marker-ink: #1a1503;
+  /* raised surfaces: hairline, top light, long soft shadow */
+  --raise-line: rgb(14 22 38 / 0.07);
+  --raise-top: rgb(255 255 255 / 0.9);
+  --raise-shadow: 0 1px 2px rgb(14 22 38 / 0.04), 0 18px 40px -22px rgb(14 22 38 / 0.28);
+  --radius: 0.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #080d18;
+    --foreground: #eef1f8;
+    --card: #101829;
+    --muted: #172238;
+    --muted-foreground: #8e9ab3;
+    --border: #1d2940;
+    --primary: #eef1f8;
+    --primary-foreground: #080d18;
+    --ring: #8ea6ff;
+    --destructive: #f97066;
+    --marker: #f6cf45;
+    --marker-edge: #b8901a;
+    --raise-line: rgb(148 170 220 / 0.12);
+    --raise-top: rgb(255 255 255 / 0.06);
+    --raise-shadow: 0 1px 0 rgb(0 0 0 / 0.4), 0 24px 60px -28px rgb(0 0 0 / 0.9);
+  }
+}
+
+@utility raised {
+  background-color: var(--card);
+  box-shadow: inset 0 1px 0 var(--raise-top), 0 0 0 1px var(--raise-line), var(--raise-shadow);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    font-size: 17px;
+  }
+  body {
+    @apply bg-background text-foreground;
+    line-height: 1.6;
+  }
+}
+
+/* Answer prose: what the model writes, in Markdown. */
+.answer > * + * {
+  margin-top: 0.85em;
+}
+.answer h1,
+.answer h2,
+.answer h3 {
+  font-weight: 650;
+  line-height: 1.35;
+  margin-top: 1.4em;
+}
+.answer h1 {
+  font-size: 1.2rem;
+}
+.answer h2,
+.answer h3 {
+  font-size: 1.05rem;
+}
+.answer ul {
+  list-style: disc;
+  padding-left: 1.3em;
+}
+.answer ol {
+  list-style: decimal;
+  padding-left: 1.3em;
+}
+.answer li + li {
+  margin-top: 0.3em;
+}
+.answer strong {
+  font-weight: 650;
+}
+.answer a:not([data-citation]) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.answer table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.94rem;
+  font-variant-numeric: tabular-nums;
+}
+.answer th,
+.answer td {
+  padding: 0.45em 0.75em;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.answer tr:last-child td {
+  border-bottom: 0;
+}
+.answer th {
+  font-weight: 650;
+  border-bottom-color: var(--foreground);
+}
+.answer th[align="right"],
+.answer td[align="right"] {
+  text-align: right;
+}

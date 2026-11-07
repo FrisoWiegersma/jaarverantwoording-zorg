@@ -58,6 +58,13 @@ the full corpus is 79k PDFs and 119 GB.
 **Chat** (`web/`, Next.js + Kokonut UI, Gemini via `GEMINI_API_KEY`; `web/.env` is a symlink to `../.env`): run the API, then
 `cd web && npm run dev -- --port 3210`. Every figure links to `/documents/{year}/{id}/pages/{page}.png?quote=`, which renders
 the PDF page with the quote highlighted (`X-Mark` = its box, `X-Found` = all | partial | none). `CHAT_MODEL` overrides `gemini-3.8-flash`.
+Questionnaire figures cite `/bron/vragenlijst/{year}/{org_id}/{var}`. Every answer with figures ends in a table (one figure per row)
+with **Kopieer voor Excel** (HTML with `x:num`, so numbers paste as numbers) and **Download als Excel** (`POST /api/xlsx`, ExcelJS).
+Each Bron cell links to `/bron/…?q=<quote>`, a standalone page with the same evidence as the side panel.
+
+OpenUI renders financial answers inside the existing chat: tables, summary cards, and comparison charts.
+All three keep the same source table and Excel buttons. The separate `openui-agent/` directory is an
+experimental weather agent, committed for reference and not deployed with the healthcare app.
 
 **MCP** (stdio): `claude mcp add digimv -- uv run --env-file "$PWD/.env" --directory "$PWD" mcp_server.py`.
 Tools: `search_organizations`, `get_figures`, `get_document` (the first call per document downloads + converts it),
@@ -71,3 +78,28 @@ pdf/{year}/{id}.pdf               original PDFs, size-checked against the index
 md/{org_id}/{year}/{id}.md        Markdown with YAML frontmatter and <!-- page N --> markers (the knowledge base)
 md/{org_id}/{year}/{id}.pages.json  per-page Markdown + source, so the .md can be rebuilt without re-running OCR
 ```
+
+## Homelab deployment
+
+Compose runs the Python API internally and publishes Next.js on `127.0.0.1:3210`. The host's
+Cloudflare tunnel routes `https://jaarverantwoording-zorg.frisowiegersma.com` to `http://localhost:3210`,
+protected by Cloudflare Access. Both services have health checks and restart automatically.
+SQLite, PDFs and extracted pages live in the `digimv-data` Docker volume. Keep this volume on updates.
+
+Host: `ssh frisowiegersma@100.114.142.121` (Tailscale `homelabfriso`).
+Directory: `/home/frisowiegersma/jaarverantwoording-zorg`. Keep `.env` untracked and mode 600, with
+`GEMINI_API_KEY` and optionally `CHAT_MODEL` / `GEMINI_MODEL`; credentials never enter the images.
+
+Deploy a committed revision, using its short hash as `APP_VERSION`:
+
+```sh
+APP_VERSION=<commit> docker compose build
+APP_VERSION=<commit> docker compose up -d --wait
+docker compose ps
+docker compose logs --tail=50
+```
+
+Keep the previous images and source revision. To roll back, restore that source revision and run
+`APP_VERSION=<previous-commit> docker compose up -d --no-build --wait`. Never use `down -v`.
+Before replacing an existing data volume, back it up with the API stopped. For a live SQLite copy,
+use SQLite's backup API rather than copying the database without its WAL.

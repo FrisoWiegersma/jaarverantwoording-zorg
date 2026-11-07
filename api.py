@@ -61,6 +61,12 @@ def document(year: int, doc_id: int, pages: str | None = None):
             "pages": [{"page": n, "source": r["page_sources"][n - 1], "markdown": r["pages"][n - 1]} for n in sel]}
 
 
+@app.get("/documents/{year}/{doc_id}/meta")
+def document_meta(year: int, doc_id: int):
+    """Index metadata only (org name, type, ...): never downloads or converts. The chat's /bron page heading."""
+    return _doc_or_404(digimv.get_doc, year, doc_id)
+
+
 @app.get("/documents/{year}/{doc_id}/pdf")
 def pdf(year: int, doc_id: int):
     d = _doc_or_404(digimv.get_doc, year, doc_id)
