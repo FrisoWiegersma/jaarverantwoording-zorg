@@ -136,7 +136,7 @@ export default function Page() {
           <Logo />
           {messages.length > 0 && (
             <button
-              className="raised min-h-11 rounded-full px-4 transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+              className="raised min-h-11 shrink-0 whitespace-nowrap rounded-full px-3 text-sm transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4 sm:text-base"
               onClick={restart}
               type="button"
             >
@@ -219,7 +219,7 @@ export default function Page() {
           </div>
         </main>
 
-        <div className="shrink-0 px-5 pt-2 pb-4 sm:px-8">
+        <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
           <div className="mx-auto max-w-[46rem]">
             <AI_Prompt busy={busy} onStop={stop} onSubmit={ask} />
             <p className="mt-2 text-center text-[0.85rem] text-muted-foreground">

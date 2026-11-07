@@ -18,7 +18,11 @@ test("OpenUI arguments round-trip, with source links and Dutch numbers preserved
   assert.deepEqual(parsed.root.props, input);
   assert.equal(parseCitations(data.fallback)[0].href, figure.href);
   assert.equal(parseNumber(figure.amount)?.num, 89422224);
-  assert.match(data.fallback, /\| Basalt \| Omzet \| 2023 \| 89.422.224/);
+  assert.match(data.fallback, /\| Omzet \| 2023 \| 89.422.224/);
+  assert.doesNotMatch(data.fallback, /Organisatie \|/);
+  const comparison = presentAnswer({ ...input, figures: [figure, { ...figure, organization: "Alrijne" }] });
+  assert.match(comparison.fallback, /Organisatie \|/);
+  assert.match(comparison.fallback, /\| Alrijne \| Omzet/);
 });
 
 test("reject invalid amounts and external sources; group charts by post and unit", () => {

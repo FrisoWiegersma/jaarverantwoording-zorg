@@ -384,7 +384,12 @@ export function Evidence(props: EvidenceProps) {
   return (
     <Drawer onOpenChange={(o) => !o && onClose()} open={open}>
       <DrawerContent className="max-h-[92dvh]">
-        <DrawerTitle className="px-5 pt-3 font-semibold">Waar het staat</DrawerTitle>
+        <div className="flex shrink-0 items-center justify-between pr-2 pl-5">
+          <DrawerTitle className="font-semibold">Waar het staat</DrawerTitle>
+          <button aria-label="Sluit" className="flex size-11 items-center justify-center rounded-full hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" onClick={onClose} type="button">
+            <X aria-hidden="true" className="size-5" />
+          </button>
+        </div>
         <DrawerDescription className="sr-only">De pagina uit het jaarverslag of het veld uit de DigiMV-vragenlijst waar dit getal staat.</DrawerDescription>
         <div className="overflow-y-auto px-5 pt-3 pb-8">
           <EvidenceBody {...props} />

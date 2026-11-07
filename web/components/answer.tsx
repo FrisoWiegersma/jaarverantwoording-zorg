@@ -84,10 +84,10 @@ function TableCard({ question, children }: { question: string; children: ReactNo
   };
 
   const button =
-    "inline-flex min-h-10 items-center gap-1.5 rounded-full px-3 text-[0.9rem] font-semibold transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+    "inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[0.9rem] font-semibold transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
   return (
     <div className="raised my-5 overflow-hidden rounded-xl">
-      <div className="overflow-x-auto px-4 pt-1">
+      <div aria-label="Cijfertabel" className="overflow-x-auto px-4 pt-1 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" role="region" tabIndex={0}>
         <table ref={table}>{children}</table>
       </div>
       <div className="flex flex-wrap items-center gap-1 border-t px-2 py-1.5">

@@ -24,8 +24,9 @@ export type RichAnswerData = z.infer<typeof richAnswerSchema>;
 const cell = (s: string) => s.replace(/[\\|\[\]<>`*_]/g, "\\$&").replace(/[\r\n]/g, " ");
 
 export function figureTable(figures: Figure[]) {
-  return "| Organisatie | Post | Jaar | Bedrag | Eenheid | Bron |\n| --- | --- | ---: | ---: | --- | --- |\n" +
-    figures.map((f) => `| ${cell(f.organization)} | ${cell(f.label)} | ${f.year} | ${cell(f.amount)} | ${cell(f.unit)} | [${f.href.includes("/vragenlijst/") ? "DigiMV" : `p. ${f.href.split("/").at(-1)}`}](${f.href} "${f.quote.replace(/["|\r\n]/g, " ")}") |`).join("\n");
+  const multiple = new Set(figures.map((f) => f.organization)).size > 1;
+  return `| ${multiple ? "Organisatie | " : ""}Post | Jaar | Bedrag | Eenheid | Bron |\n| ${multiple ? "--- | " : ""}--- | ---: | ---: | --- | --- |\n` +
+    figures.map((f) => `| ${multiple ? `${cell(f.organization)} | ` : ""}${cell(f.label)} | ${f.year} | ${cell(f.amount)} | ${cell(f.unit)} | [${f.href.includes("/vragenlijst/") ? "DigiMV" : `p. ${f.href.split("/").at(-1)}`}](${f.href} "${f.quote.replace(/["|\r\n]/g, " ")}") |`).join("\n");
 }
 
 /** The model chooses the presentation; OpenUI receives only validated component arguments. */
