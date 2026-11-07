@@ -57,6 +57,17 @@ export function trendSeries(rows: Figure[]) {
   return [...rows].sort((a, b) => a.year - b.year);
 }
 
+/** The question for a comparison over the latest years both filed; a short range keeps the answer quick. */
+export function compareQuestion(a: { name: string; years: number[] }, b: { name: string; years: number[] }, what: string) {
+  const both = a.years.filter((y) => b.years.includes(y));
+  if (!both.length) return `Vergelijk ${what} van ${a.name} en ${b.name} in hun laatste jaarverslagen.`;
+  const last = Math.max(...both);
+  const first = Math.max(Math.min(...both), last - 3);
+  return first < last
+    ? `Vergelijk ${what} van ${a.name} en ${b.name} van ${first} tot en met ${last} in een grafiek.`
+    : `Vergelijk ${what} van ${a.name} en ${b.name} in ${last}.`;
+}
+
 /** A chart group that compares organisations: two to four of them (one line and colour each), one row per organisation
  * per year, two or more years in all. Years ascending, organisations in the answer's order. */
 export function compareSeries(rows: Figure[]) {

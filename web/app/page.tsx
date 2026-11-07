@@ -166,7 +166,7 @@ export default function Page() {
     <CitationPreviewProvider docs={docs}>
       <div className="flex h-dvh">
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
+          <header className="@container flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
             <Logo />
             <div className="flex items-center gap-2">
               <OrgSearch />
@@ -177,12 +177,12 @@ export default function Page() {
               {messages.length > 0 && (
                 <button
                   aria-label="Nieuwe vraag"
-                  className="raised inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+                  className="raised inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring @2xl:px-4"
                   onClick={() => load([])}
                   type="button"
                 >
-                  <SquarePen aria-hidden="true" className="size-[18px] sm:hidden" />
-                  <span className="hidden sm:inline">Nieuwe vraag</span>
+                  <SquarePen aria-hidden="true" className="size-[18px] @2xl:hidden" />
+                  <span className="hidden @2xl:inline">Nieuwe vraag</span>
                 </button>
               )}
             </div>

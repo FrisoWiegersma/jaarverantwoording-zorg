@@ -10,7 +10,7 @@ import { Evidence } from "@/components/evidence";
 import MetricCard, { type TrendPoint } from "@/components/kokonutui/metric-card";
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
-import { type Org, OrgSearch } from "@/components/org-search";
+import { CompareWith, type Org, OrgSearch } from "@/components/org-search";
 import { type Citation, citationKey, parseHref } from "@/lib/citations";
 
 type Doc = { year: number; id: number; type: string; file_name: string; published: string | null };
@@ -103,7 +103,7 @@ function Profile({ id }: { id: string }) {
     <CitationPreviewProvider docs={{}}>
       <div className="flex h-dvh">
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
+          <header className="@container flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
             <Link className="rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" href="/">
               <Logo />
             </Link>
@@ -132,6 +132,9 @@ function Profile({ id }: { id: string }) {
                     {[org.town, `KvK ${org.org_id}`, `jaarverslagen ${Math.min(...org.years)}–${Math.max(...org.years)}`].filter(Boolean).join(" · ")}
                     {org.former_names.length > 0 && <> · eerder {org.former_names.join(", ")}</>}
                   </p>
+                  <div className="mt-5">
+                    <CompareWith onAsk={ask} org={org} />
+                  </div>
 
                   <p aria-live="polite" className="mt-6 min-h-6 text-[0.95rem] text-muted-foreground">
                     {loading > 0

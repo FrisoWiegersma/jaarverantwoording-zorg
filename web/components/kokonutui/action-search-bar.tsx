@@ -96,6 +96,7 @@ export default function ActionSearchBar({
   className,
   autoFocus = false,
   onClose,
+  chooseLabel = "Invullen",
 }: {
   /** The top-level rows for the current query. */
   items: CommandItem[];
@@ -112,6 +113,8 @@ export default function ActionSearchBar({
   autoFocus?: boolean;
   /** After it closes: Escape, a choice, focus leaving it. */
   onClose?: () => void;
+  /** What Enter does to a row without a page, in the footer. */
+  chooseLabel?: string;
 }) {
   const uid = useId();
   const inputId = `${uid}-input`;
@@ -483,7 +486,7 @@ export default function ActionSearchBar({
                   <span className="mr-1.5">Kiezen</span>
                 </span>
                 <Kbd>↵</Kbd>
-                <span>{activeRow?.value && !activeRow.value.startsWith("/") ? "Invullen" : "Openen"}</span>
+                <span>{activeRow?.children ? "Openen" : chooseLabel}</span>
               </span>
               <span className="flex items-center gap-1.5">
                 {stack.length > 0 && (

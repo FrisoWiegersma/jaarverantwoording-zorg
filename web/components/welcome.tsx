@@ -6,7 +6,7 @@ import { CornerDownLeft } from "lucide-react";
 const SUGGESTIONS = [
   "Wat was het eigen vermogen van Zorggroep Exact eind 2023?",
   "Hoeveel omzet had de Alrijne Zorggroep in 2025?",
-  "Hoe groot was het resultaat van Stichting Basalt in 2025, vergeleken met het jaar ervoor?",
+  "Vergelijk de omzet van Stichting Basalt en Treant Zorggroep van 2022 tot en met 2025.",
 ];
 
 export function Welcome({ onAsk }: { onAsk: (question: string) => void }) {
@@ -16,8 +16,8 @@ export function Welcome({ onAsk }: { onAsk: (question: string) => void }) {
         Vraag het de jaarverslagen.
       </h1>
       <p className="mt-4 max-w-[34rem] text-[1.1rem] text-muted-foreground leading-relaxed">
-        Over omzet, eigen vermogen of personeel van een zorgorganisatie, 2019 tot nu. Bij elk bedrag zie je de pagina
-        waar het staat.
+        Over omzet, eigen vermogen of personeel van een zorgorganisatie, of van een paar naast elkaar, 2019 tot nu. Bij
+        elk bedrag zie je de pagina waar het staat.
       </p>
 
       <ul className="raised mt-10 max-w-[36rem] divide-y divide-border overflow-hidden rounded-2xl">

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createParser } from "@openuidev/lang-core";
 import { z } from "zod";
-import { chartGroups, compareSeries, presentAnswer, richAnswerSchema, trendSeries, type Figure } from "./rich-answer.ts";
+import { chartGroups, compareQuestion, compareSeries, presentAnswer, richAnswerSchema, trendSeries, type Figure } from "./rich-answer.ts";
 import { parseCitations, safeEvidenceLink } from "./citations.ts";
 import { parseNumber } from "./excel.ts";
 
@@ -57,4 +57,11 @@ test("a comparison needs two to four organisations over two or more years, one r
   assert.equal(compareSeries(rows.filter((f) => f.organization === "Basalt")), null);
   assert.equal(compareSeries([...rows, { ...figure, organization: "Basalt", year: 2022 }]), null);
   assert.equal(compareSeries(["A", "B", "C", "D", "E"].flatMap((organization) => [2022, 2023].map((year) => ({ ...figure, organization, year })))), null);
+});
+
+test("compareQuestion asks over the latest years both organisations filed", () => {
+  const a = { name: "A", years: [2019, 2020, 2021, 2022, 2023, 2024, 2025] };
+  assert.equal(compareQuestion(a, { name: "B", years: [2020, 2021, 2022, 2023, 2024] }, "de omzet"), "Vergelijk de omzet van A en B van 2021 tot en met 2024 in een grafiek.");
+  assert.equal(compareQuestion(a, { name: "B", years: [2025] }, "de omzet"), "Vergelijk de omzet van A en B in 2025.");
+  assert.equal(compareQuestion(a, { name: "B", years: [2018] }, "de omzet"), "Vergelijk de omzet van A en B in hun laatste jaarverslagen.");
 });
