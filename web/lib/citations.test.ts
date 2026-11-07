@@ -1,7 +1,7 @@
 // Run: node --test lib/*.test.ts
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { citationFromKey, evidenceUrl, hidePartialLink, parseCitations, parseHref } from "./citations.ts";
+import { evidenceUrl, hidePartialLink, parseCitations, parseHref } from "./citations.ts";
 
 test("citations", () => {
   const text =
@@ -36,10 +36,6 @@ test("citations", () => {
     parseCitations("[p. 12](/bron/2023/84870/12 'Eigen vermogen 108.256')").map((x) => x.quote),
     ["Eigen vermogen 108.256"],
   );
-  assert.deepEqual(citationFromKey("/bron/2023/84870/12|Eigen vermogen"), {
-    kind: "page", year: 2023, docId: 84870, page: 12, key: "/bron/2023/84870/12|Eigen vermogen",
-    href: "/bron/2023/84870/12", quote: "Eigen vermogen",
-  });
   assert.equal(
     evidenceUrl("/bron/2023/84870/10", "Eigen vermogen 108.256", "https://x.nl"),
     "https://x.nl/bron/2023/84870/10?q=Eigen%20vermogen%20108.256",

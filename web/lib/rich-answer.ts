@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parseHref } from "./citations.ts";
 import { parseNumber } from "./excel.ts";
 
-export const figureSchema = z.object({
+const figureSchema = z.object({
   organization: z.string().min(1).max(200),
   label: z.string().min(1).max(200),
   year: z.number().int().min(2019).max(2100),

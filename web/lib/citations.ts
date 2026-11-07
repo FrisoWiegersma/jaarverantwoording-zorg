@@ -40,14 +40,6 @@ export function parseCitations(text: string): Citation[] {
   return [...seen.values()];
 }
 
-/** The citation behind a chip's key, for a chip the text parser missed (escapes, entities in the title). */
-export function citationFromKey(key: string): Citation | null {
-  const at = key.indexOf("|");
-  const href = key.slice(0, at);
-  const source = parseHref(href);
-  return source && { ...source, key, href, quote: key.slice(at + 1) };
-}
-
 /** The standalone evidence page for one citation: what a Bron link in Excel opens. */
 export function evidenceUrl(href: string, quote: string | undefined, origin: string) {
   return `${origin}${href}${quote ? `?q=${encodeURIComponent(quote)}` : ""}`;

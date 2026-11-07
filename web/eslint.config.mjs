@@ -12,8 +12,6 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Vendored Kokonut UI components: kept as shipped, not held to the React Compiler lint rules.
-    "components/kokonutui/**",
   ]),
 ]);
 

@@ -20,13 +20,11 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface AITextLoadingProps {
-  texts?: string[];
+  texts: string[];
   className?: string;
   interval?: number;
   /** Stable status for screen readers; the cycling words are hidden from them. */
-  label?: string;
-  /** Show the seconds spent so far next to the words. */
-  showElapsed?: boolean;
+  label: string;
 }
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -60,20 +58,12 @@ const letterVariants = {
 } satisfies Variants;
 
 export default function AITextLoading({
-  texts = [
-    "Thinking...",
-    "Processing...",
-    "Analyzing...",
-    "Computing...",
-    "Almost...",
-  ],
+  texts,
   className,
   interval = 1500,
-  label = "Loading",
-  showElapsed = false,
+  label,
 }: AITextLoadingProps) {
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
-  const [seconds, setSeconds] = useState(0);
   // Clamped, so a shorter (or empty) `texts` never reads past the end.
   const textIndex = texts.length > 0 ? currentTextIndex % texts.length : 0;
   const text = texts[textIndex] ?? "";
@@ -88,20 +78,6 @@ export default function AITextLoading({
 
     return () => clearInterval(timer);
   }, [interval, texts.length]);
-
-  useEffect(() => {
-    if (!showElapsed) {
-      return;
-    }
-    // Counts from zero each time it's turned on, not from the last run.
-    setSeconds(0);
-    const startedAt = Date.now();
-    const timer = setInterval(
-      () => setSeconds(Math.floor((Date.now() - startedAt) / 1000)),
-      500
-    );
-    return () => clearInterval(timer);
-  }, [showElapsed]);
 
   return (
     <output
@@ -132,7 +108,6 @@ export default function AITextLoading({
               {Array.from(text).map((char, i) => (
                 <motion.span
                   className="inline-block"
-                  // biome-ignore lint/suspicious/noArrayIndexKey: letters of one fixed word, never reordered
                   key={i}
                   variants={letterVariants}
                 >
@@ -151,14 +126,6 @@ export default function AITextLoading({
           </AnimatePresence>
         </span>
       </MotionConfig>
-      {showElapsed && (
-        <span
-          aria-hidden="true"
-          className="font-medium text-base text-neutral-400 tabular-nums dark:text-neutral-500"
-        >
-          {seconds}s
-        </span>
-      )}
     </output>
   );
 }

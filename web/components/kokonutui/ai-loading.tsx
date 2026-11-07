@@ -15,7 +15,7 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
-export type AgentStepStatus = "pending" | "running" | "done" | "error";
+type AgentStepStatus = "running" | "done" | "error";
 
 export interface AgentStep {
   id: string;
@@ -26,133 +26,13 @@ export interface AgentStep {
 }
 
 interface AILoadingStateProps {
-  /**
-   * The agent's steps, in order. Update them as work progresses. When
-   * omitted, a demo run plays on a loop.
-   */
-  steps?: AgentStep[];
-  /** Collapse the list once every step is done. Defaults to true. */
-  collapseWhenDone?: boolean;
+  steps: AgentStep[];
   className?: string;
 }
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 const LINE_HEIGHT = 24;
 const VISIBLE_LINES = 3;
-
-const DEMO_STEPS: Omit<AgentStep, "status">[] = [
-  {
-    id: "search",
-    label: "Searching the web",
-    detail: [
-      "query: loading states in agent UIs",
-      "visiting 5 websites",
-      "reading emilkowal.ski/ui/great-animations",
-      "reading developer.apple.com/design",
-    ],
-  },
-  {
-    id: "read",
-    label: "Reading 4 sources",
-    detail: [
-      "extracting key passages",
-      "dropping 1 duplicate source",
-      "ranking by relevance",
-    ],
-  },
-  {
-    id: "compare",
-    label: "Comparing approaches",
-    detail: [
-      "spinners vs. step lists",
-      "progress you can verify",
-      "checking motion preferences",
-    ],
-  },
-  {
-    id: "write",
-    label: "Writing the summary",
-    detail: ["drafting 3 sections"],
-  },
-];
-
-const DEMO_TICK_MS = 750;
-const DEMO_REST_MS = 3200;
-
-interface DemoPosition {
-  step: number;
-  line: number;
-}
-
-const advanceDemo = ({ step, line }: DemoPosition): DemoPosition => {
-  if (step >= DEMO_STEPS.length) {
-    return { step: 0, line: 0 };
-  }
-  const lineCount = DEMO_STEPS[step].detail?.length ?? 0;
-  return line < lineCount
-    ? { step, line: line + 1 }
-    : { step: step + 1, line: 0 };
-};
-
-/** Advances through DEMO_STEPS one log line per tick, pausing offscreen. */
-function useDemoRun(
-  enabled: boolean,
-  rootRef: React.RefObject<HTMLElement | null>
-) {
-  const [position, setPosition] = useState<DemoPosition>({
-    step: 0,
-    line: 0,
-  });
-  const [isVisible, setIsVisible] = useState(true);
-
-  useEffect(() => {
-    const element = rootRef.current;
-    if (!(enabled && element)) {
-      return;
-    }
-    const observer = new IntersectionObserver(([entry]) =>
-      setIsVisible(entry.isIntersecting)
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [enabled, rootRef]);
-
-  const positionRef = useRef(position);
-
-  useEffect(() => {
-    if (!(enabled && isVisible)) {
-      return;
-    }
-    let id: ReturnType<typeof setTimeout>;
-    const schedule = () => {
-      const finished = positionRef.current.step >= DEMO_STEPS.length;
-      id = setTimeout(
-        () => {
-          positionRef.current = advanceDemo(positionRef.current);
-          setPosition(positionRef.current);
-          schedule();
-        },
-        finished ? DEMO_REST_MS : DEMO_TICK_MS
-      );
-    };
-    schedule();
-    return () => clearTimeout(id);
-  }, [enabled, isVisible]);
-
-  return DEMO_STEPS.map((step, i): AgentStep => {
-    if (i < position.step) {
-      return { ...step, status: "done" };
-    }
-    if (i === position.step) {
-      return {
-        ...step,
-        status: "running",
-        detail: step.detail?.slice(0, position.line),
-      };
-    }
-    return { ...step, status: "pending" };
-  });
-}
 
 function StepIcon({ status }: { status: AgentStepStatus }) {
   return (
@@ -166,9 +46,6 @@ function StepIcon({ status }: { status: AgentStepStatus }) {
           key={status}
           transition={{ duration: 0.18, ease: EASE_OUT }}
         >
-          {status === "pending" && (
-            <span className="size-1.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
-          )}
           {status === "running" && (
             <svg
               aria-hidden="true"
@@ -333,7 +210,6 @@ function WaveText({ text }: { text: string }) {
       {Array.from(text).map((char, i) => (
         <span
           className="kokonut-ai-wave whitespace-pre"
-          // biome-ignore lint/suspicious/noArrayIndexKey: letters of one fixed label, never reordered
           key={i}
           style={{ animationDelay: `${i * 0.05}s` }}
         >
@@ -349,7 +225,7 @@ const formatStepTime = (ms: number) =>
 
 /**
  * Times each step from when it starts running to when it ends, so callers
- * only pass statuses. A step back to pending clears its time.
+ * only pass statuses.
  */
 function useStepTimes(steps: AgentStep[]) {
   const [times, setTimes] = useState<Record<string, number>>({});
@@ -361,11 +237,6 @@ function useStepTimes(steps: AgentStep[]) {
     const finished: Record<string, number> = {};
     let changed = false;
     for (const step of steps) {
-      if (step.status === "pending") {
-        delete starts[step.id];
-        changed ||= step.id in times;
-        continue;
-      }
       // Running again after it had ended: a new run, so time it afresh.
       if (step.status === "running" && step.id in times) {
         starts[step.id] = now;
@@ -378,6 +249,7 @@ function useStepTimes(steps: AgentStep[]) {
       }
     }
     if (changed) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Record finish times when streamed tool states change.
       setTimes(finished);
     }
   }, [steps, times]);
@@ -386,7 +258,6 @@ function useStepTimes(steps: AgentStep[]) {
 }
 
 const LABEL_COLORS: Record<AgentStepStatus, string> = {
-  pending: "text-zinc-400 dark:text-zinc-500",
   running: "text-zinc-900 dark:text-zinc-100",
   done: "text-zinc-500 dark:text-zinc-400",
   error: "text-red-600 dark:text-red-400",
@@ -459,13 +330,9 @@ function StepRow({
 }
 
 export default function AILoadingState({
-  steps: stepsProp,
-  collapseWhenDone = true,
+  steps,
   className,
 }: AILoadingStateProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const demoSteps = useDemoRun(stepsProp === undefined, rootRef);
-  const steps = stepsProp ?? demoSteps;
   const listId = useId();
 
   const running = steps.find((step) => step.status === "running");
@@ -480,7 +347,7 @@ export default function AILoadingState({
   // opens it again.
   // Synced during render rather than in an effect, so a list that mounts
   // already done starts folded instead of playing a collapse.
-  const shouldCollapse = isDone && collapseWhenDone;
+  const shouldCollapse = isDone;
   const [isOpen, setIsOpen] = useState(!shouldCollapse);
   const [wasCollapsed, setWasCollapsed] = useState(shouldCollapse);
   if (wasCollapsed !== shouldCollapse) {
@@ -500,10 +367,7 @@ export default function AILoadingState({
   }
 
   return (
-    <div
-      className={cn("flex w-full", className)}
-      ref={rootRef}
-    >
+    <div className={cn("flex w-full", className)}>
       <MotionConfig reducedMotion="user">
         <div className="w-full max-w-xl">
           <button
