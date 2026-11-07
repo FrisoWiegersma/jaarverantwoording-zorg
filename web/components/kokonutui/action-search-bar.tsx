@@ -406,6 +406,8 @@ export default function ActionSearchBar({
             aria-expanded={open}
             autoComplete="off"
             autoFocus={autoFocus}
+            // A phone keyboard's Enter would otherwise be "next field" and jump to the next input on the page.
+            enterKeyHint="go"
             className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             id={inputId}
             onChange={handleChange}
