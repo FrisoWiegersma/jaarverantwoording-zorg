@@ -1,4 +1,4 @@
-"""Offline check of flattening and keys. Run: python test_digimv.py"""
+"""Offline check of flattening, keys and search. Run: python test_digimv.py"""
 
 import digimv
 
@@ -38,13 +38,32 @@ def run():
     assert digimv.get_doc(2023, 4, db)["desaveu"].startswith("Désaveuverklaring")
     assert digimv.get_doc(2023, 1, db)["url"].endswith("documentId=1&year=2023")
 
+    # substring tokens over name + town, across years; mid-word for Dutch compounds
+    assert [o["org_id"] for o in digimv.search("zorgg arnh", db=db)] == ["82905347"]
+    assert "11111111" in [o["org_id"] for o in digimv.search("huiszorg", db=db)]
+    # exact org id, also for non-KvK ids
+    assert digimv.search("82905347", db=db)[0]["name"] == "Zorggroep Exact B.V."
+    assert digimv.search("GeenKvK012", db=db)[0]["documents"] == []
+    # diacritics folded both ways; FTS syntax in user input is harmless
+    assert "11111111" in [o["org_id"] for o in digimv.search('een "thuisz', db=db)]
+    # self-location docs + désaveu merge into one org; the other location is its own org with a parent
+    b = next(o for o in digimv.search("thuiszorg", db=db) if o["org_id"] == "11111111")
+    assert {(d["year"], d["id"]) for d in b["documents"]} == {(2023, 2), (2023, 4), (2024, 1)}
+    assert b["years"] == [2023, 2024] and b["parents"] == []  # own self-location is not a parent
+    noord = next(o for o in digimv.search("noord", db=db))
+    assert (noord["org_id"], noord["parents"]) == ("22222222", ["11111111"])
+    # filters
+    assert [d["id"] for d in digimv.search("thuiszorg", doc_type="désaveu", db=db)[0]["documents"]] == [4]
+    assert [d["id"] for d in digimv.search("thuiszorg", year=2024, db=db)[0]["documents"]] == [1]
+    assert digimv.search("   ", db=db) == []
+
     # an empty API response never wipes a year we hold
     try:
         digimv.load_year(db, 2024, [])
         raise AssertionError("empty response wiped 2024")
     except ValueError:
         pass
-    assert digimv.get_doc(2024, 1, db)["org_id"] == "11111111"
+    assert digimv.search("thuiszorg", year=2024, db=db)
     # re-sync replaces the year instead of duplicating it
     assert digimv.load_year(db, 2023, Y2023) == (5, 5, 4, 4)
 

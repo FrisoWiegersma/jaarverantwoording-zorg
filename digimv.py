@@ -13,6 +13,7 @@ Notes on the data (verified against the live API):
 import argparse
 import json
 import os
+import re
 import sqlite3
 import sys
 import urllib.parse
@@ -34,6 +35,8 @@ CREATE TABLE IF NOT EXISTS docs(
   published TEXT, description TEXT, location_summary TEXT, desaveu TEXT,
   PRIMARY KEY(year, id));
 CREATE INDEX IF NOT EXISTS docs_org ON docs(org_id, year);
+CREATE VIRTUAL TABLE IF NOT EXISTS orgs_fts USING fts5(
+  name, town, org_id, content='orgs', tokenize='trigram remove_diacritics 1');
 CREATE TABLE IF NOT EXISTS sync_log(year INT, synced_at TEXT, orgs INT, docs INT);
 """
 
@@ -95,6 +98,7 @@ def load_year(db, year, data):
         db.execute("DELETE FROM docs WHERE year=?", (year,))
         db.executemany("INSERT INTO orgs VALUES (?,?,?,?,?,?)", [(year, *r) for r in orgs])
         db.executemany("INSERT INTO docs VALUES (?,?,?,?,?,?,?,?,?,?,?)", [(year, *r) for r in docs])
+        db.execute("INSERT INTO orgs_fts(orgs_fts) VALUES('rebuild')")
         n_orgs = db.execute("SELECT count(*) FROM orgs WHERE year=?", (year,)).fetchone()[0]
         n_docs = db.execute("SELECT count(*) FROM docs WHERE year=?", (year,)).fetchone()[0]
         if (n_orgs, n_docs) != (len(orgs), len(docs)):
@@ -128,10 +132,66 @@ def last_sync(db=None):
 
 # ---------------------------------------------------------------- search
 
+def _org_query(q):
+    """'woonzorgg  arnh' -> '"woonzorgg" "arnh"': every token is a substring (trigram index), so Dutch
+    compounds like 'Woonzorggroep' match 'zorggroep'. Quoting keeps FTS syntax out of user input."""
+    # ponytail: tokens under 3 chars can't use a trigram index and are dropped ('De Hoop' -> 'Hoop')
+    return " ".join(f'"{t}"' for t in re.findall(r"\w+", q) if len(t) >= 3)
+
+
 def _doc_dict(r):
     d = dict(r)
     d["url"] = doc_url(d["year"], d["id"])
     return d
+
+
+def search(q, year=None, doc_type=None, limit=50, db=None):
+    """Organisations matching q (substrings of name/town/org id, or an exact org id), across all years.
+
+    One result per org_id; documents listed per year. doc_type is a case-insensitive prefix, e.g. "jaarrekening".
+    """
+    db = db or connect()
+    q = q.strip()
+    type_like = f"{doc_type}%" if doc_type else None
+    filters, args = "", []
+    if year:
+        filters += " AND o.year=?"
+        args.append(year)
+    if type_like:
+        filters += " AND EXISTS (SELECT 1 FROM docs d WHERE d.year=o.year AND d.org_id=o.org_id AND d.type LIKE ?)"
+        args.append(type_like)
+
+    if db.execute("SELECT 1 FROM orgs WHERE org_id=?", (q,)).fetchone():
+        ids = [r[0] for r in db.execute(f"SELECT DISTINCT o.org_id FROM orgs o WHERE o.org_id=?{filters}", (q, *args))]
+    elif match := _org_query(q):
+        ids = [r[0] for r in db.execute(
+            f"""SELECT o.org_id FROM orgs_fts JOIN orgs o ON o.rowid = orgs_fts.rowid
+                WHERE orgs_fts MATCH ?{filters}
+                GROUP BY o.org_id ORDER BY min(orgs_fts.rank), max(o.year) DESC, min(o.name) LIMIT ?""",
+            (match, *args, limit))]  # trigram bm25 ties a lot; recent filers first
+    else:
+        return []
+
+    out = []
+    for oid in ids:
+        rows = db.execute("SELECT * FROM orgs WHERE org_id=? ORDER BY year DESC, parent_id=''  DESC", (oid,)).fetchall()
+        dq, dargs = "SELECT * FROM docs WHERE org_id=?", [oid]
+        if year:
+            dq += " AND year=?"
+            dargs.append(year)
+        if type_like:
+            dq += " AND type LIKE ?"
+            dargs.append(type_like)
+        out.append({
+            "org_id": oid,
+            "name": rows[0]["name"],
+            "town": rows[0]["town"],
+            "former_names": sorted({r["name"] for r in rows} - {rows[0]["name"]}),
+            "parents": sorted({r["parent_id"] for r in rows if r["parent_id"] not in ("", oid)}),
+            "years": sorted({r["year"] for r in rows}),
+            "documents": [_doc_dict(d) for d in db.execute(dq + " ORDER BY year DESC, type, id", dargs)],
+        })
+    return out
 
 
 def get_doc(year, doc_id, db=None):
@@ -147,15 +207,33 @@ def get_doc(year, doc_id, db=None):
 
 # ---------------------------------------------------------------- CLI
 
+def _fmt_size(n):
+    return f"{n / 1e6:.1f} MB" if n >= 1e6 else f"{n / 1e3:.0f} kB"
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("sync", help="download the full index for every year")
     s.add_argument("--year", type=int, action="append", help="only these years (repeatable)")
+    s = sub.add_parser("search", help="find organisations")
+    s.add_argument("q")
+    s.add_argument("--year", type=int)
+    s.add_argument("--type", help="document type prefix, e.g. jaarrekening")
+    s.add_argument("--limit", type=int, default=20)
     a = ap.parse_args(argv)
 
     if a.cmd == "sync":
         return 0 if sync(a.year or YEARS) else 1
+
+    if a.cmd == "search":
+        for o in search(a.q, a.year, a.type, a.limit):
+            parent = f"  [location of {', '.join(o['parents'])}]" if o["parents"] else ""
+            former = f"  (formerly {'; '.join(o['former_names'])})" if o["former_names"] else ""
+            print(f"{o['org_id']}  {o['name']} ({o['town']}){former}  years {','.join(map(str, o['years']))}{parent}")
+            for d in o["documents"]:
+                print(f"    {d['year']}/{d['id']:<6} {d['type'][:40]:<40} {d['file_name']}  ({_fmt_size(d['file_size'])})")
+        return 0
 
 
 if __name__ == "__main__":
