@@ -102,7 +102,6 @@ Tests cover organisation identity across years, search, extraction and OCR routi
 | `api.py`, `mcp_server.py` | HTTP and MCP interfaces over the retrieval functions |
 | `web/` | Next.js chat, OpenUI answers, source evidence, and Excel export |
 | `test_digimv.py`, `web/lib/*.test.ts` | Offline Python checks and frontend unit tests |
-| `openui-agent/` | Separate OpenUI/LangGraph weather experiment; not part of the healthcare app or Compose stack |
 
 Data comes from the public [DigiMV archive](https://digimv13.desan.nl/archive/search). This project is independently built and is not affiliated with DigiMV or the organisations whose reports it reads. The hosted instance is private; the screenshots and local setup above are the public demo.
 

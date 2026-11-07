@@ -11,7 +11,7 @@
 5. `present_answer` accepts a short summary and sourced figure rows. Zod checks the input shape, Dutch numeric notation, and citation paths. The server serializes validated arguments into an OpenUI `FinancialAnswer` program.
 6. The client renders a table, cards, or chart. All views retain a source table and Excel controls. The Markdown fallback is generated from the same rows.
 
-OpenUI supplies the renderer inside the existing chat. The healthcare app does not use the separate LangGraph experiment or an OpenUI Gateway. Chart groups separate posts and units; negative values keep their sign and use a different bar colour.
+OpenUI supplies the renderer inside the existing chat, using the app's Gemini connection. Chart groups separate posts and units; negative values keep their sign and use a different bar colour.
 
 ## Retrieval and storage
 
