@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, X
 import { motion } from "motion/react";
 import { type CSSProperties, type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+import { Mark as Marker, MarkerText } from "@/components/kokonutui/marker-text";
 import type { Citation } from "@/lib/citations";
 import { parseNumber } from "@/lib/excel";
 import { cn } from "@/lib/utils";
@@ -108,16 +109,21 @@ function Heading({ title, sub }: { title: string; sub: string }) {
 
 function PageEvidence({ c, shot, doc }: { c: PageCitation; shot: Shot | "error" | null; doc?: DocMeta }) {
   const pdf = `${pagePath(c)}/pdf#page=${c.page}`;
+  // The box is drawn once the page image has a size to draw it on.
+  const [shown, setShown] = useState<string | null>(null);
   return (
     <>
       <Heading sub={`${doc?.type ?? "Document"} ${c.year}, pagina ${c.page}`} title={doc?.org ?? `Document ${c.year}/${c.docId}`} />
 
       {c.quote && (
-        <blockquote className="text-[1.05rem] leading-relaxed">
-          <mark className="box-decoration-clone rounded-[4px] bg-marker px-1.5 py-0.5 font-semibold text-marker-ink">
-            {c.quote}
-          </mark>
-        </blockquote>
+        <MarkerText key={c.key} show>
+          <blockquote className="text-[1.05rem] leading-relaxed">
+            {/* The ink darkens as the marker passes, so the text reads on the page before and on yellow after. */}
+            <Marker className="font-semibold transition-colors delay-150 duration-500 motion-reduce:transition-none [[data-armed]_&]:text-marker-ink">
+              {c.quote}
+            </Marker>
+          </blockquote>
+        </MarkerText>
       )}
 
       {/* The real page, as printed. A click opens the whole PDF on that page. */}
@@ -132,22 +138,22 @@ function PageEvidence({ c, shot, doc }: { c: PageCitation; shot: Shot | "error" 
         target="_blank"
       >
         {shot && shot !== "error" ? (
-          <div className="relative" style={shot.mark ? pageWindow(shot.mark) : undefined}>
+          <MarkerText delay={c.quote ? 350 : 0} key={shot.src} show={shown === shot.src} style={shot.mark ? pageWindow(shot.mark) : undefined}>
             {/* eslint-disable-next-line @next/next/no-img-element -- blob URL of a rendered page, nothing to optimise */}
-            <img alt={`Pagina ${c.page}`} className="block h-auto w-full" src={shot.src} />
+            <img alt={`Pagina ${c.page}`} className="block h-auto w-full" onLoad={() => setShown(shot.src)} src={shot.src} />
             {shot.mark && (
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute -m-1.5 box-content rounded-md p-1.5 ring-2 ring-marker-edge"
+              <Marker
+                className="pointer-events-none absolute"
                 style={{
                   top: `${shot.mark[0] * 100}%`,
                   left: `${shot.mark[1] * 100}%`,
                   width: `${(shot.mark[3] - shot.mark[1]) * 100}%`,
                   height: `${(shot.mark[2] - shot.mark[0]) * 100}%`,
                 }}
+                type="box"
               />
             )}
-          </div>
+          </MarkerText>
         ) : (
           <div className={cn("h-[20rem]", shot === "error" ? "" : "animate-pulse bg-black/[0.04]")} />
         )}
