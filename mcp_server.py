@@ -11,9 +11,12 @@ mcp = MCPServer(
         "Dutch healthcare annual reports (DigiMV jaarverantwoording, 2019-2025). Workflow: search_organizations "
         "to find the org (org_id) and its documents. For figures (omzet, resultaat, eigen vermogen, activa, fte, "
         "WNT, ...) call get_figures(org_id, year, query) first: the values the organisation filed itself, exact, "
-        "in seconds, 2020 onwards, for the legal entity. For consolidated group figures, 2019, or the story behind "
-        "a number, use get_document(year, doc_id) and search_documents. When both exist and differ, report both "
-        "and say which is which. Cite the source: figure label + year, or year/doc_id + page.\n"
+        "in seconds, 2020 onwards. consolidated=true means a group: the fields under 'geconsolideerde jaarrekening' "
+        "(var ending in Cons) are the group totals, the 'enkelvoudige jaarrekening' ones the legal entity alone; "
+        "query e.g. 'geconsolideerd som der bedrijfsopbrengsten' or 'geconsolideerd vermogen' (a group's equity is "
+        "'Groepsvermogen'). For 2019, figures the questionnaire doesn't have, or the story behind a number, use "
+        "get_document(year, doc_id) and search_documents. When a document and the questionnaire differ, report "
+        "both and say which is which. Cite the source: figure label + year, or year/doc_id + page.\n"
         "Reading Dutch healthcare accounts: total revenue ('omzet') is 'Som der bedrijfsopbrengsten' (= 'Netto "
         "omzet' + 'Overige bedrijfsopbrengsten'). Groups report several statements: use the 'geconsolideerde "
         "winst- en verliesrekening', not 'enkelvoudige' (parent only) or 'gesegmenteerde' (per segment) ones, "
@@ -41,8 +44,9 @@ def get_figures(org_id: str, year: int, query: str | None = None, limit: int = 5
 
     Every answered field with its Dutch label path, e.g. "Winst- en verliesrekening › Som der bedrijfsopbrengsten
     › Bedrag in euro's boekjaar" (boekjaar = this year, vorig boekjaar = prior year), its value as filed and its
-    unit (€, %, fte; amounts are whole euros). Figures cover the legal entity itself (enkelvoudig), not the
-    consolidated group. query keeps fields whose label contains every word (substring, accents ignored), e.g.
+    unit (€, %, fte; amounts are whole euros). Groups (consolidated=true) file two sets: 'geconsolideerde
+    jaarrekening' fields (var ending in Cons) for the group, 'enkelvoudige jaarrekening' for the legal entity alone.
+    query keeps fields whose label contains every word (substring, accents ignored), e.g.
     "som der bedrijfsopbrengsten", "totaal activa", "eigen vermogen", "aantal fte", "wnt". Non-zero values come
     first. First call per org/year takes ~3 s, then cached. found=false means no questionnaire for that year.
     """

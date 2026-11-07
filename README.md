@@ -46,8 +46,10 @@ the full corpus is 79k PDFs and 119 GB.
 - Values are kept verbatim. Visibility follows DigiMV's own archive page (`isVisible`, not `archiveHidden`).
 - Label templates show every branch ("Som der bedrijfsopbrengsten / Som der bedrijfsbaten") and never a guessed one.
 - Answers without a question are kept, not dropped.
-- Figures are for the **legal entity** (enkelvoudig). Group (consolidated) totals exist only in the PDFs. The
-  four test organisations matched their PDFs exactly: entity figures for LUMC and HMC, totals for Basalt and Alrijne.
+- **Groups** file two sets: the fields under "geconsolideerde jaarrekening" (variable ending in `Cons`) are the
+  group totals, the "enkelvoudige jaarrekening" fields the legal entity alone. Everyone else leaves the consolidated
+  fields at 0; `consolidated` in the result says which case it is. Checked against the PDFs: LUMC and HMC 2025
+  match both their consolidated and their enkelvoudige statements, Basalt and Alrijne their single set.
 - Field names change between years, so search by label, not by variable name.
 
 **API**: `uv run --env-file .env uvicorn api:app` → `/search?q=`, `/orgs/{org_id}`, `/documents/{year}/{id}?pages=1-5`,

@@ -166,11 +166,17 @@ def run():
                    "'2026-05-29T12:00:00Z', NULL, NULL, NULL)")
         f = digimv.get_figures("28099814", 2025, "bedrijfsopbr", db=db)
         assert (f["found"], f["matched"], f["figures"][0]["value"]) == (True, 1, "108179322")
-        assert f["filed"] == "2026-05-29T12:00:00Z" and len(calls) == 1
+        assert f["filed"] == "2026-05-29T12:00:00Z" and len(calls) == 1 and f["consolidated"] is False
         assert digimv.get_figures("28099814", 2025, "wnt", db=db)["matched"] == 2 and len(calls) == 1  # cached, labels
         db.execute("UPDATE docs SET published='2099-01-01T00:00:00Z' WHERE year=2025 AND id=50")  # re-filed
         digimv.get_figures("28099814", 2025, db=db)
         assert len(calls) == 2
+        # groups also fill a consolidated set; everyone else files it as zeros
+        arch["nodes"].append(node(6, 1, "Financiële gegevens - geconsolideerde jaarrekening", "qSom_0Cons", [(13, None)]))
+        arch["responses"].append(answer(13, "0"))
+        assert digimv.get_figures("28099814", 2025, refresh=True, db=db)["consolidated"] is False
+        arch["responses"][-1]["value"] = "1286254000"
+        assert digimv.get_figures("28099814", 2025, refresh=True, db=db)["consolidated"] is True
         digimv._http = lambda url, **kw: b""  # no questionnaire for this org/year
         assert digimv.get_figures("11111111", 2024, db=db)["found"] is False
         for bad in ((2019, None), (2025, "ab")):

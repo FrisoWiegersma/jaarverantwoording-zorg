@@ -590,8 +590,9 @@ def _fetch_figures(db, org_id, year):
 def get_figures(org_id, year, query=None, limit=100, refresh=False, db=None):
     """Every figure an organisation filed in its DigiMV questionnaire for `year` (2020+), cached in SQLite.
 
-    Values are verbatim as filed, for the legal entity itself (enkelvoudig), not the consolidated group.
-    `query` keeps fields whose label or variable contains every word (substring, accents ignored),
+    Values are verbatim as filed. Groups file two sets: the fields under 'geconsolideerde jaarrekening' (variable
+    ending in Cons) are the group totals, the 'enkelvoudige jaarrekening' ones the legal entity alone; everyone
+    else leaves the consolidated fields at 0. `consolidated` says which case it is. `query` keeps fields whose label or variable contains every word (substring, accents ignored),
     e.g. "som der bedrijfsopbrengsten", "totaal activa", "fte". Refetched when the org re-publishes.
     """
     db = db or connect()
@@ -612,9 +613,13 @@ def get_figures(org_id, year, query=None, limit=100, refresh=False, db=None):
         args.append(match)
     rows = [dict(r) for r in db.execute(sql + " ORDER BY rowid", args)]
     rows.sort(key=lambda r: _is_zero(r["value"]))  # stable: filed zeros after real figures, order kept
+    cons = db.execute("SELECT value FROM figures_fts WHERE year=? AND org_id=? AND figures_fts MATCH ?",
+                      (year, org_id, 'label:"geconsolideerd"'))
     return {"org_id": org_id, "year": year, "name": log["name"], "found": bool(log["n"]), "filed": log["finished"],
-            "scope": "legal entity (enkelvoudig) as filed in the DigiMV questionnaire; consolidated group "
-                     "figures are only in the documents",
+            "consolidated": any(not _is_zero(v) for v, in cons),  # only groups fill the consolidated fields
+            "scope": "as filed in the DigiMV questionnaire. consolidated=true: a group; fields under 'geconsolideerde "
+                     "jaarrekening' (var ending in Cons) are the group totals, the 'enkelvoudige jaarrekening' fields "
+                     "the legal entity alone. consolidated=false: one set, for the organisation itself",
             "source": f"{ARCHIVE}?externalOrganizationId={org_id}&questionnaireName=DigiMV{year}",
             "total_fields": log["n"], "matched": len(rows), "figures": rows[:limit]}
 
