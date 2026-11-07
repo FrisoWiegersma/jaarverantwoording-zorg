@@ -85,6 +85,8 @@ Compose runs the Python API internally and publishes Next.js on `127.0.0.1:3210`
 Cloudflare tunnel routes `https://jaarverantwoording-zorg.frisowiegersma.com` to `http://localhost:3210`,
 protected by Cloudflare Access. Both services have health checks and restart automatically.
 SQLite, PDFs and extracted pages live in the `digimv-data` Docker volume. Keep this volume on updates.
+The API image uses Debian Trixie's SQLite for the accent-insensitive trigram index and runs the offline
+self-check during its build. API startup also probes a real index search before accepting requests.
 
 Host: `ssh frisowiegersma@100.114.142.121` (Tailscale `homelabfriso`).
 Directory: `/home/frisowiegersma/jaarverantwoording-zorg`. Keep `.env` untracked and mode 600, with

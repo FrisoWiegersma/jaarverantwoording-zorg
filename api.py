@@ -12,6 +12,8 @@ import digimv
 
 @asynccontextmanager
 async def lifespan(app):
+    # A copied index can open on older SQLite even when its trigram tokenizer cannot run.
+    digimv.search("zorg", limit=1)
     last = digimv.last_sync()
     if not last or datetime.fromisoformat(last) < datetime.now(timezone.utc) - timedelta(hours=24):
         # corrections get re-published; refresh the index in the background, the old one stays readable meanwhile
