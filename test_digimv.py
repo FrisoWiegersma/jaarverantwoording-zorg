@@ -1,4 +1,4 @@
-"""Offline check of flattening, keys and search. Run: python test_digimv.py"""
+"""Offline check of flattening, keys, search and the knowledge-base index. Run: python test_digimv.py"""
 
 import digimv
 
@@ -67,6 +67,18 @@ def run():
     # re-sync replaces the year instead of duplicating it
     assert digimv.load_year(db, 2023, Y2023) == (5, 5, 4, 4)
 
+    # knowledge base: markdown build + full-text index with org/year filters
+    d = digimv.get_doc(2023, 1, db)
+    pages = ["# Jaarrekening 2023", "## Balans\n| Eigen vermogen | 1.234 |"]
+    md = digimv.build_md(d, pages)
+    assert md.startswith("---\norg: \"Zorggroep Exact B.V.\"\n") and "<!-- page 2 -->\n## Balans" in md
+    digimv.index_pages(db, d, pages)
+    digimv.index_pages(db, d, pages)  # re-index must not duplicate
+    hits = digimv.search_text("eigen vermogen", db=db)
+    assert [(h["year"], h["doc_id"], h["page"]) for h in hits] == [(2023, 1, 2)], hits
+    assert "«Eigen»" in hits[0]["snippet"]
+    assert digimv.search_text("balans", org_id="82905347", year=2023, db=db)
+    assert not digimv.search_text("balans", org_id="11111111", db=db)
     assert digimv.parse_pages("1-3,2,9", 5) == [1, 2, 3] and digimv.parse_pages("all", 2) == [1, 2]
     assert digimv.parse_pages("", 3) == [1, 2, 3] and digimv.parse_pages("4", 3) == []
 

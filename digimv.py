@@ -45,6 +45,11 @@ CREATE INDEX IF NOT EXISTS docs_org ON docs(org_id, year);
 CREATE VIRTUAL TABLE IF NOT EXISTS orgs_fts USING fts5(
   name, town, org_id, content='orgs', tokenize='trigram remove_diacritics 1');
 CREATE TABLE IF NOT EXISTS sync_log(year INT, synced_at TEXT, orgs INT, docs INT);
+CREATE TABLE IF NOT EXISTS kb(
+  year INT, doc_id INT, org_id TEXT, published TEXT, pages INT, PRIMARY KEY(year, doc_id));
+CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
+  md, year UNINDEXED, doc_id UNINDEXED, page UNINDEXED, org_id UNINDEXED,
+  tokenize='unicode61 remove_diacritics 2');
 """
 
 
@@ -144,6 +149,12 @@ def _org_query(q):
     compounds like 'Woonzorggroep' match 'zorggroep'. Quoting keeps FTS syntax out of user input."""
     # ponytail: tokens under 3 chars can't use a trigram index and are dropped ('De Hoop' -> 'Hoop')
     return " ".join(f'"{t}"' for t in re.findall(r"\w+", q) if len(t) >= 3)
+
+
+def _text_query(q):
+    """'eigen verm' -> '"eigen"* "verm"*': word-prefix match on OCR'd pages (word tokenizer = readable snippets)."""
+    # ponytail: no mid-word match here ('lasten' misses 'bedrijfslasten'); trigram pages if agents need it
+    return " ".join(f'"{t}"*' for t in re.findall(r"\w+", q))
 
 
 def _doc_dict(r):
@@ -350,6 +361,16 @@ def build_md(d, pages, sources=None):
     return head + "".join(f"\n<!-- page {i} -->\n{md}\n" for i, md in enumerate(pages, 1))
 
 
+def index_pages(db, d, pages):
+    with db:
+        # ponytail: delete filters on UNINDEXED columns = full scan; fine until the KB holds ~1M pages
+        db.execute("DELETE FROM pages_fts WHERE year=? AND doc_id=?", (d["year"], d["id"]))
+        db.executemany("INSERT INTO pages_fts VALUES (?,?,?,?,?)",
+                       [(md, d["year"], d["id"], i, d["org_id"]) for i, md in enumerate(pages, 1)])
+        db.execute("INSERT OR REPLACE INTO kb VALUES (?,?,?,?,?)",
+                   (d["year"], d["id"], d["org_id"], d["published"], len(pages)))
+
+
 def get_document(year, doc_id, db=None):
     """Download + extract on first use, cached afterwards. Returns metadata, pages and file paths.
 
@@ -373,8 +394,12 @@ def get_document(year, doc_id, db=None):
         md_file.unlink(missing_ok=True)
     pages = [p["markdown"] for p in cached["pages"]]
     sources = [p["source"] for p in cached["pages"]]
-    if not md_file.exists():
+    md_written = not md_file.exists()
+    if md_written:
         md_file.write_text(build_md(d, pages, sources))
+    kb = db.execute("SELECT published, pages FROM kb WHERE year=? AND doc_id=?", (year, doc_id)).fetchone()
+    if not kb or kb[0] != d["published"] or md_written:
+        index_pages(db, d, pages)
     return {**d, "pages": pages, "page_sources": sources, "page_count": len(pages),
             "pdf_path": str(pdf_path(year, doc_id)), "md_path": str(md_file)}
 
@@ -388,6 +413,35 @@ def parse_pages(spec, n):
         a, _, b = part.strip().partition("-")
         out += range(int(a), int(b or a) + 1)
     return [p for p in dict.fromkeys(out) if 1 <= p <= n]
+
+
+def search_text(q, org_id=None, year=None, doc_id=None, limit=20, db=None):
+    """Full-text search over every OCR'd page in the knowledge base."""
+    db = db or connect()
+    match = _text_query(q)
+    if not match:
+        return []
+    sql, args = """SELECT p.year, p.doc_id, p.page, p.org_id, d.type, d.file_name, p.md,
+                          snippet(pages_fts, 0, '«', '»', ' … ', 24) AS snippet
+                   FROM pages_fts p LEFT JOIN docs d ON d.year=p.year AND d.id=p.doc_id
+                   WHERE pages_fts MATCH ?""", [match]
+    for col, val in (("org_id", org_id), ("year", year), ("doc_id", doc_id)):
+        if val is not None:
+            sql += f" AND p.{col}=?"
+            args.append(val)
+    out = []
+    for r in db.execute(sql + " ORDER BY rank LIMIT ?", (*args, limit)):
+        r = dict(r)
+        r["heading"] = page_heading(r.pop("md"))  # which statement a hit is from: consolidated vs segment
+        out.append(r)
+    return out
+
+
+def page_heading(md):
+    """First Markdown headings of a page, e.g. 'II.2 LUMC-GROEP › Geconsolideerde winst- en verliesrekening'."""
+    lines = re.findall(r"^#{1,6} .+$|^\*\*[^*|\n]{6,}\*\*\s*$", md, re.M)  # headings and full-bold title lines
+    heads = [re.sub(r"[#*_]+", "", h).strip() for h in lines]
+    return " › ".join(dict.fromkeys(h for h in heads if h)).strip()[:200] or None
 
 
 # ---------------------------------------------------------------- CLI
@@ -412,6 +466,11 @@ def main(argv=None):
     g.add_argument("--doc", help="YEAR/ID")
     s.add_argument("--year", type=int)
     s.add_argument("--type", help="document type prefix, e.g. jaarrekening")
+    s = sub.add_parser("text", help="full-text search the knowledge base")
+    s.add_argument("q")
+    s.add_argument("--org")
+    s.add_argument("--year", type=int)
+    s.add_argument("--limit", type=int, default=20)
     a = ap.parse_args(argv)
 
     if a.cmd == "sync":
@@ -445,6 +504,11 @@ def main(argv=None):
                 failed += 1
                 print(f"{y}/{i}  FAILED: {e}", file=sys.stderr)
         return 1 if failed else 0
+
+    if a.cmd == "text":
+        for r in search_text(a.q, a.org, a.year, limit=a.limit):
+            print(f"{r['year']}/{r['doc_id']} p{r['page']}  {r['org_id']}  {r['type']}\n    {r['snippet']}")
+        return 0
 
 
 if __name__ == "__main__":
