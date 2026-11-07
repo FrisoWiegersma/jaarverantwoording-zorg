@@ -35,7 +35,7 @@ export function CitationChip({
       aria-label={label === "DigiMV" ? "Bekijk de bron in de DigiMV-vragenlijst" : `Bekijk de bron, pagina ${label.slice(3)}`}
       aria-pressed={active}
       className={cn(
-        "mx-0.5 inline-flex h-6 translate-y-[-1px] items-center rounded-[5px] bg-marker px-1.5 align-middle font-semibold text-[0.78rem] text-marker-ink tabular-nums",
+        "mx-0.5 inline-flex h-6 translate-y-[-1px] items-center whitespace-nowrap rounded-[5px] bg-marker px-1.5 align-middle font-semibold text-[0.78rem] text-marker-ink tabular-nums",
         "transition-[box-shadow] duration-150 hover:shadow-[inset_0_-2px_0_var(--marker-edge)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
         active && "ring-2 ring-foreground ring-offset-1 ring-offset-background"
       )}
