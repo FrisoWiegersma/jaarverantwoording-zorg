@@ -215,6 +215,8 @@ def run():
     assert digimv.pick_key_figures(filed, False)["omzet"]["value"] == "59720000"
     assert digimv.pick_key_figures([row("qSomBedrijfsopbrengsten_0", "0"), row("jeu10800Jeu10800", "504577000")],
                                    False)["omzet"]["value"] == "504577000"  # a micro filer leaves the new field at 0
+    assert digimv.pick_key_figures([row("jeu10800Jeu10800", "0"), row("jeu10800MicroJeu10800Micro", "532058")],
+                                   False)["omzet"]["value"] == "532058"  # 2020-2021 micro form
 
     # saved conversations: per Cloudflare Access user, never another's
     from fastapi.testclient import TestClient

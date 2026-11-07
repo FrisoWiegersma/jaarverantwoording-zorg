@@ -11,7 +11,7 @@ import MetricCard, { type TrendPoint } from "@/components/kokonutui/metric-card"
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
 import { CompareWith, type Org, OrgSearch } from "@/components/org-search";
-import { citationOf, dutch, METRICS, useKeyFigures } from "@/lib/key-figures";
+import { citationOf, dutch, gapNote, METRICS, useKeyFigures } from "@/lib/key-figures";
 
 /** Questions the agent answers well, over the latest years filed; ranges stay short so answers stay quick. */
 function questions({ name, years }: Org) {
@@ -33,7 +33,9 @@ export function ProfileView() {
 
 function Profile({ id }: { id: string }) {
   const router = useRouter();
-  const [{ org, ready, loading, failed }] = useKeyFigures([id]);
+  const [loaded] = useKeyFigures([id]);
+  const { org, ready, loading, failed } = loaded;
+  const gap = loading ? null : gapNote(loaded);
   const [shown, setShown] = useState<string | null>(null);
   const filed = ready.length + loading + failed;
 
@@ -123,6 +125,7 @@ function Profile({ id }: { id: string }) {
                       ) : null
                     )}
                   </section>
+                  {gap && <p className="mt-3 text-[0.9rem] text-muted-foreground">{gap}</p>}
                   {filed > 0 && org.years.includes(2019) && (
                     <p className="mt-3 text-[0.9rem] text-muted-foreground">2019 staat alleen in de jaarverslagen zelf. Vraag ernaar, dan zoekt de assistent het op.</p>
                   )}

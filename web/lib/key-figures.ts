@@ -22,6 +22,20 @@ export const METRICS = [
   { key: "personen", label: "Medewerkers, gemiddeld", unit: "personen" },
 ];
 
+export const andList = (items: (string | number)[]) => (items.length > 1 ? `${items.slice(0, -1).join(", ")} en ${items.at(-1)}` : String(items[0] ?? ""));
+
+/**
+ * Years with a questionnaire but no key figure in it: some small organisations file one without the financial
+ * statements. Their annual accounts as a PDF, where there is one, still have the figures; the chat can read those.
+ */
+export function gapNote({ org, ready }: Loaded) {
+  if (!org || typeof org !== "object") return null;
+  const empty = ready.filter((y) => !Object.keys(y.figures).length).map((y) => y.year);
+  if (!empty.length) return null;
+  const inPdf = empty.filter((y) => org.documents.some((d) => d.year === y && /jaarrekening|jaarverslag/i.test(d.type)));
+  return `${org.name} vulde in ${andList(empty)} geen financiële cijfers in de vragenlijst in${inPdf.length ? `; die van ${andList(inPdf)} staan in de jaarrekening, vraag het de jaarverslagen` : ""}.`;
+}
+
 export const dutch = (value: string) => Number(value).toLocaleString("nl-NL", { maximumFractionDigits: 2 });
 
 /** The cited questionnaire field, as an answer would cite it: the label and the value as filed. */

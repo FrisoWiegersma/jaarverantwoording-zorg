@@ -661,7 +661,7 @@ def get_figures(org_id, year, query=None, limit=100, refresh=False, db=None):
 # micro form, so each figure lists its var per form; the first one filed wins. Groups report the group under the
 # 2022+ name plus "Cons"; the 2020-21 forms hold a group's totals in the plain fields.
 KEY_FIGURES = {
-    "omzet": ("qSomBedrijfsopbrengsten_0", "jeu10800Jeu10800"),
+    "omzet": ("qSomBedrijfsopbrengsten_0", "jeu10800Jeu10800", "jeu10800MicroJeu10800Micro"),
     "resultaat": ("qResultaatNaBelastingen_0", "jeu11520Jeu11520", "jeu11520MicroJeu11520Micro"),
     "eigen_vermogen": ("qEigenVermogen_0", "jeu09710Jeu09710", "jeu09700MicroJeu09700Micro"),
     "totaal_activa": ("qTotaalActiva_0", "jeu09300Jeu09300", "jeu09300MicroJeu09300Micro"),

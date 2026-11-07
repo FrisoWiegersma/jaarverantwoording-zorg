@@ -12,13 +12,11 @@ import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
 import { CompareWith, comparePath, OrgSearch } from "@/components/org-search";
 import { type Citation, citationKey } from "@/lib/citations";
-import { citationOf, dutch, METRICS, type OrgInfo, useKeyFigures } from "@/lib/key-figures";
+import { andList, citationOf, dutch, gapNote, METRICS, type OrgInfo, useKeyFigures } from "@/lib/key-figures";
 import { compareQuestion, compareSeries, type Figure } from "@/lib/rich-answer";
 
 // At most four: the chart has four colours that stay apart, also for colour-blind readers.
 const MAX = 4;
-
-const list = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} en ${names.at(-1)}` : (names[0] ?? ""));
 
 export function CompareView() {
   const { ids } = useParams<{ ids: string[] }>();
@@ -35,7 +33,7 @@ function Compare({ ids }: { ids: string[] }) {
   const orgs = loaded.map((l) => (l.org && typeof l.org === "object" ? l.org : null));
   const known = orgs.filter((o): o is OrgInfo => o !== null);
   const missing = loaded.filter((l) => l.org === "missing" || l.org === "error").length;
-  const title = known.length === ids.length ? list(known.map((o) => o.name)) : null;
+  const title = known.length === ids.length ? andList(known.map((o) => o.name)) : null;
   useEffect(() => {
     if (title) document.title = `${title} · Jaarverslagen zorg`;
   }, [title]);
@@ -135,7 +133,7 @@ function Compare({ ids }: { ids: string[] }) {
                       ? "Kerncijfers ophalen uit DigiMV. De eerste keer duurt dat even."
                       : failed > 0
                         ? `${failed} ${failed === 1 ? "jaar kon" : "jaren konden"} niet worden opgehaald. Probeer het later nog eens.`
-                        : `Zo ingevuld in de DigiMV-vragenlijst${groups.length ? `; bij ${list(groups)} de cijfers van de hele groep (geconsolideerd)` : ""}. Klik op DigiMV voor het veld.`}
+                        : `Zo ingevuld in de DigiMV-vragenlijst${groups.length ? `; bij ${andList(groups)} de cijfers van de hele groep (geconsolideerd)` : ""}. Klik op DigiMV voor het veld.`}
               </p>
 
               <section aria-label="Kerncijfers naast elkaar" className={ids.length <= 2 ? "mt-4 grid gap-4 xl:grid-cols-2" : "mt-4 grid gap-4"}>
@@ -153,8 +151,16 @@ function Compare({ ids }: { ids: string[] }) {
                 ))}
                 {loading > 0 && shownCharts.length === 0 && [0, 1].map((i) => <div aria-hidden="true" className="raised h-[24rem] animate-pulse rounded-xl" key={i} />)}
               </section>
+              {loading === 0 &&
+                loaded.map(gapNote).map((note) =>
+                  note ? (
+                    <p className="mt-3 text-[0.9rem] text-muted-foreground" key={note}>
+                      {note}
+                    </p>
+                  ) : null
+                )}
               {loading === 0 && skipped.length > 0 && (
-                <p className="mt-3 text-[0.9rem] text-muted-foreground">Te weinig ingevuld om te vergelijken: {list(skipped)}. De jaarverslagen zelf weten soms meer.</p>
+                <p className="mt-3 text-[0.9rem] text-muted-foreground">Te weinig ingevuld om te vergelijken: {andList(skipped)}. De jaarverslagen zelf weten soms meer.</p>
               )}
 
               {known.length > 1 && known.length === ids.length && (
