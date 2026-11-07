@@ -9,7 +9,7 @@
 
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { type DocMeta, type Filed, formatFiled, pageWindow, type Shot, useLoaded } from "@/components/evidence";
+import { type DocMeta, type Filed, formatFiled, pageWindow, type Shot, useCheck, useLoaded } from "@/components/evidence";
 import type { Citation } from "@/lib/citations";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -160,6 +160,7 @@ export function CitationPreviewProvider({ docs, children }: { docs: Record<strin
 
 function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
   const value = useLoaded(c);
+  const check = useCheck(c);
   const shot = c.kind === "page" && value && value !== "error" ? (value as Shot) : null;
   const filed = c.kind === "figure" && value && value !== "error" ? (value as Filed) : null;
   const title = c.kind === "page" ? doc?.org : filed?.org;
@@ -205,6 +206,16 @@ function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
       {c.quote && (
         <p className="line-clamp-3 leading-snug">
           <mark className="box-decoration-clone rounded-[3px] bg-marker px-1 font-semibold text-marker-ink">{c.quote}</mark>
+        </p>
+      )}
+
+      {check && (
+        <p className="font-semibold text-amber-800 leading-snug dark:text-amber-300">
+          {c.kind === "page"
+            ? "Controleer: niet alles staat letterlijk op deze pagina."
+            : filed?.field
+              ? `Controleer: ingevuld is ${formatFiled(filed.field)}.`
+              : "Controleer: dit veld staat niet in de vragenlijst."}
         </p>
       )}
 

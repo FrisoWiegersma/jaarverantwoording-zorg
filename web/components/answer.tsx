@@ -1,17 +1,19 @@
 "use client";
 
-import { ClipboardCopy, Download } from "lucide-react";
+import { AlertTriangle, ClipboardCopy, Download } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { memo, type ReactNode, useRef, useState } from "react";
+import { memo, type ReactNode, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useCitationPreview } from "@/components/citation-preview";
+import { useCheck } from "@/components/evidence";
 import { citationKey, parseHref } from "@/lib/citations";
 import { copyRows, readTable, toRows } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 
 /** "p. 10" or "DigiMV" in marker yellow: the same yellow the panel shows where it says so. Styled after Kokonut AI
- * Citations; hover or keyboard focus previews the passage, a click opens it in the panel. */
+ * Citations; hover or keyboard focus previews the passage, a click opens it in the panel. When the source says
+ * something else than the quote, the chip says "controleer" before anyone has to click it. */
 export function CitationChip({
   href,
   label,
@@ -26,13 +28,17 @@ export function CitationChip({
   onClick: () => void;
 }) {
   const preview = useCitationPreview();
-  const source = parseHref(href);
   const key = citationKey(href, quote);
-  const citation = source && { ...source, key, href, quote: quote ?? "" };
+  const citation = useMemo(() => {
+    const source = parseHref(href);
+    return source && { ...source, key: citationKey(href, quote), href, quote: quote ?? "" };
+  }, [href, quote]);
+  // ponytail: every chip loads its source up front (cached, and what a click shows anyway); fine for answers of tens
+  const check = useCheck(citation ?? undefined);
   return (
     <button
       aria-describedby={preview.openKey === key ? preview.id : undefined}
-      aria-label={label === "DigiMV" ? "Bekijk de bron in de DigiMV-vragenlijst" : `Bekijk de bron, pagina ${label.slice(3)}`}
+      aria-label={`${label === "DigiMV" ? "Bekijk de bron in de DigiMV-vragenlijst" : `Bekijk de bron, pagina ${label.slice(3)}`}${check ? ". Controleer: de bron zegt iets anders" : ""}`}
       aria-pressed={active}
       className={cn(
         "mx-0.5 inline-flex h-6 translate-y-[-1px] items-center whitespace-nowrap rounded-[5px] bg-marker px-1.5 align-middle font-semibold text-[0.78rem] text-marker-ink tabular-nums",
@@ -54,6 +60,12 @@ export function CitationChip({
       type="button"
     >
       {label}
+      {check && (
+        <span className="-mr-1.5 ml-1.5 inline-flex h-full items-center gap-1 rounded-r-[5px] bg-amber-50 px-1.5 font-semibold text-amber-800 ring-1 ring-amber-500/50 ring-inset dark:bg-amber-950 dark:text-amber-300">
+          <AlertTriangle aria-hidden="true" className="size-3" />
+          controleer
+        </span>
+      )}
     </button>
   );
 }

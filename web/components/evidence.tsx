@@ -204,6 +204,15 @@ function quoteMatches(quote: string, value: string) {
   return parseNumber(said)?.num === Number(value);
 }
 
+/** Whether the source says something else than the answer: a quote not (all) on its page, or a filed value that
+ * differs from the number quoted. Null while it loads, or when the source could not be loaded. */
+export function useCheck(c: Citation | undefined) {
+  const value = useLoaded(c);
+  if (!c?.quote || !value || value === "error") return null;
+  if (value.kind === "page") return value.found !== "all";
+  return !value.field || !quoteMatches(c.quote, value.field.value);
+}
+
 function FigureEvidence({ c, filed }: { c: FigureCitation; filed: Filed | "error" | null }) {
   const field = filed && filed !== "error" ? filed.field : null;
   const path = field?.label.split(" › ") ?? [];
