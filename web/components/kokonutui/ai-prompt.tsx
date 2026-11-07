@@ -16,7 +16,6 @@
 import { ArrowUp } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { useAutoResizeTextarea } from "@/hooks/use-auto-resize-textarea";
 import { cn } from "@/lib/utils";
 
 interface AIPromptProps {
@@ -77,7 +76,7 @@ export default function AI_Prompt({
   const [value, setValue] = useState("");
   // The last question sent, for ↑ in an empty box (as in a terminal).
   const lastSentRef = useRef("");
-  const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 240 });
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const textareaId = useId();
   const canSend = value.trim().length > 0 && !busy;
 
@@ -86,7 +85,6 @@ export default function AI_Prompt({
     lastSentRef.current = value;
     onSubmit(value.trim());
     setValue("");
-    adjustHeight(true);
   };
 
   const stop = () => {
@@ -102,7 +100,6 @@ export default function AI_Prompt({
       setValue(lastSentRef.current);
       requestAnimationFrame(() => {
         const el = textareaRef.current;
-        adjustHeight();
         el?.setSelectionRange(el.value.length, el.value.length);
       });
     } else if (e.key === "Enter" && !e.shiftKey) {
@@ -126,12 +123,9 @@ export default function AI_Prompt({
           Je vraag
         </label>
         <Textarea
-          className="min-h-[60px] w-full resize-none rounded-none border-none bg-transparent px-4 py-3 text-[1.05rem] leading-relaxed shadow-none placeholder:text-muted-foreground focus-visible:ring-0 md:text-[1.05rem] dark:bg-transparent"
+          className="min-h-[60px] max-h-[240px] w-full resize-none overflow-y-auto rounded-none border-none bg-transparent px-4 py-3 text-[1.05rem] leading-relaxed shadow-none placeholder:text-muted-foreground focus-visible:ring-0 md:text-[1.05rem] dark:bg-transparent"
           id={textareaId}
-          onChange={(e) => {
-            setValue(e.target.value);
-            adjustHeight();
-          }}
+          onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={busy ? "Bezig met antwoorden. Esc stopt het antwoord." : placeholder}
           ref={textareaRef}
