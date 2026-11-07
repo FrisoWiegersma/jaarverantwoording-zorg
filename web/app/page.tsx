@@ -30,12 +30,13 @@ const textOf = (m: UIMessage) =>
 type Out = Record<string, unknown> & { length?: number };
 const quoted = (s: unknown) => `“${String(s ?? "")}”`;
 
-/** Tool calls as Dutch steps for Kokonut's AI State Loading. */
-function stepsOf(m: UIMessage): AgentStep[] {
+/** Tool calls as Dutch steps for Kokonut's AI State Loading. `live`: this message is still streaming; once it isn't,
+ * a call without a result was stopped, and must not keep spinning. */
+function stepsOf(m: UIMessage, live: boolean): AgentStep[] {
   return m.parts.filter(isToolUIPart).map((p) => {
     const input = (p.input ?? {}) as Record<string, unknown>;
     const out = (p.state === "output-available" ? p.output : null) as Out | Out[] | null;
-    const status = p.state === "output-available" ? "done" : p.state === "output-error" ? "error" : "running";
+    const status = p.state === "output-available" ? "done" : p.state === "output-error" || !live ? "error" : "running";
     const list = Array.isArray(out) ? out : [];
     let label: string;
     let detail: string[] | undefined;
@@ -77,7 +78,7 @@ function stepsOf(m: UIMessage): AgentStep[] {
       default:
         label = getToolName(p);
     }
-    if (status === "error") label = `${label}: mislukt`;
+    if (p.state === "output-error") label = `${label}: mislukt`;
     return { id: p.toolCallId, label, status, detail };
   });
 }
@@ -173,8 +174,8 @@ export default function Page() {
                         </h2>
                       );
                     }
-                    const steps = stepsOf(m);
                     const streaming = busy && m === last;
+                    const steps = stepsOf(m, streaming);
                     const plainText = m.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n\n");
                     const text = streaming ? hidePartialLink(plainText) : plainText;
                     // Between tool calls the agent is still at work: never let the list read as finished.
