@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, ClipboardCopy, Download } from "lucide-react";
+import { ClipboardCopy, Download } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { memo, type ReactNode, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -66,10 +67,39 @@ const slug = (s: string) =>
     .slice(0, 60)
     .replace(/^-|-$/g, "") || "tabel";
 
+// Spinner and drawn check from Kokonut Particle Button (@dorianbaffier, MIT). Trimmed for this app: the icons
+// only, without the particle burst, the shake or the label morph, so the buttons keep their width.
+function Spinner() {
+  return (
+    <svg aria-hidden="true" className="size-4 animate-spin [animation-duration:700ms]" fill="none" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" opacity="0.25" r="6" stroke="currentColor" strokeWidth="2" />
+      <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function DrawnCheck() {
+  const still = useReducedMotion();
+  return (
+    <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 16 16">
+      <motion.path
+        animate={{ pathLength: 1 }}
+        d="M3.5 8.5 6.5 11.5 12.5 4.5"
+        initial={still ? false : { pathLength: 0 }}
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        transition={{ duration: 0.3, delay: 0.08, ease: [0.23, 1, 0.32, 1] }}
+      />
+    </svg>
+  );
+}
+
 /** A table with the two ways into Excel: paste into your own sheet, or a ready file. */
 function TableCard({ question, children }: { question: string; children: ReactNode }) {
   const table = useRef<HTMLTableElement>(null);
-  const [done, setDone] = useState<"copy" | "download" | "error" | null>(null);
+  const [done, setDone] = useState<"copy" | "pending" | "download" | "error" | null>(null);
   const rows = () => toRows(readTable(table.current!), window.location.origin);
   const flash = (what: typeof done) => {
     setDone(what);
@@ -78,6 +108,8 @@ function TableCard({ question, children }: { question: string; children: ReactNo
 
   const copy = () => copyRows(rows()).then(() => flash("copy"), () => flash("error"));
   const download = async () => {
+    if (done === "pending") return;
+    setDone("pending");
     try {
       const res = await fetch("/api/xlsx", {
         method: "POST",
@@ -105,15 +137,16 @@ function TableCard({ question, children }: { question: string; children: ReactNo
       </div>
       <div className="flex flex-wrap items-center gap-1 border-t px-2 py-1.5">
         <button className={button} onClick={copy} type="button">
-          {done === "copy" ? <Check aria-hidden="true" className="size-4" /> : <ClipboardCopy aria-hidden="true" className="size-4" />}
+          {done === "copy" ? <DrawnCheck /> : <ClipboardCopy aria-hidden="true" className="size-4" />}
           Kopieer voor Excel
         </button>
-        <button className={button} onClick={download} type="button">
-          {done === "download" ? <Check aria-hidden="true" className="size-4" /> : <Download aria-hidden="true" className="size-4" />}
+        <button aria-busy={done === "pending" || undefined} className={button} onClick={download} type="button">
+          {done === "pending" ? <Spinner /> : done === "download" ? <DrawnCheck /> : <Download aria-hidden="true" className="size-4" />}
           Download als Excel
         </button>
         <p aria-live="polite" className="px-2 text-[0.88rem] text-muted-foreground">
           {done === "copy" && "Gekopieerd, plak het in Excel."}
+          {done === "pending" && "Excel maken…"}
           {done === "download" && "Gedownload."}
           {done === "error" && "Dat lukte niet. Probeer het nog eens."}
         </p>
