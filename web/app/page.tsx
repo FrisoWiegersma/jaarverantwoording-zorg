@@ -129,15 +129,6 @@ export default function Page() {
   const index = Math.max(0, citations.findIndex((c) => c.key === evidence?.key));
 
   const ask = (text: string) => sendMessage({ text });
-  // A chosen template lands in the box to be read and adjusted before it is sent.
-  const fill = (text: string) => {
-    setDraft(text);
-    requestAnimationFrame(() => {
-      const el = promptRef.current;
-      el?.focus();
-      el?.setSelectionRange(text.length, text.length);
-    });
-  };
   // The answer runs on even when the connection drops, so Stop tells the server too.
   const halt = () => {
     stop();
@@ -149,16 +140,14 @@ export default function Page() {
     setEvidence(null);
   };
 
-  // From an organisation page: /?vraag=… puts its question in the box, to read and adjust before sending.
+  // From an organisation page: /?vraag=… asks its question. A fresh page first asks the server for an answer to
+  // resume; there is none, and its "none" must not land on top of this question, so that is stopped first.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("vraag");
     if (!q) return;
     window.history.replaceState(null, "", "/");
-    requestAnimationFrame(() => {
-      setDraft(q);
-      promptRef.current?.focus();
-    });
-  }, []);
+    stop().then(() => sendMessage({ text: q }));
+  }, [stop, sendMessage]);
   const onIndex = useCallback(
     (i: number) => evidence && setEvidence({ messageId: evidence.messageId, key: citations[i].key }),
     [evidence, citations]
@@ -179,9 +168,8 @@ export default function Page() {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
             <Logo />
-            {/* ponytail: no room beside the logo on a phone; there the question box takes the name too. */}
-            <OrgSearch className="hidden md:block" onPick={fill} />
             <div className="flex items-center gap-2">
+              <OrgSearch />
               {/* ponytail: phones only notify through a service worker, so the bell is for desktops */}
               <NotifyBell className="hidden md:inline-flex" />
               <History current={messages[0]?.id} onOpen={load} />

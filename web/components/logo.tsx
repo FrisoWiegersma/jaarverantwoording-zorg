@@ -6,7 +6,8 @@ export function Logo() {
         <rect className="fill-marker" height="28" rx="8" width="28" />
         <path className="stroke-marker-ink" d="M8 11h12M8 17h7" strokeLinecap="round" strokeWidth="2.4" />
       </svg>
-      Jaarverslagen zorg
+      {/* On a phone the header holds four buttons: the mark alone, the name for screen readers. */}
+      <span className="max-sm:sr-only">Jaarverslagen zorg</span>
     </span>
   );
 }

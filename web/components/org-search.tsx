@@ -1,53 +1,33 @@
 "use client";
 
-/** ⌘K: find an organisation by name, then open its key figures, or pick a question about its latest years to put in
- * the question box. */
+/** Find an organisation by name and open its page: a button in the header, ⌘K anywhere, the search in a dialog. */
 
-import { Building2, ChartLine, MessageSquareText } from "lucide-react";
+import { Building2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import ActionSearchBar, { type CommandItem } from "@/components/kokonutui/action-search-bar";
+import ActionSearchBar, { type CommandItem, isPaletteCombo, Kbd, useIsMac } from "@/components/kokonutui/action-search-bar";
 
 export type Org = { org_id: string; name: string; town: string | null; years: number[] };
 type Status = "hint" | "searching" | "none" | "error" | "done";
-
-/** Questions the agent answers well, over the latest years filed; ranges stay short so answers stay quick. */
-export function templates({ org_id, name, years }: Org): CommandItem[] {
-  const last = Math.max(...years);
-  const first = Math.max(Math.min(...years), last - 3);
-  const icon = <MessageSquareText className="size-4" />;
-  return [
-    { id: `${org_id}-omzet`, label: `Omzet ${first}–${last} in een grafiek`, value: `Toon de omzet van ${name} van ${first} tot en met ${last} in een grafiek.` },
-    { id: `${org_id}-vermogen`, label: `Eigen vermogen eind ${last}`, value: `Wat was het eigen vermogen van ${name} eind ${last}?` },
-    {
-      id: `${org_id}-resultaat`,
-      label: `Resultaat ${last} vergeleken met ${last - 1}`,
-      value: `Hoe groot was het resultaat van ${name} in ${last}, vergeleken met het jaar ervoor?`,
-    },
-    { id: `${org_id}-personeel`, label: `Personeel ${last}`, value: `Hoeveel personeel had ${name} in ${last}, in fte en in personen?` },
-  ].map((t) => ({ ...t, icon }));
-}
 
 const toItem = (org: Org): CommandItem => ({
   id: org.org_id,
   label: org.name,
   detail: [org.town, `${Math.min(...org.years)}–${Math.max(...org.years)}`].filter(Boolean).join(" · "),
   icon: <Building2 className="size-4" />,
-  placeholder: "Kies een vraag",
-  children: [
-    // A value starting with "/" is a page to go to, not a question.
-    { id: `${org.org_id}-profiel`, label: "Kerncijfers bekijken", value: `/organisatie/${encodeURIComponent(org.org_id)}`, icon: <ChartLine className="size-4" /> },
-    ...templates(org),
-  ],
+  value: `/organisatie/${encodeURIComponent(org.org_id)}`,
 });
 
-export function OrgSearch({ onPick, className }: { onPick: (question: string) => void; className?: string }) {
+export function OrgSearch() {
   const router = useRouter();
+  const isMac = useIsMac();
+  const [open, setOpen] = useState(false);
   const [items, setItems] = useState<CommandItem[]>([]);
   const [status, setStatus] = useState<Status>("hint");
   const [query, setQuery] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pending = useRef<AbortController>(undefined);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(
     () => () => {
@@ -85,24 +65,75 @@ export function OrgSearch({ onPick, className }: { onPick: (question: string) =>
     }, 150);
   }, []);
 
+  const close = useCallback(() => {
+    search("");
+    setOpen(false);
+    // Escape or a tap beside it leaves focus nowhere: back to the button.
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body) trigger.current?.focus({ preventScroll: true });
+    });
+  }, [search]);
+
+  // ⌘K / Ctrl K anywhere opens it; while open, the palette's own ⌘K closes it.
+  useEffect(() => {
+    if (open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!isPaletteCombo(e) || e.defaultPrevented || document.activeElement?.closest('[aria-modal="true"]')) return;
+      e.preventDefault();
+      setOpen(true);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
+
   const empty = {
     hint: "Typ minstens twee letters van de naam.",
     searching: "Zoeken…",
     none: `Geen organisatie gevonden voor “${query}”.`,
     error: "Zoeken lukte niet. Probeer het nog eens.",
-    done: "Geen vraag die daarop lijkt.",
+    done: "",
   }[status];
 
   return (
-    <ActionSearchBar
-      className={className}
-      empty={empty}
-      items={items}
-      label="Zoek een zorgorganisatie"
-      onQueryChange={search}
-      onSelect={({ value }) => value && (value.startsWith("/") ? router.push(value) : onPick(value))}
-      placeholder="Zoek een organisatie…"
-      shortcut
-    />
+    <>
+      <button
+        aria-haspopup="dialog"
+        aria-keyshortcuts="Meta+K Control+K"
+        className="raised inline-flex size-11 shrink-0 items-center justify-center gap-2 rounded-full transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring lg:w-auto lg:pr-2.5 lg:pl-4"
+        onClick={() => setOpen(true)}
+        ref={trigger}
+        type="button"
+      >
+        <Search aria-hidden="true" className="size-[18px] shrink-0" />
+        <span className="sr-only lg:not-sr-only lg:whitespace-nowrap">Zoek organisatie</span>
+        <span aria-hidden="true" className="ml-1 hidden gap-0.5 lg:flex">
+          <Kbd>{isMac ? "⌘" : "Ctrl"}</Kbd>
+          <Kbd>K</Kbd>
+        </span>
+      </button>
+      {open && (
+        <div aria-label="Zoek een zorgorganisatie" aria-modal="true" className="fixed inset-0 z-50" role="dialog">
+          {/* A tap beside the search closes it; phones do not always blur the input for that. */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-black/30 transition-opacity duration-150 starting:opacity-0 dark:bg-black/50"
+            onPointerDown={close}
+          />
+          <div className="relative mx-auto w-full max-w-xl px-4 pt-3 sm:pt-[14vh]">
+            <ActionSearchBar
+              autoFocus
+              className="max-w-none"
+              empty={empty}
+              items={items}
+              label="Zoek een zorgorganisatie"
+              onClose={close}
+              onQueryChange={search}
+              onSelect={({ value }) => value && router.push(value)}
+              placeholder="Naam van de organisatie…"
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

@@ -11,7 +11,8 @@
  *
  * Trimmed for this app: the top-level rows come from the caller as you type (`onQueryChange`), as found, and each
  * opens a page of choices filtered by plain text; choosing one hands it to `onSelect` and closes. No fuzzy
- * matching, recents, groups, shortcuts, links or in-row progress. Dutch labels, theme colours.
+ * matching, recents, groups, shortcuts, links or in-row progress. Dutch labels, theme colours. `autoFocus` and
+ * `onClose` let the app show it in a dialog.
  */
 
 import { ChevronRight, Search } from "lucide-react";
@@ -57,7 +58,7 @@ const fold = (s: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-function Kbd({ children }: { children: ReactNode }) {
+export function Kbd({ children }: { children: ReactNode }) {
   return (
     <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border bg-muted px-1 font-sans text-[11px] text-muted-foreground">
       {children}
@@ -65,7 +66,7 @@ function Kbd({ children }: { children: ReactNode }) {
   );
 }
 
-function isPaletteCombo(e: globalThis.KeyboardEvent) {
+export function isPaletteCombo(e: globalThis.KeyboardEvent) {
   return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k";
 }
 
@@ -77,7 +78,7 @@ function inOtherModal(focused: Element | null, root: HTMLElement) {
 
 const noSubscribe = () => () => {};
 // The server renders ⌘; the browser corrects it after hydration.
-const useIsMac = () =>
+export const useIsMac = () =>
   useSyncExternalStore(
     noSubscribe,
     () => APPLE_PLATFORM.test(navigator.userAgent),
@@ -93,6 +94,8 @@ export default function ActionSearchBar({
   label,
   placeholder,
   className,
+  autoFocus = false,
+  onClose,
 }: {
   /** The top-level rows for the current query. */
   items: CommandItem[];
@@ -105,6 +108,10 @@ export default function ActionSearchBar({
   label: string;
   placeholder: string;
   className?: string;
+  /** Open with focus in the input, as when the palette is shown in a dialog. */
+  autoFocus?: boolean;
+  /** After it closes: Escape, a choice, focus leaving it. */
+  onClose?: () => void;
 }) {
   const uid = useId();
   const inputId = `${uid}-input`;
@@ -160,8 +167,9 @@ export default function ActionSearchBar({
       const target = returnFocus.current;
       returnFocus.current = null;
       if (restoreFocus && target?.isConnected) target.focus();
+      onClose?.();
     },
-    [onQueryChange]
+    [onQueryChange, onClose]
   );
 
   /* -- ⌘K -- */
@@ -342,9 +350,10 @@ export default function ActionSearchBar({
     if (e.button === 0) openPalette("pointer");
   };
 
-  // Close when focus leaves the whole palette (Tab away, click outside).
+  // Close when focus leaves the whole palette (Tab away, click outside); not when another app or tab takes it.
   const handleBlur = (e: FocusEvent<HTMLDivElement>) => {
     const next = e.relatedTarget;
+    if (!document.hasFocus()) return;
     if (open && !(next instanceof Node && e.currentTarget.contains(next))) {
       returnFocus.current = null;
       closePalette(false);
@@ -396,9 +405,11 @@ export default function ActionSearchBar({
             aria-controls={open ? listboxId : undefined}
             aria-expanded={open}
             autoComplete="off"
+            autoFocus={autoFocus}
             className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             id={inputId}
             onChange={handleChange}
+            onFocus={autoFocus ? () => openPalette("pointer") : undefined}
             onKeyDown={handleKeyDown}
             onPointerDown={handleInputPointerDown}
             placeholder={page ? (page.placeholder ?? page.label) : placeholder}
@@ -470,7 +481,7 @@ export default function ActionSearchBar({
                   <span className="mr-1.5">Kiezen</span>
                 </span>
                 <Kbd>↵</Kbd>
-                <span>{activeRow?.children || activeRow?.value?.startsWith("/") ? "Openen" : "Invullen"}</span>
+                <span>{activeRow?.value && !activeRow.value.startsWith("/") ? "Invullen" : "Openen"}</span>
               </span>
               <span className="flex items-center gap-1.5">
                 {stack.length > 0 && (

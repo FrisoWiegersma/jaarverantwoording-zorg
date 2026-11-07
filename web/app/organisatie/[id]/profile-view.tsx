@@ -10,7 +10,7 @@ import { Evidence } from "@/components/evidence";
 import MetricCard, { type TrendPoint } from "@/components/kokonutui/metric-card";
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
-import { type Org, OrgSearch, templates } from "@/components/org-search";
+import { type Org, OrgSearch } from "@/components/org-search";
 import { type Citation, citationKey, parseHref } from "@/lib/citations";
 
 type Doc = { year: number; id: number; type: string; file_name: string; published: string | null };
@@ -27,6 +27,18 @@ const METRICS = [
   { key: "fte", label: "Personeel in fte", unit: "fte" },
   { key: "personen", label: "Medewerkers, gemiddeld", unit: "personen" },
 ];
+
+/** Questions the agent answers well, over the latest years filed; ranges stay short so answers stay quick. */
+function questions({ name, years }: Org) {
+  const last = Math.max(...years);
+  const first = Math.max(Math.min(...years), last - 3);
+  return [
+    `Toon de omzet van ${name} van ${first} tot en met ${last} in een grafiek.`,
+    `Wat was het eigen vermogen van ${name} eind ${last}?`,
+    `Hoe groot was het resultaat van ${name} in ${last}, vergeleken met het jaar ervoor?`,
+    `Hoeveel personeel had ${name} in ${last}, in fte en in personen?`,
+  ];
+}
 
 const dutch = (value: string) => Number(value).toLocaleString("nl-NL", { maximumFractionDigits: 2 });
 
@@ -95,8 +107,10 @@ function Profile({ id }: { id: string }) {
             <Link className="rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" href="/">
               <Logo />
             </Link>
-            <OrgSearch className="hidden md:block" onPick={ask} />
-            <SwitchButton />
+            <div className="flex items-center gap-2">
+              <OrgSearch />
+              <SwitchButton />
+            </div>
           </header>
 
           <main className="flex-1 overflow-y-auto">
@@ -158,14 +172,14 @@ function Profile({ id }: { id: string }) {
                   <section className="mt-12">
                     <h2 className="font-semibold text-[1.15rem]">Vraag het de jaarverslagen</h2>
                     <ul className="raised mt-4 max-w-[40rem] divide-y divide-border overflow-hidden rounded-2xl">
-                      {templates(org).map((t) => (
-                        <li key={t.id}>
+                      {questions(org).map((q) => (
+                        <li key={q}>
                           <button
                             className="group flex min-h-14 w-full items-center gap-4 px-5 py-3 text-left leading-snug transition-colors duration-150 hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-hidden"
-                            onClick={() => t.value && ask(t.value)}
+                            onClick={() => ask(q)}
                             type="button"
                           >
-                            <span className="flex-1">{t.value}</span>
+                            <span className="flex-1">{q}</span>
                             <CornerDownLeft aria-hidden="true" className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
                           </button>
                         </li>
@@ -175,7 +189,7 @@ function Profile({ id }: { id: string }) {
 
                   <section className="mt-12">
                     <h2 className="font-semibold text-[1.15rem]">Documenten</h2>
-                    <ul className="mt-4 grid gap-x-8 sm:grid-cols-2">
+                    <ul className="mt-4 grid grid-cols-1 gap-x-8 sm:grid-cols-2">
                       {org.documents.map((d) => (
                         <li className="border-b" key={`${d.year}/${d.id}`}>
                           <a
