@@ -421,6 +421,42 @@ def parse_pages(spec, n):
     return [p for p in dict.fromkeys(out) if 1 <= p <= n]
 
 
+def render_page(path, page, quotes=(), dpi=110):
+    """Page `page` of the PDF at `path` as a PNG with `quotes` highlighted: the chat UI's evidence panel.
+
+    Returns (png, mark, found). mark = (top, left, bottom, right) around the highlights as page fractions, or None.
+    found = "all" when every quote (or each figure and run of words in it) is on the page, else "partial"/"none":
+    a figure the model quoted but that is not printed on this page shows up as "partial", not as a green check.
+    """
+    import pymupdf
+
+    doc = pymupdf.open(path)
+    if not 1 <= page <= doc.page_count:
+        raise KeyError(f"page {page} is not in this document ({doc.page_count} pages)")
+    pg = doc[page - 1]
+    rects, found = [], []
+    for q in list(quotes)[:8]:  # ponytail: same caps as the strohmgpt panel; quotes arrive in a query string
+        clean = " ".join(re.sub(r"<br>|[|*#_`]", " ", q[:400]).split())  # the model quotes pymupdf4llm Markdown
+        hits = pg.search_for(clean) if len(clean) >= 3 else []
+        parts = [] if hits else [p.strip(" ,.:;()€") for p in re.findall(r"-?\d[\d.,]*\d|[^\d]{3,}", clean)]
+        rects += hits
+        found += [True] if hits else []
+        for p in (p for p in parts if len(p) >= 3):  # table row: label and figure sit far apart on the page
+            hits = pg.search_for(p)
+            rects += hits
+            found.append(bool(hits))
+    for r in rects:
+        pg.add_highlight_annot(r)
+    png = pg.get_pixmap(dpi=dpi).tobytes("png")
+    if not rects:
+        return png, None, "none"
+    box = pymupdf.Rect()
+    for r in rects:
+        box |= r * pg.rotation_matrix  # pixmap is rotated, search results are not
+    w, h = pg.rect.width, pg.rect.height
+    return png, (box.y0 / h, box.x0 / w, box.y1 / h, box.x1 / w), "all" if all(found) else "partial"
+
+
 def search_text(q, org_id=None, year=None, doc_id=None, limit=20, db=None):
     """Full-text search over every OCR'd page in the knowledge base."""
     db = db or connect()

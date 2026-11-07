@@ -4,8 +4,8 @@ import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse, Response
 
 import digimv
 
@@ -67,6 +67,19 @@ def pdf(year: int, doc_id: int):
     path = _doc_or_404(digimv.get_pdf, year, doc_id)
     # inline: the chat UI opens it in a tab at #page=N instead of downloading it
     return FileResponse(path, media_type="application/pdf", filename=d["file_name"], content_disposition_type="inline")
+
+
+@app.get("/documents/{year}/{doc_id}/pages/{page}.png")
+def page_png(year: int, doc_id: int, page: int, quote: list[str] = Query([])):
+    """Page as a PNG with the quotes highlighted (chat evidence panel).
+
+    X-Mark: top,left,bottom,right of the highlights as page fractions, empty when nothing matched.
+    X-Found: all | partial | none.
+    """
+    path = _doc_or_404(digimv.get_pdf, year, doc_id)
+    png, mark, found = _doc_or_404(digimv.render_page, path, page, quote)
+    return Response(png, media_type="image/png", headers={
+        "X-Mark": ",".join(f"{v:.4f}" for v in mark or ()), "X-Found": found, "Cache-Control": "max-age=3600"})
 
 
 @app.get("/kb/search")

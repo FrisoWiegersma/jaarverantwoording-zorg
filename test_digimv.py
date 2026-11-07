@@ -109,6 +109,17 @@ def run():
         path = Path(tmp) / "t.pdf"
         pdf.save(path)
         pages = digimv.extract_pages(path)
+        # evidence panel: Markdown table quote, label + figure apart, a figure not on the page, wrong page
+        png, mark, found = digimv.render_page(path, 1, ["|**Eigen vermogen**|108.256|"])
+        assert png[:4] == b"\x89PNG" and found == "all" and 0 <= mark[0] < mark[2] <= 1 and 0 <= mark[1] < mark[3] <= 1
+        assert digimv.render_page(path, 1, ["Balans | 108.256"])[2] == "all"
+        assert digimv.render_page(path, 1, ["eigen vermogen 999.999"])[2] == "partial"
+        assert digimv.render_page(path, 2, ["108.256"])[1:] == (None, "none")
+        try:
+            digimv.render_page(path, 3, [])
+            raise AssertionError("rendered page 3 of 2")
+        except KeyError:
+            pass
     assert [p["source"] for p in pages] == ["text", "text"] and "108.256" in pages[0]["markdown"], pages
     assert pages[1]["markdown"] == ""
 
