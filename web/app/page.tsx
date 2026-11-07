@@ -11,6 +11,7 @@ import { type DocMeta, Evidence } from "@/components/evidence";
 import AILoadingState, { type AgentStep } from "@/components/kokonutui/ai-loading";
 import AI_Prompt from "@/components/kokonutui/ai-prompt";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
+import ScrollIndex from "@/components/kokonutui/scroll-index";
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
 import { Welcome } from "@/components/welcome";
@@ -152,7 +153,7 @@ export default function Page() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto">
+          <ScrollIndex className="flex-1" label="Vragen in dit gesprek" selector="[data-question]">
             <div className="mx-auto h-full w-full max-w-[46rem] px-5 sm:px-8">
               {messages.length === 0 ? (
                 <Welcome onAsk={ask} />
@@ -167,6 +168,7 @@ export default function Page() {
                             "scroll-mt-6 text-balance font-semibold text-[1.3rem] leading-snug",
                             i === 0 ? "pt-6" : "mt-12 border-t pt-10"
                           )}
+                          data-question=""
                           key={m.id}
                           ref={i === messages.findLastIndex((x) => x.role === "user") ? lastQuestion : undefined}
                         >
@@ -224,7 +226,7 @@ export default function Page() {
                 </div>
               )}
             </div>
-          </main>
+          </ScrollIndex>
 
           <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
             <div className="mx-auto max-w-[46rem]">
