@@ -1,4 +1,5 @@
 data/
+seed-data/
 .env
 __pycache__/
 .venv/
