@@ -92,7 +92,7 @@ function Compare({ ids }: { ids: string[] }) {
                 <ArrowLeft aria-hidden="true" className="size-4" /> Naar de vragen
               </Link>
 
-              <h1 className="mt-2 text-balance font-light text-[2rem] leading-tight tracking-[-0.015em] sm:text-[2.4rem]">
+              <h1 className="mt-2 text-balance font-light text-[1.65rem] leading-tight tracking-[-0.015em] sm:text-[2.4rem]">
                 {title ?? (missing ? "Vergelijken" : <span className="inline-block h-10 w-2/3 animate-pulse rounded-lg bg-muted align-middle" />)}
               </h1>
 
@@ -136,7 +136,7 @@ function Compare({ ids }: { ids: string[] }) {
                         : `Zo ingevuld in de DigiMV-vragenlijst${groups.length ? `; bij ${andList(groups)} de cijfers van de hele groep (geconsolideerd)` : ""}. Klik op DigiMV voor het veld.`}
               </p>
 
-              <section aria-label="Kerncijfers naast elkaar" className={ids.length <= 2 ? "mt-4 grid gap-4 xl:grid-cols-2" : "mt-4 grid gap-4"}>
+              <section aria-label="Kerncijfers naast elkaar" className={ids.length <= 2 ? "mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2" : "mt-4 grid grid-cols-1 gap-4"}>
                 {shownCharts.map((c) => (
                   <CompareChart
                     key={c.key}

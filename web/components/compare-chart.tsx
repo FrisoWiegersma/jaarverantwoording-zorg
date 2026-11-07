@@ -6,6 +6,7 @@
  * amounts as filed and their sources. Drawn after Kokonut Metric Card, without its single-series extras.
  */
 
+import { ChevronDown } from "lucide-react";
 import { type KeyboardEvent, type PointerEvent, type ReactNode, useRef, useState } from "react";
 import { parseNumber } from "@/lib/excel";
 import type { Figure } from "@/lib/rich-answer";
@@ -44,6 +45,7 @@ export default function CompareChart({ title, unit, years, series, source }: {
   source: (f: Figure) => ReactNode;
 }) {
   const [cursor, setCursor] = useState<number | null>(null);
+  const [all, setAll] = useState(false);
   const pressed = useRef(false);
   const chartRef = useRef<HTMLDivElement>(null);
 
@@ -94,9 +96,29 @@ export default function CompareChart({ title, unit, years, series, source }: {
   const readout = series.map((s) => `${s.organization} ${at(s, years[read])?.amount ?? "geen cijfer"}`).join(", ");
 
   return (
-    <figure className="raised rounded-xl p-4">
+    <figure className="@container raised min-w-0 rounded-xl p-4">
       <figcaption className="font-semibold">{title}</figcaption>
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm" aria-label="Organisaties">
+      {/* Narrow, as on a phone: the year read, per organisation, in place of the legend; the table is a tap away. */}
+      <div className="mt-3 @sm:hidden">
+        <p className="text-muted-foreground text-xs tabular-nums">{years[read]}</p>
+        <ul aria-label="Organisaties" className="mt-1 space-y-2">
+          {series.map((s, i) => {
+            const f = at(s, years[read]);
+            return (
+              <li key={s.organization}>
+                <span className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <span aria-hidden="true" className="h-0.5 w-3 shrink-0 rounded-full" style={{ background: color(i) }} />
+                  <span className="truncate">{s.organization}</span>
+                </span>
+                <span className="mt-0.5 flex items-center gap-2 pl-5 font-medium text-[1.05rem] tabular-nums">
+                  {f ? <>{f.amount} {source(f)}</> : <span className="font-normal text-muted-foreground text-sm">geen cijfer</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <ul className="mt-2 hidden flex-wrap gap-x-4 gap-y-1 text-sm @sm:flex" aria-label="Organisaties">
         {series.map((s, i) => (
           <li className="flex items-center gap-2" key={s.organization}>
             <span aria-hidden="true" className="h-0.5 w-4 rounded-full" style={{ background: color(i) }} />
@@ -126,7 +148,8 @@ export default function CompareChart({ title, unit, years, series, source }: {
           onLostPointerCapture={release}
           onPointerCancel={release}
           onPointerDown={onPointerDown}
-          onPointerLeave={() => !pressed.current && setCursor(null)}
+          // A finger lifting leaves the year it read; a mouse leaving lets go of it.
+          onPointerLeave={(e) => e.pointerType === "mouse" && !pressed.current && setCursor(null)}
           onPointerMove={onPointerMove}
           onPointerUp={release}
           ref={chartRef}
@@ -169,13 +192,21 @@ export default function CompareChart({ title, unit, years, series, source }: {
       </div>
 
       {/* The same figures side by side: what the lines show, exactly as filed, with their sources. */}
-      <div className="mt-4 overflow-x-auto" data-no-swipe="">
+      <button
+        aria-expanded={all}
+        className="mt-1 -mb-2 inline-flex min-h-11 items-center gap-1.5 rounded-md text-muted-foreground text-sm hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring @sm:hidden"
+        onClick={() => setAll(!all)}
+        type="button"
+      >
+        Alle jaren <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", all && "rotate-180")} />
+      </button>
+      <div className={cn("mt-4 overflow-x-auto", !all && "hidden @sm:block")} data-no-swipe="">
         <table className="w-full text-sm tabular-nums">
           <thead>
             <tr className="border-b text-left text-muted-foreground">
               <th className="py-1.5 pr-3 font-normal">Jaar</th>
               {series.map((s, i) => (
-                <th className="py-1.5 pl-3 text-right font-normal" key={s.organization} scope="col">
+                <th className="whitespace-nowrap py-1.5 pl-3 text-right font-normal" key={s.organization} scope="col">
                   <span aria-hidden="true" className="mr-1.5 inline-block h-0.5 w-3 rounded-full align-middle" style={{ background: color(i) }} />
                   {s.organization}
                 </th>
