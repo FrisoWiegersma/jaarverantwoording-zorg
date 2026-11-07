@@ -16,6 +16,7 @@ import AITextLoading from "@/components/kokonutui/ai-text-loading";
 import ScrollIndex from "@/components/kokonutui/scroll-index";
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
+import { announceAnswer, NotifyBell } from "@/components/notify";
 import { OrgSearch } from "@/components/org-search";
 import { Welcome } from "@/components/welcome";
 import { hidePartialLink, parseCitations } from "@/lib/citations";
@@ -106,7 +107,13 @@ function docsOf(messages: UIMessage[]) {
 
 export default function Page() {
   // resume: a dropped connection (a phone that locked) picks the answer up again when the page is back in view.
-  const chat = useChat({ resume: true });
+  const chat = useChat({
+    resume: true,
+    onFinish: ({ messages, isAbort, isError }) => {
+      const question = messages.findLast((m) => m.role === "user");
+      if (question && !isAbort && !isError) announceAnswer(textOf(question));
+    },
+  });
   // The chat's id is drawn at random on first read: only read it when it is needed, never while rendering.
   const { messages, sendMessage, status, stop, error, regenerate, setMessages } = chat;
   const [evidence, setEvidence] = useState<{ messageId: string; key: string } | null>(null);
@@ -175,6 +182,8 @@ export default function Page() {
             {/* ponytail: no room beside the logo on a phone; there the question box takes the name too. */}
             <OrgSearch className="hidden md:block" onPick={fill} />
             <div className="flex items-center gap-2">
+              {/* ponytail: phones only notify through a service worker, so the bell is for desktops */}
+              <NotifyBell className="hidden md:inline-flex" />
               <History current={messages[0]?.id} onOpen={load} />
               <SwitchButton />
               {messages.length > 0 && (
