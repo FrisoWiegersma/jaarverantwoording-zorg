@@ -53,12 +53,13 @@ def org(org_id: str):
 
 @app.get("/documents/{year}/{doc_id}")
 def document(year: int, doc_id: int, pages: str | None = None):
-    """Markdown pages (all by default). First request for a document downloads + converts it."""
-    r = _doc_or_404(digimv.get_document, year, doc_id)
+    """Markdown pages (all by default). The first request downloads the document; each page converts on its first read."""
     try:
-        sel = digimv.parse_pages(pages, r["page_count"])
+        digimv.parse_pages(pages, 1)  # syntax only: the page count comes with the document
     except ValueError:
         raise HTTPException(400, "pages must look like 1-5,8 or all")
+    r = _doc_or_404(digimv.get_document, year, doc_id, pages)
+    sel = digimv.parse_pages(pages, r["page_count"])
     return {**{k: v for k, v in r.items() if k != "pages"},
             "pages": [{"page": n, "source": r["page_sources"][n - 1], "markdown": r["pages"][n - 1]} for n in sel]}
 

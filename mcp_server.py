@@ -62,13 +62,13 @@ def get_document(year: int, doc_id: int, pages: str = "1-5") -> dict:
 
     pages: e.g. "1-5", "12", "3,7-9" or "all". The result has page_count, so request further pages as needed;
     a jaarrekening is typically 15-60 pages, the balance sheet and income statement usually in the first third.
-    The first call for a document downloads and converts it: text-layer pages locally in seconds; scanned
-    pages through paid Gemini OCR (~10 s and a fraction of a cent per page), so don't open documents speculatively. Later
-    calls are cached. Each page's `source` says whether its text came from the PDF's own text layer ("text",
+    The first call for a document downloads it and OCRs scanned pages through paid Gemini (~10 s and a fraction
+    of a cent per page), so don't open documents speculatively. Text-layer pages convert locally on their first
+    read, about a second a page: ask for the pages you need. Later calls are cached. Each page's `source` says whether its text came from the PDF's own text layer ("text",
     exact) or from OCR (model name); for OCR pages double-check key figures against totals on the same page.
     """
     try:  # ToolError reaches the agent with its message; other exceptions are hidden by the SDK
-        r = digimv.get_document(year, doc_id)
+        r = digimv.get_document(year, doc_id, pages)
         sel = digimv.parse_pages(pages, r["page_count"])
     except KeyError as e:
         raise ToolError(e.args[0]) from e

@@ -115,7 +115,8 @@ const tools = {
     description:
       "Read a document (identified by year AND doc_id; ids restart every year) as Markdown, a page range at a time. " +
       'pages: e.g. "1-5", "12", "3,7-9". The result has page_count, so request further pages as needed. The first call ' +
-      "for a document downloads and converts it (seconds, up to a minute for scans). Each page's source says whether its " +
+      "for a document downloads it; each page converts on its first read, about a second a page, so ask for the pages you " +
+      "need rather than long ranges. Each page's source says whether its " +
       'text came from the PDF text layer ("text", exact) or from OCR.',
     inputSchema: z.object({ year: z.number().int(), doc_id: z.number().int(), pages: z.string().default("1-5") }),
     execute: async ({ year, doc_id, pages }) => {

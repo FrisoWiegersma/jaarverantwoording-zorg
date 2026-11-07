@@ -109,6 +109,7 @@ def run():
         path = Path(tmp) / "t.pdf"
         pdf.save(path)
         pages = digimv.extract_pages(path)
+        assert digimv.convert_pages(path, [2, 1])[1].count("108.256") == 1
         # evidence panel: Markdown table quote, label + figure apart, a figure not on the page, wrong page
         png, mark, found = digimv.render_page(path, 1, ["|**Eigen vermogen**|108.256|"])
         assert png[:4] == b"\x89PNG" and found == "all" and 0 <= mark[0] < mark[2] <= 1 and 0 <= mark[1] < mark[3] <= 1
@@ -120,8 +121,23 @@ def run():
             raise AssertionError("rendered page 3 of 2")
         except KeyError:
             pass
-    assert [p["source"] for p in pages] == ["text", "text"] and "108.256" in pages[0]["markdown"], pages
-    assert pages[1]["markdown"] == ""
+        # first open keeps plain text for search; a page gets its Markdown when read, and the index follows
+        digimv.DATA, data = Path(tmp), digimv.DATA
+        try:
+            digimv.pdf_path(2023, 1).parent.mkdir(parents=True)
+            digimv.pdf_path(2023, 1).write_bytes(path.read_bytes())
+            db.execute("UPDATE docs SET file_size=? WHERE year=2023 AND id=1", (path.stat().st_size,))
+            r = digimv.get_document(2023, 1, "2", db=db)
+            cached = json.loads((digimv.md_dir(r) / "1.pages.json").read_text())["pages"]
+            assert cached[0]["markdown"] is None and cached[1]["markdown"] == "" and r["page_count"] == 2
+            assert [h["page"] for h in digimv.search_text("eigen vermogen", doc_id=1, db=db)] == [1]
+            r = digimv.get_document(2023, 1, "1", db=db)
+            assert "108.256" in r["pages"][0] and digimv.search_text("108", doc_id=1, db=db)
+            assert json.loads((digimv.md_dir(r) / "1.pages.json").read_text())["pages"][0]["markdown"] == r["pages"][0]
+        finally:
+            digimv.DATA = data
+    assert [p["source"] for p in pages] == ["text", "text"] and pages[0]["markdown"] is None, pages
+    assert "108.256" in pages[0]["text"] and pages[1]["text"] == ""
 
     # structured figures: labels show every template branch, never a guessed one; HTML stripped
     r = digimv.render_label

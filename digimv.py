@@ -18,6 +18,7 @@ import os
 import re
 import sqlite3
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -327,21 +328,20 @@ def _gemini(pdf_bytes):
 
 
 def extract_pages(path):
-    """PDF -> [{"markdown", "source"}] per page.
+    """PDF -> [{"markdown", "source"[, "text"]}] per page, on first open.
 
-    Pages with a text layer are read locally (exact characters, free). Scanned pages go to Gemini one page
-    per request, all in parallel: a page takes ~3 s with flash-lite, so a scanned document takes seconds.
+    Scanned pages go to Gemini one page per request, all in parallel: a page takes ~3 s with flash-lite, so a
+    scanned document takes seconds. Pages with a text layer get only their plain text here (milliseconds, for
+    the search index); their Markdown ("markdown": None for now) comes on first read, see convert_pages.
     """
     import pymupdf  # heavy imports only when extracting
-    import pymupdf4llm
 
     doc = pymupdf.open(path)
     scans = [i for i, pg in enumerate(doc) if _is_scan(pg)]
     out = [None] * doc.page_count
-    texts = [i for i in range(doc.page_count) if i not in set(scans)]
-    if texts:
-        for c in pymupdf4llm.to_markdown(doc, pages=texts, page_chunks=True, use_ocr=False, show_progress=False):
-            out[c["metadata"]["page_number"] - 1] = {"markdown": c["text"].strip(), "source": "text"}
+    for i, pg in enumerate(doc):
+        if i not in scans:
+            out[i] = {"markdown": None, "source": "text", "text": pg.get_text().strip()}
 
     blobs = []
     for i in scans:  # PyMuPDF isn't thread-safe: build the one-page PDFs here, only HTTP runs in threads
@@ -356,6 +356,18 @@ def extract_pages(path):
     if missing:
         raise ValueError(f"{path.name}: no output for pages {missing}")
     return out
+
+
+def convert_pages(path, numbers):
+    """Markdown for text-layer pages `numbers` (1-based), tables included. pymupdf4llm's layout model takes ~1 s a
+    page on a small server, so a document converts only the pages someone reads, not all 100 up front."""
+    import pymupdf
+    import pymupdf4llm
+
+    chunks = pymupdf4llm.to_markdown(pymupdf.open(path), pages=[n - 1 for n in numbers], page_chunks=True,
+                                     use_ocr=False, show_progress=False)
+    by_page = {c["metadata"]["page_number"]: c["text"].strip() for c in chunks}
+    return [by_page[n] for n in numbers]
 
 
 def build_md(d, pages, sources=None):
@@ -377,8 +389,19 @@ def index_pages(db, d, pages):
                    (d["year"], d["id"], d["org_id"], d["published"], len(pages)))
 
 
-def get_document(year, doc_id, db=None):
-    """Download + extract on first use, cached afterwards. Returns metadata, pages and file paths.
+_doc_locks, _doc_locks_guard = {}, threading.Lock()
+
+
+def _doc_lock(year, doc_id):
+    """One lock per document: parallel tool calls must not download, OCR or convert the same pages twice."""
+    with _doc_locks_guard:
+        return _doc_locks.setdefault((year, doc_id), threading.Lock())
+
+
+def get_document(year, doc_id, pages=None, db=None):
+    """Download + extract on first use, Markdown for each text page on its first read; cached afterwards.
+    `pages` ("1-5", "12", None/"all") are the pages the caller will read. Returns metadata, pages and file paths;
+    a page nobody has read yet holds its plain text.
 
     Cache is fresh when {id}.pages.json has the index's `published` and the current EXTRACTOR version; a
     corrected re-publication triggers a new download, an extractor change only a new extraction.
@@ -387,26 +410,36 @@ def get_document(year, doc_id, db=None):
     d = get_doc(year, doc_id, db)
     out = md_dir(d)
     cache_file, md_file = out / f"{doc_id}.pages.json", out / f"{doc_id}.md"
-    cached = json.loads(cache_file.read_text()) if cache_file.exists() else None
-    if not cached or cached["published"] != d["published"] or cached.get("extractor") != EXTRACTOR:
-        if cached and cached["published"] != d["published"]:  # never reuse the old PDF, even if same size
-            pdf_path(year, doc_id).unlink(missing_ok=True)
-        cached = {"published": d["published"], "extractor": EXTRACTOR, "doc": d,
-                  "pages": extract_pages(get_pdf(year, doc_id, db))}
-        out.mkdir(parents=True, exist_ok=True)
-        tmp = cache_file.with_suffix(".part")
-        tmp.write_text(json.dumps(cached, ensure_ascii=False))
-        tmp.replace(cache_file)
-        md_file.unlink(missing_ok=True)
-    pages = [p["markdown"] for p in cached["pages"]]
-    sources = [p["source"] for p in cached["pages"]]
-    md_written = not md_file.exists()
-    if md_written:
-        md_file.write_text(build_md(d, pages, sources))
-    kb = db.execute("SELECT published, pages FROM kb WHERE year=? AND doc_id=?", (year, doc_id)).fetchone()
-    if not kb or kb[0] != d["published"] or md_written:
-        index_pages(db, d, pages)
-    return {**d, "pages": pages, "page_sources": sources, "page_count": len(pages),
+    with _doc_lock(year, doc_id):
+        cached = json.loads(cache_file.read_text()) if cache_file.exists() else None
+        fresh = not cached or cached["published"] != d["published"] or cached.get("extractor") != EXTRACTOR
+        if fresh:
+            if cached and cached["published"] != d["published"]:  # never reuse the old PDF, even if same size
+                pdf_path(year, doc_id).unlink(missing_ok=True)
+            cached = {"published": d["published"], "extractor": EXTRACTOR, "doc": d,
+                      "pages": extract_pages(get_pdf(year, doc_id, db))}
+        todo = [n for n in parse_pages(pages, len(cached["pages"])) if cached["pages"][n - 1]["markdown"] is None]
+        if todo:
+            for n, md in zip(todo, convert_pages(get_pdf(year, doc_id, db), todo)):
+                cached["pages"][n - 1]["markdown"] = md
+        if fresh or todo:
+            out.mkdir(parents=True, exist_ok=True)
+            tmp = cache_file.with_suffix(".part")
+            tmp.write_text(json.dumps(cached, ensure_ascii=False))
+            tmp.replace(cache_file)
+            md_file.unlink(missing_ok=True)
+        texts = [p["text"] if p["markdown"] is None else p["markdown"] for p in cached["pages"]]
+        sources = [p["source"] for p in cached["pages"]]
+        if not md_file.exists():
+            md_file.write_text(build_md(d, texts, sources))
+        kb = db.execute("SELECT published FROM kb WHERE year=? AND doc_id=?", (year, doc_id)).fetchone()
+        if fresh or not kb or kb[0] != d["published"]:
+            index_pages(db, d, texts)
+        elif todo:  # search hits on a page read since show its Markdown headings, as on a page read at once
+            with db:
+                db.executemany("UPDATE pages_fts SET md=? WHERE year=? AND doc_id=? AND page=?",
+                               [(texts[n - 1], year, doc_id, n) for n in todo])
+    return {**d, "pages": texts, "page_sources": sources, "page_count": len(texts),
             "pdf_path": str(pdf_path(year, doc_id)), "md_path": str(md_file)}
 
 
