@@ -2,12 +2,14 @@
 
 import { useChat } from "@ai-sdk/react";
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
+import { SquarePen } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Answer } from "@/components/answer";
 import { CitationPreviewProvider } from "@/components/citation-preview";
 import { RichAnswer } from "@/components/rich-answer";
 import type { presentAnswer } from "@/lib/rich-answer";
 import { type DocMeta, Evidence } from "@/components/evidence";
+import { History } from "@/components/history";
 import AILoadingState, { type AgentStep } from "@/components/kokonutui/ai-loading";
 import AI_Prompt from "@/components/kokonutui/ai-prompt";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
@@ -134,9 +136,9 @@ export default function Page() {
     stop();
     fetch(`/api/chat/${encodeURIComponent(chat.id)}/stream`, { method: "DELETE" }).catch(() => {});
   };
-  const restart = () => {
+  const load = (saved: UIMessage[]) => {
     if (busy) halt();
-    setMessages([]);
+    setMessages(saved);
     setEvidence(null);
   };
 
@@ -173,14 +175,17 @@ export default function Page() {
             {/* ponytail: no room beside the logo on a phone; there the question box takes the name too. */}
             <OrgSearch className="hidden md:block" onPick={fill} />
             <div className="flex items-center gap-2">
+              <History current={messages[0]?.id} onOpen={load} />
               <SwitchButton />
               {messages.length > 0 && (
                 <button
-                  className="raised min-h-11 shrink-0 whitespace-nowrap rounded-full px-3 text-sm transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4 sm:text-base"
-                  onClick={restart}
+                  aria-label="Nieuwe vraag"
+                  className="raised inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+                  onClick={() => load([])}
                   type="button"
                 >
-                  Nieuwe vraag
+                  <SquarePen aria-hidden="true" className="size-[18px] sm:hidden" />
+                  <span className="hidden sm:inline">Nieuwe vraag</span>
                 </button>
               )}
             </div>

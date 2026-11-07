@@ -2,6 +2,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import {
   convertToModelMessages,
   createUIMessageStreamResponse,
+  generateId,
   isStepCount,
   hasToolCall,
   isToolUIPart,
@@ -141,6 +142,18 @@ const tools = {
   }),
 };
 
+/** The conversation, saved under its first question's id for the person asking (GET /chats in the DigiMV API). */
+async function save(messages: UIMessage[], user: string) {
+  const first = messages.find((m) => m.role === "user");
+  if (!first) return;
+  const title = first.parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join(" ").slice(0, 200);
+  await fetch(new URL(`/chats/${encodeURIComponent(first.id)}`, API), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...(user && { "cf-access-authenticated-user-email": user }) },
+    body: JSON.stringify({ title, messages }),
+  }).catch(() => {}); // ponytail: a conversation that failed to save is only missing from the list
+}
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const id: unknown = body?.id;
@@ -174,7 +187,7 @@ export async function POST(req: Request) {
     abortSignal: answer.stop.signal,
   });
   return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream }),
+    stream: toUIMessageStream({ stream: result.stream, originalMessages: messages, generateMessageId: generateId, onEnd: ({ messages }) => save(messages, user) }),
     // Long first reads of a report must not look like a dead connection to a proxy on the way.
     keepAliveMs: 15_000,
     consumeSseStream: ({ stream }) => record(id, answer, stream),

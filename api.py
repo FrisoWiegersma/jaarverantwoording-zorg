@@ -1,11 +1,15 @@
 """HTTP API over the DigiMV index and knowledge base. Run: uv run --env-file .env uvicorn api:app"""
 
+import json
+import sqlite3
 import threading
-from contextlib import asynccontextmanager
+from typing import Annotated
+from contextlib import asynccontextmanager, closing
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, Field
 
 import digimv
 
@@ -116,3 +120,64 @@ def key_figures(org_id: str, year: int):
         raise HTTPException(400, str(e))
     except (RuntimeError, OSError) as e:
         raise HTTPException(502, str(e))
+
+
+# ---------------------------------------------------------------- saved conversations
+# Their own file: a re-seeded digimv.db must not take anyone's conversations with it.
+
+def _chats():
+    digimv.DATA.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(digimv.DATA / "chats.db", timeout=30)
+    db.execute("CREATE TABLE IF NOT EXISTS chats("
+               "user TEXT, id TEXT, title TEXT, updated TEXT, messages TEXT, PRIMARY KEY(user, id))")
+    return db
+
+
+def _user(request: Request):
+    # ponytail: trusts Cloudflare Access's header, as the app is only reachable through the Access tunnel (Compose
+    # binds to loopback). Verify Cf-Access-Jwt-Assertion if it ever gets another way in. Local dev: one shared list.
+    return request.headers.get("cf-access-authenticated-user-email", "")
+
+
+ChatId = Annotated[str, Path(min_length=1, max_length=100)]
+
+
+class ChatIn(BaseModel):
+    title: str = Field(max_length=300)
+    messages: list[dict] = Field(min_length=1, max_length=200)
+
+
+@app.get("/chats")
+def chats(request: Request):
+    with closing(_chats()) as db:
+        rows = db.execute("SELECT id, title, updated FROM chats WHERE user=? ORDER BY updated DESC LIMIT 100",
+                          (_user(request),)).fetchall()
+    return [{"id": i, "title": t, "updated": u} for i, t, u in rows]
+
+
+@app.get("/chats/{chat_id}")
+def chat(request: Request, chat_id: ChatId):
+    with closing(_chats()) as db:
+        row = db.execute("SELECT title, updated, messages FROM chats WHERE user=? AND id=?",
+                         (_user(request), chat_id)).fetchone()
+    if not row:
+        raise HTTPException(404, "conversation not found")
+    return {"id": chat_id, "title": row[0], "updated": row[1], "messages": json.loads(row[2])}
+
+
+@app.put("/chats/{chat_id}")
+def save_chat(body: ChatIn, request: Request, chat_id: ChatId):
+    messages = json.dumps(body.messages, ensure_ascii=False)
+    if len(messages) > 20_000_000:
+        raise HTTPException(413, "conversation too large")
+    updated = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with closing(_chats()) as db, db:
+        db.execute("INSERT OR REPLACE INTO chats VALUES (?,?,?,?,?)",
+                   (_user(request), chat_id, body.title, updated, messages))
+    return {"id": chat_id, "updated": updated}
+
+
+@app.delete("/chats/{chat_id}", status_code=204)
+def delete_chat(request: Request, chat_id: ChatId):
+    with closing(_chats()) as db, db:
+        db.execute("DELETE FROM chats WHERE user=? AND id=?", (_user(request), chat_id))

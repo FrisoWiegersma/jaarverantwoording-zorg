@@ -216,6 +216,22 @@ def run():
     assert digimv.pick_key_figures([row("qSomBedrijfsopbrengsten_0", "0"), row("jeu10800Jeu10800", "504577000")],
                                    False)["omzet"]["value"] == "504577000"  # a micro filer leaves the new field at 0
 
+    # saved conversations: per Cloudflare Access user, never another's
+    from fastapi.testclient import TestClient
+    import api
+    with tempfile.TemporaryDirectory() as tmp:
+        digimv.DATA, data = Path(tmp), digimv.DATA
+        try:
+            c, me, other = TestClient(api.app), {"cf-access-authenticated-user-email": "a@x"}, {"cf-access-authenticated-user-email": "b@x"}
+            body = {"title": "Omzet Basalt", "messages": [{"id": "m1", "role": "user", "parts": []}]}
+            assert c.put("/chats/m1", json=body, headers=me).status_code == 200
+            assert [x["title"] for x in c.get("/chats", headers=me).json()] == ["Omzet Basalt"]
+            assert c.get("/chats", headers=other).json() == [] and c.get("/chats/m1", headers=other).status_code == 404
+            assert c.get("/chats/m1", headers=me).json()["messages"] == body["messages"]
+            assert c.put("/chats/m1", json={**body, "messages": []}, headers=me).status_code == 422
+            assert c.delete("/chats/m1", headers=me).status_code == 204 and c.get("/chats", headers=me).json() == []
+        finally:
+            digimv.DATA = data
     print("ok")
 
 
