@@ -203,6 +203,19 @@ def run():
                 pass
     finally:
         digimv._http = real_http
+
+    # organisation page: groups show the group, older and micro forms their own names, empty staff tables nothing
+    def row(var, value):
+        return {"label": var, "value": value, "unit": "€", "var": var}
+    filed = [row("qSomBedrijfsopbrengsten_0", "59720000"), row("qSomBedrijfsopbrengsten_0Cons", "533923000"),
+             row("qResultaatNaBelastingen_0", "-205000"), row("qPersTotTotAantalFte", "0.00"),
+             row("jeu09700MicroJeu09700Micro", "9342"), row("qPersTotTotGemiddeldPers", "6350.50")]
+    key = {k: r["value"] for k, r in digimv.pick_key_figures(filed, True).items()}
+    assert key == {"omzet": "533923000", "resultaat": "-205000", "eigen_vermogen": "9342", "personen": "6350.50"}, key
+    assert digimv.pick_key_figures(filed, False)["omzet"]["value"] == "59720000"
+    assert digimv.pick_key_figures([row("qSomBedrijfsopbrengsten_0", "0"), row("jeu10800Jeu10800", "504577000")],
+                                   False)["omzet"]["value"] == "504577000"  # a micro filer leaves the new field at 0
+
     print("ok")
 
 

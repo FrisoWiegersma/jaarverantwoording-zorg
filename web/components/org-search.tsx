@@ -1,16 +1,18 @@
 "use client";
 
-/** ⌘K: find an organisation by name, then pick a question about its latest years to put in the question box. */
+/** ⌘K: find an organisation by name, then open its key figures, or pick a question about its latest years to put in
+ * the question box. */
 
-import { Building2, MessageSquareText } from "lucide-react";
+import { Building2, ChartLine, MessageSquareText } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ActionSearchBar, { type CommandItem } from "@/components/kokonutui/action-search-bar";
 
-type Org = { org_id: string; name: string; town: string | null; years: number[] };
+export type Org = { org_id: string; name: string; town: string | null; years: number[] };
 type Status = "hint" | "searching" | "none" | "error" | "done";
 
 /** Questions the agent answers well, over the latest years filed; ranges stay short so answers stay quick. */
-function templates({ org_id, name, years }: Org): CommandItem[] {
+export function templates({ org_id, name, years }: Org): CommandItem[] {
   const last = Math.max(...years);
   const first = Math.max(Math.min(...years), last - 3);
   const icon = <MessageSquareText className="size-4" />;
@@ -32,10 +34,15 @@ const toItem = (org: Org): CommandItem => ({
   detail: [org.town, `${Math.min(...org.years)}–${Math.max(...org.years)}`].filter(Boolean).join(" · "),
   icon: <Building2 className="size-4" />,
   placeholder: "Kies een vraag",
-  children: templates(org),
+  children: [
+    // A value starting with "/" is a page to go to, not a question.
+    { id: `${org.org_id}-profiel`, label: "Kerncijfers bekijken", value: `/organisatie/${encodeURIComponent(org.org_id)}`, icon: <ChartLine className="size-4" /> },
+    ...templates(org),
+  ],
 });
 
 export function OrgSearch({ onPick, className }: { onPick: (question: string) => void; className?: string }) {
+  const router = useRouter();
   const [items, setItems] = useState<CommandItem[]>([]);
   const [status, setStatus] = useState<Status>("hint");
   const [query, setQuery] = useState("");
@@ -93,7 +100,7 @@ export function OrgSearch({ onPick, className }: { onPick: (question: string) =>
       items={items}
       label="Zoek een zorgorganisatie"
       onQueryChange={search}
-      onSelect={(item) => item.value && onPick(item.value)}
+      onSelect={({ value }) => value && (value.startsWith("/") ? router.push(value) : onPick(value))}
       placeholder="Zoek een organisatie…"
       shortcut
     />

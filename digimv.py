@@ -657,6 +657,42 @@ def get_figures(org_id, year, query=None, limit=100, refresh=False, db=None):
             "total_fields": log["n"], "matched": len(rows), "figures": rows[:limit]}
 
 
+# The organisation page's key figures. The questionnaire renamed its fields in 2022 and small organisations file a
+# micro form, so each figure lists its var per form; the first one filed wins. Groups report the group under the
+# 2022+ name plus "Cons"; the 2020-21 forms hold a group's totals in the plain fields.
+KEY_FIGURES = {
+    "omzet": ("qSomBedrijfsopbrengsten_0", "jeu10800Jeu10800"),
+    "resultaat": ("qResultaatNaBelastingen_0", "jeu11520Jeu11520", "jeu11520MicroJeu11520Micro"),
+    "eigen_vermogen": ("qEigenVermogen_0", "jeu09710Jeu09710", "jeu09700MicroJeu09700Micro"),
+    "totaal_activa": ("qTotaalActiva_0", "jeu09300Jeu09300", "jeu09300MicroJeu09300Micro"),
+    "fte": ("qPersTotTotAantalFte",),
+    "personen": ("qPersTotTotGemiddeldPers",),
+}
+
+
+def pick_key_figures(rows, consolidated):
+    """Figure rows (label, value, unit, var) -> {key: row} for the KEY_FIGURES that were filed. Every form comes
+    with every field, the unused ones as 0, so a zero never wins."""
+    # ponytail: a genuine zero (a break-even result) reads as not filed; the chat still finds it
+    by_var = {}
+    for r in rows:
+        by_var.setdefault(r["var"], r)
+    out = {}
+    for key, names in KEY_FIGURES.items():
+        names = [f"{n}Cons" for n in names if n.startswith("q")] * consolidated + list(names)
+        for n in names:
+            if n in by_var and not _is_zero(by_var[n]["value"]):
+                out[key] = by_var[n]
+                break
+    return out
+
+
+def key_figures(org_id, year, db=None):
+    f = get_figures(org_id, year, limit=None, db=db)
+    return {k: f[k] for k in ("org_id", "year", "name", "found", "consolidated")} | \
+        {"figures": pick_key_figures(f["figures"], f["consolidated"])}
+
+
 # ---------------------------------------------------------------- integrity
 
 def verify(db=None):

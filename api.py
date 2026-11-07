@@ -105,3 +105,14 @@ def figures(org_id: str, year: int, q: str | None = None, limit: int = 200):
         raise HTTPException(400, str(e))
     except (RuntimeError, OSError) as e:  # DigiMV unreachable
         raise HTTPException(502, str(e))
+
+
+@app.get("/orgs/{org_id}/key-figures/{year}")
+def key_figures(org_id: str, year: int):
+    """Omzet, resultaat, eigen vermogen, totaal activa and staff as filed in DigiMV (2020+): the organisation page."""
+    try:
+        return digimv.key_figures(org_id, year)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except (RuntimeError, OSError) as e:
+        raise HTTPException(502, str(e))

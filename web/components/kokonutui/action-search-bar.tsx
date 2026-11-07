@@ -470,7 +470,7 @@ export default function ActionSearchBar({
                   <span className="mr-1.5">Kiezen</span>
                 </span>
                 <Kbd>↵</Kbd>
-                <span>{activeRow?.children ? "Openen" : "Invullen"}</span>
+                <span>{activeRow?.children || activeRow?.value?.startsWith("/") ? "Openen" : "Invullen"}</span>
               </span>
               <span className="flex items-center gap-1.5">
                 {stack.length > 0 && (

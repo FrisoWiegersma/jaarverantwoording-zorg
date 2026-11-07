@@ -131,6 +131,16 @@ export default function Page() {
     setMessages([]);
     setEvidence(null);
   };
+  // From an organisation page: /?vraag=… puts its question in the box, to read and adjust before sending.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("vraag");
+    if (!q) return;
+    window.history.replaceState(null, "", "/");
+    requestAnimationFrame(() => {
+      setDraft(q);
+      promptRef.current?.focus();
+    });
+  }, []);
   const onIndex = useCallback(
     (i: number) => evidence && setEvidence({ messageId: evidence.messageId, key: citations[i].key }),
     [evidence, citations]
