@@ -4,6 +4,7 @@ import {
   createUIMessageStreamResponse,
   isStepCount,
   hasToolCall,
+  isToolUIPart,
   pruneMessages,
   validateUIMessages,
   streamText,
@@ -13,6 +14,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { presentAnswer, richAnswerSchema } from "@/lib/rich-answer";
+import { record, startAnswer, userOf } from "@/lib/streams";
 
 const API = process.env.DIGIMV_API ?? "http://127.0.0.1:8000";
 const google = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -141,26 +143,40 @@ const tools = {
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
+  const id: unknown = body?.id;
   let messages: UIMessage[];
   try {
+    if (typeof id !== "string" || !id || id.length > 100) throw new Error("id");
     if (!Array.isArray(body?.messages) || !body.messages.length || body.messages.length > 100) throw new Error("messages");
     messages = await validateUIMessages({ messages: body.messages, tools });
     if (messages.at(-1)?.role !== "user" || messages.some((m) => m.role !== "user" && m.role !== "assistant")) throw new Error("role");
   } catch {
     return Response.json({ error: "Ongeldige chatberichten." }, { status: 400 });
   }
+  // A call cut off half-way (Stop, a dropped connection) has no result, and the model refuses a history with one.
+  messages = messages
+    .map((m) => ({ ...m, parts: m.parts.filter((p) => !isToolUIPart(p) || p.state === "output-available" || p.state === "output-error") }))
+    .filter((m) => m.parts.length);
   const history = await convertToModelMessages(messages);
   // Only the previous question keeps its tool results (the pages it read): otherwise a long chat resends every page on
   // every step. Older answers and their /bron links stay, and re-reading a page is a cache hit in the API.
   const users = history.flatMap((m, i) => (m.role === "user" ? [i] : []));
   const keep = users.length > 1 ? history.length - users[users.length - 2] : history.length;
+  const user = userOf(req);
+  // Not the request's signal: a phone that locks mid-answer gets the whole answer when it comes back.
+  const answer = startAnswer(id, user);
   const result = streamText({
     model: google(process.env.CHAT_MODEL ?? "gemini-3.8-flash"),
     instructions: INSTRUCTIONS + "\nGebruik present_answer voor je uiteindelijke antwoord met cijfers, in plaats van zelf de eindtabel te schrijven. Kies chart bij een vergelijking of trend, cards bij enkele kerncijfers, anders table. De tool toont altijd de brontabel met Excel-knoppen. Geef elke rij de organisatie, post, het jaar, bedrag in Nederlandse notatie, eenheid, /bron/-link en letterlijk broncitaat. Schrijf na present_answer geen herhaling van de tabel.\nVergelijk je organisaties, geef dan hetzelfde cijfer bij elke organisatie precies dezelfde Post en Eenheid, liefst uit de DigiMV-vragenlijst (hele euro's): dan staan ze in één grafiek naast elkaar.",
     messages: pruneMessages({ messages: history, toolCalls: `before-last-${keep}-messages` }),
     tools,
     stopWhen: [isStepCount(14), hasToolCall("present_answer")],
-    abortSignal: req.signal,
+    abortSignal: answer.stop.signal,
   });
-  return createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) });
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+    // Long first reads of a report must not look like a dead connection to a proxy on the way.
+    keepAliveMs: 15_000,
+    consumeSseStream: ({ stream }) => record(id, answer, stream),
+  });
 }

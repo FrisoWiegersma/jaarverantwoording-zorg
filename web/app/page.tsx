@@ -103,7 +103,10 @@ function docsOf(messages: UIMessage[]) {
 }
 
 export default function Page() {
-  const { messages, sendMessage, status, stop, error, regenerate, setMessages } = useChat();
+  // resume: a dropped connection (a phone that locked) picks the answer up again when the page is back in view.
+  const chat = useChat({ resume: true });
+  // The chat's id is drawn at random on first read: only read it when it is needed, never while rendering.
+  const { messages, sendMessage, status, stop, error, regenerate, setMessages } = chat;
   const [evidence, setEvidence] = useState<{ messageId: string; key: string } | null>(null);
   const busy = status === "submitted" || status === "streaming";
   const lastQuestion = useRef<HTMLHeadingElement>(null);
@@ -126,11 +129,17 @@ export default function Page() {
       el?.setSelectionRange(text.length, text.length);
     });
   };
-  const restart = () => {
+  // The answer runs on even when the connection drops, so Stop tells the server too.
+  const halt = () => {
     stop();
+    fetch(`/api/chat/${encodeURIComponent(chat.id)}/stream`, { method: "DELETE" }).catch(() => {});
+  };
+  const restart = () => {
+    if (busy) halt();
     setMessages([]);
     setEvidence(null);
   };
+
   // From an organisation page: /?vraag=… puts its question in the box, to read and adjust before sending.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("vraag");
@@ -254,7 +263,7 @@ export default function Page() {
 
           <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
             <div className="mx-auto max-w-[46rem]">
-              <AI_Prompt busy={busy} onStop={stop} onSubmit={ask} onValueChange={setDraft} ref={promptRef} value={draft} />
+              <AI_Prompt busy={busy} onStop={halt} onSubmit={ask} onValueChange={setDraft} ref={promptRef} value={draft} />
               <p className="mt-2 text-center text-[0.85rem] text-muted-foreground">
                 Klik op een geel paginanummer om te zien waar het staat.
               </p>
