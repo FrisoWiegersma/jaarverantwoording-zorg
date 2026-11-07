@@ -67,6 +67,37 @@ def run():
     # re-sync replaces the year instead of duplicating it
     assert digimv.load_year(db, 2023, Y2023) == (5, 5, 4, 4)
 
+    assert digimv.parse_pages("1-3,2,9", 5) == [1, 2, 3] and digimv.parse_pages("all", 2) == [1, 2]
+    assert digimv.parse_pages("", 3) == [1, 2, 3] and digimv.parse_pages("4", 3) == []
+
+    # scan detection + local extraction keeps page order (text page, blank page, image-only scan page)
+    import tempfile
+    from pathlib import Path
+    import pymupdf
+    pdf = pymupdf.open()
+    pdf.new_page().insert_text((72, 72), "Balans per 31 december 2023, eigen vermogen 108.256")
+    pdf.new_page()
+    img = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 40, 40), False)
+    scan = pdf.new_page()
+    scan.insert_image(scan.rect, pixmap=img)
+    # Basalt-style: full-page scan + invisible scanner OCR layer + short visible auditor stamp
+    stamped = pdf.new_page()
+    stamped.insert_image(stamped.rect, pixmap=img)
+    stamped.insert_textbox(stamped.rect, "Som der bedrijfsopbrengsten 123.456 " * 40, render_mode=3)
+    stamped.insert_text((72, 800), "Deloitte Accountants B.V. Voor identificatiedoeleinden.")
+    # designed page: background photo with real visible text stays local
+    designed = pdf.new_page()
+    designed.insert_image(designed.rect, pixmap=img)
+    designed.insert_textbox(designed.rect + (36, 36, -36, -36), "Wij leverden in 2025 zorg aan veel patienten. " * 8)
+    assert [digimv._is_scan(p) for p in pdf] == [False, False, True, True, False]
+    pdf.delete_pages([2, 3, 4])  # extracting scan pages would call Gemini
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "t.pdf"
+        pdf.save(path)
+        pages = digimv.extract_pages(path)
+    assert [p["source"] for p in pages] == ["text", "text"] and "108.256" in pages[0]["markdown"], pages
+    assert pages[1]["markdown"] == ""
+
     print("ok")
 
 

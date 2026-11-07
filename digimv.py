@@ -11,17 +11,24 @@ Notes on the data (verified against the live API):
 """
 
 import argparse
+import base64
 import json
 import os
 import re
 import sqlite3
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 BASE = "https://digimv13.desan.nl/api/ArchiveSearch"
+# scanned pages only. Pinned, not "-latest": that alias moved to a thinking model (28 s/page vs 3 s)
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
+EXTRACTOR = 2  # bump when extraction changes: cached documents from older versions count as stale
 UA = "jaarverantwoording-zorg/0.1"
 YEARS = range(2019, date.today().year + 1)  # API returns [] for years outside its archive window
 DATA = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
@@ -235,6 +242,154 @@ def get_pdf(year, doc_id, db=None):
     return p
 
 
+# ---------------------------------------------------------------- OCR + knowledge base
+
+def _safe(s):
+    return re.sub(r"[^\w.-]", "_", s)
+
+
+def md_dir(d):
+    return DATA / "md" / _safe(d["org_id"]) / str(d["year"])
+
+
+SCAN_PROMPT = """This is a scanned page from a Dutch healthcare organisation's annual report \
+(jaarverantwoording). Transcribe it to Markdown exactly as printed: every word and number verbatim, \
+Dutch number formatting kept (1.234,56 and -/- or brackets for negatives), nothing summarised, translated, \
+corrected or added. Tables become Markdown tables with the same rows and columns; empty cells stay empty. \
+Headings become Markdown headings. Skip signatures and stamps except for legible printed text in them. \
+Output only the Markdown; an empty answer for a blank page."""
+
+
+def _is_scan(page):
+    """The page's content lives in an image: there is an image and almost no *visible* text.
+
+    Visible only, because scanned PDFs often carry an invisible scanner-OCR layer (which pymupdf4llm skips)
+    and auditors stamp a short visible line ("Voor identificatiedoeleinden ...") on every scanned page.
+    Measured on DigiMV: scans have <= 93 visible chars, designed pages with photos >= 124 (plus a cover).
+    """
+    import pymupdf
+
+    imgs = page.get_image_info()
+    if not imgs:
+        return False  # blank or pure text
+    visible = sum(1 for sp in page.get_texttrace() if sp["type"] != 3 and sp.get("opacity", 1) > 0
+                  for c in sp["chars"] if chr(c[0]).strip())
+    cover = max(abs(pymupdf.Rect(i["bbox"]) & page.rect) / abs(page.rect) for i in imgs)
+    # ponytail: a photo cover page with a short title also goes to Gemini; costs one page, loses nothing
+    return visible < 50 or (visible < 200 and cover >= 0.5)
+
+
+def _gemini(pdf_bytes):
+    """Transcribe a one-page PDF scan with Gemini. Returns (markdown, exact model version)."""
+    key = os.environ.get("GEMINI_API_KEY")
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY is not set (needed for scanned pages)")
+    body = {"contents": [{"parts": [
+                {"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(pdf_bytes).decode()}},
+                {"text": SCAN_PROMPT}]}],
+            "generationConfig": {"temperature": 0}}
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    for attempt in range(4):
+        try:
+            raw = _http(url, data=json.dumps(body).encode(), timeout=300,
+                        headers={"x-goog-api-key": key, "Content-Type": "application/json"})
+            break
+        except urllib.error.HTTPError as e:
+            msg = e.read()[:400].decode(errors="replace")
+            if e.code in (429, 500, 503) and attempt < 3:  # rate limit / overload: back off
+                time.sleep(10 * (attempt + 1))
+                continue
+            raise RuntimeError(f"Gemini HTTP {e.code}: {msg}") from e
+    res = json.loads(raw)
+    cand = (res.get("candidates") or [{}])[0]
+    if cand.get("finishReason") != "STOP":
+        raise ValueError(f"Gemini stopped with {cand.get('finishReason')}")
+    md = "".join(p.get("text", "") for p in cand["content"]["parts"]).strip()
+    md = re.sub(r"^```(?:markdown)?\n|\n```$", "", md)  # some models fence their answer
+    return md.strip(), res.get("modelVersion", GEMINI_MODEL)
+
+
+def extract_pages(path):
+    """PDF -> [{"markdown", "source"}] per page.
+
+    Pages with a text layer are read locally (exact characters, free). Scanned pages go to Gemini one page
+    per request, all in parallel: a page takes ~3 s with flash-lite, so a scanned document takes seconds.
+    """
+    import pymupdf  # heavy imports only when extracting
+    import pymupdf4llm
+
+    doc = pymupdf.open(path)
+    scans = [i for i, pg in enumerate(doc) if _is_scan(pg)]
+    out = [None] * doc.page_count
+    texts = [i for i in range(doc.page_count) if i not in set(scans)]
+    if texts:
+        for c in pymupdf4llm.to_markdown(doc, pages=texts, page_chunks=True, use_ocr=False, show_progress=False):
+            out[c["metadata"]["page_number"] - 1] = {"markdown": c["text"].strip(), "source": "text"}
+
+    blobs = []
+    for i in scans:  # PyMuPDF isn't thread-safe: build the one-page PDFs here, only HTTP runs in threads
+        sub = pymupdf.open()
+        sub.insert_pdf(doc, from_page=i, to_page=i)
+        blobs.append(sub.tobytes())
+    with ThreadPoolExecutor(16) as ex:  # ponytail: fixed fan-out; paid-tier flash-lite allows thousands RPM
+        for i, (md, model) in zip(scans, ex.map(_gemini, blobs)):
+            out[i] = {"markdown": md, "source": model}
+
+    missing = [i + 1 for i, pg in enumerate(out) if pg is None]
+    if missing:
+        raise ValueError(f"{path.name}: no output for pages {missing}")
+    return out
+
+
+def build_md(d, pages, sources=None):
+    ocr = sorted({s for s in sources or [] if s != "text"})
+    fm = {"org": d["org_name"], "org_id": d["org_id"], "year": d["year"], "doc_id": d["id"], "type": d["type"],
+          "file_name": d["file_name"], "published": d["published"], "source": d["url"], "pages": len(pages),
+          "ocr_pages": [i for i, s in enumerate(sources or [], 1) if s != "text"], "ocr_model": ocr[0] if ocr else None}
+    head = "---\n" + "".join(f"{k}: {json.dumps(v, ensure_ascii=False)}\n" for k, v in fm.items()) + "---\n"
+    return head + "".join(f"\n<!-- page {i} -->\n{md}\n" for i, md in enumerate(pages, 1))
+
+
+def get_document(year, doc_id, db=None):
+    """Download + extract on first use, cached afterwards. Returns metadata, pages and file paths.
+
+    Cache is fresh when {id}.pages.json has the index's `published` and the current EXTRACTOR version; a
+    corrected re-publication triggers a new download, an extractor change only a new extraction.
+    """
+    db = db or connect()
+    d = get_doc(year, doc_id, db)
+    out = md_dir(d)
+    cache_file, md_file = out / f"{doc_id}.pages.json", out / f"{doc_id}.md"
+    cached = json.loads(cache_file.read_text()) if cache_file.exists() else None
+    if not cached or cached["published"] != d["published"] or cached.get("extractor") != EXTRACTOR:
+        if cached and cached["published"] != d["published"]:  # never reuse the old PDF, even if same size
+            pdf_path(year, doc_id).unlink(missing_ok=True)
+        cached = {"published": d["published"], "extractor": EXTRACTOR, "doc": d,
+                  "pages": extract_pages(get_pdf(year, doc_id, db))}
+        out.mkdir(parents=True, exist_ok=True)
+        tmp = cache_file.with_suffix(".part")
+        tmp.write_text(json.dumps(cached, ensure_ascii=False))
+        tmp.replace(cache_file)
+        md_file.unlink(missing_ok=True)
+    pages = [p["markdown"] for p in cached["pages"]]
+    sources = [p["source"] for p in cached["pages"]]
+    if not md_file.exists():
+        md_file.write_text(build_md(d, pages, sources))
+    return {**d, "pages": pages, "page_sources": sources, "page_count": len(pages),
+            "pdf_path": str(pdf_path(year, doc_id)), "md_path": str(md_file)}
+
+
+def parse_pages(spec, n):
+    """'1-3,8' -> [1, 2, 3, 8], clipped to 1..n. Empty / 'all' -> every page."""
+    if not spec or spec.strip().lower() == "all":
+        return list(range(1, n + 1))
+    out = []
+    for part in spec.split(","):
+        a, _, b = part.strip().partition("-")
+        out += range(int(a), int(b or a) + 1)
+    return [p for p in dict.fromkeys(out) if 1 <= p <= n]
+
+
 # ---------------------------------------------------------------- CLI
 
 def _fmt_size(n):
@@ -251,6 +406,12 @@ def main(argv=None):
     s.add_argument("--year", type=int)
     s.add_argument("--type", help="document type prefix, e.g. jaarrekening")
     s.add_argument("--limit", type=int, default=20)
+    s = sub.add_parser("fetch", help="download + extract documents into the knowledge base")
+    g = s.add_mutually_exclusive_group(required=True)
+    g.add_argument("--org", help="org id (KvK)")
+    g.add_argument("--doc", help="YEAR/ID")
+    s.add_argument("--year", type=int)
+    s.add_argument("--type", help="document type prefix, e.g. jaarrekening")
     a = ap.parse_args(argv)
 
     if a.cmd == "sync":
@@ -264,6 +425,26 @@ def main(argv=None):
             for d in o["documents"]:
                 print(f"    {d['year']}/{d['id']:<6} {d['type'][:40]:<40} {d['file_name']}  ({_fmt_size(d['file_size'])})")
         return 0
+
+    if a.cmd == "fetch":
+        if a.doc:
+            y, i = a.doc.split("/")
+            targets = [(int(y), int(i))]
+        else:
+            targets = [(d["year"], d["id"]) for o in search(a.org, a.year, a.type) if o["org_id"] == a.org
+                       for d in o["documents"]]
+            if not targets:
+                print("no matching documents", file=sys.stderr)
+                return 1
+        failed = 0
+        for y, i in targets:
+            try:
+                r = get_document(y, i)
+                print(f"{y}/{i}  {r['page_count']} pages  {r['md_path']}")
+            except Exception as e:  # keep going; report at the end
+                failed += 1
+                print(f"{y}/{i}  FAILED: {e}", file=sys.stderr)
+        return 1 if failed else 0
 
 
 if __name__ == "__main__":
