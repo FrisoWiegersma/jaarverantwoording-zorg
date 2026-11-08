@@ -13,6 +13,7 @@ import { SourceView } from "@/components/evidence";
 import { History } from "@/components/history";
 import { Logo } from "@/components/logo";
 import { ChatPage } from "@/components/chat";
+import { conversationId, rememberConversation } from "@/lib/chat-session";
 import { citationKey, type Citation } from "@/lib/citations";
 import { projectRequest, type Project, type ProjectDocument } from "@/lib/projects";
 
@@ -42,13 +43,26 @@ export function ProjectWorkspace({ id }: { id: string }) {
     if (!r.ok) throw new Error("Gesprekken konden niet worden geladen");
     setChats(await r.json());
   }, [id]);
+  const openChat = useCallback(async (chatId: string) => {
+    setError("");
+    try {
+      const r = await fetch(`/digimv/chats/${encodeURIComponent(chatId)}`, { cache: "no-store" });
+      if (!r.ok) throw new Error("Gesprek kon niet worden geopend");
+      const saved = await r.json();
+      if (saved.project_id !== id) throw new Error("Dit gesprek hoort bij een ander project");
+      rememberConversation(chatId);
+      setActive({ id: chatId, messages: saved.messages });
+    } catch (e) { setError((e as Error).message); }
+  }, [id]);
   useEffect(() => {
     projectRequest(`/${id}`).then((p) => {
       setProject(p);
       refreshDocs().catch((e) => setError(e.message));
       refreshChats().catch((e) => setError(e.message));
+      const chatId = conversationId(new URL(window.location.href));
+      if (chatId) openChat(chatId);
     }).catch((e) => setError(e.message));
-  }, [id, refreshDocs, refreshChats]);
+  }, [id, refreshDocs, refreshChats, openChat]);
   const processing = documents.some((d) => !d.archived && ["queued", "processing"].includes(d.status));
   useEffect(() => {
     if (!processing) return;
@@ -56,20 +70,15 @@ export function ProjectWorkspace({ id }: { id: string }) {
     return () => clearInterval(timer);
   }, [processing, refreshDocs]);
   const run = async (fn: () => Promise<void>) => { setBusy(true); setError(""); try { await fn(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } };
-  const openChat = (chatId: string) => run(async () => {
-    const r = await fetch(`/digimv/chats/${encodeURIComponent(chatId)}`, { cache: "no-store" });
-    if (!r.ok) throw new Error("Gesprek kon niet worden geopend");
-    const saved = await r.json();
-    setActive({ id: chatId, messages: saved.messages });
-  });
+
   const addFile = async (file: File) => { const data = new FormData(); data.append("file", file); await projectRequest(`/${id}/documents`, "POST", data); await refreshDocs(); setAdding(false); };
   const visible = documents.filter((d) => !d.archived);
   return <div className={active ? "flex h-dvh flex-col" : "min-h-dvh"}>
     <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-4 sm:px-8"><Link className="inline-flex min-h-11 items-center" href="/"><Logo /></Link><div className="flex items-center gap-3"><Link className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground" href="/">Chat</Link><Link className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground" href="/projecten">Projecten</Link><SwitchButton /></div></header>
     {error && <p role="alert" className="mx-auto my-3 w-full max-w-3xl rounded-xl border p-3 text-sm">{error}</p>}
     {!project ? <p className="p-8 text-center">{error ? "Project niet beschikbaar" : "Project laden…"}</p> : active ? <>
-      <div className="mx-auto flex w-full max-w-4xl shrink-0 items-center justify-between gap-2 border-b px-4 py-3"><button className="min-w-0 truncate text-left font-medium" onClick={() => { setActive(null); refreshChats().catch((e) => setError(e.message)); }}><FolderOpen className="mr-2 inline size-4" />{project.name}</button><div className="flex shrink-0 items-center gap-2"><History projectId={id} current={active.id} onOpen={(messages) => setActive({ id: messages[0].id, messages })} /><button className={button} onClick={() => setActive(null)}><Plus className="size-4" />Nieuw gesprek</button></div></div>
-      <div className="min-h-0 flex-1"><ChatPage key={active.id} projectId={id} projectName={project.name} conversation={active.messages.length ? active : undefined} initialQuestion={active.initialQuestion} onSaved={() => { refreshChats().catch((e) => setError(e.message)); }} /></div>
+      <div className="mx-auto flex w-full max-w-4xl shrink-0 items-center justify-between gap-2 border-b px-4 py-3"><button className="min-w-0 truncate text-left font-medium" onClick={() => { rememberConversation(null); setActive(null); refreshChats().catch((e) => setError(e.message)); }}><FolderOpen className="mr-2 inline size-4" />{project.name}</button><div className="flex shrink-0 items-center gap-2"><History projectId={id} current={active.id} onOpen={(messages, chatId) => { rememberConversation(chatId); setActive({ id: chatId, messages }); }} /><button className={button} onClick={() => { rememberConversation(null); setActive(null); }}><Plus className="size-4" />Nieuw gesprek</button></div></div>
+      <div className="min-h-0 flex-1"><ChatPage key={active.id} projectId={id} projectName={project.name} conversation={active} initialQuestion={active.initialQuestion} onSaved={() => { refreshChats().catch((e) => setError(e.message)); }} /></div>
     </> : <main className="mx-auto w-full max-w-3xl px-4 pt-8 pb-16 sm:px-8 sm:pt-16">
       <div className="mb-7 flex items-center justify-between gap-3"><h1 className="flex min-w-0 items-center gap-3 text-2xl font-medium"><FolderOpen aria-hidden="true" className="size-7 shrink-0" /><span className="truncate">{project.name}</span></h1><button className={button} aria-label="Projectinstructies" onClick={() => { setSettingsDraft(project); setSettings(true); }}><SlidersHorizontal className="size-4" /><span className="hidden sm:inline">Instructies</span></button></div>
       <AI_Prompt value={question} onValueChange={setQuestion} busy={false} onStop={() => {}} placeholder="Stel een vraag binnen dit project…" onSubmit={(text) => { setActive({ id: crypto.randomUUID(), messages: [], initialQuestion: text }); setQuestion(""); }} />

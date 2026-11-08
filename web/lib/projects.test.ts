@@ -37,9 +37,14 @@ test("streams with the same chat ID stay isolated by owner", async () => {
   await record("same-id", a, new ReadableStream({ start(c) { c.enqueue("data: private-alice\n\n"); c.close(); } }));
   assert.equal(replay("same-id", "stranger"), null);
   const stream = replay("same-id", "alice")!;
-  assert.equal((await stream.getReader().read()).value, "data: private-alice\n\n");
+  const reader = stream.getReader();
+  await reader.read(); // reconnect keepalive comment
+  assert.equal((await reader.read()).value, "data: private-alice\n\n");
+  await reader.cancel();
   stopAnswer("same-id", "alice");
   assert.equal(b.stop.signal.aborted, false);
-  assert.notEqual(replay("same-id", "bob"), null);
+  const bobStream = replay("same-id", "bob");
+  assert.notEqual(bobStream, null);
+  await bobStream!.cancel();
   stopAnswer("same-id", "bob");
 });

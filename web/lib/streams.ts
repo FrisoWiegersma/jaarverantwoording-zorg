@@ -50,12 +50,35 @@ export function replay(id: string, user: string): ReadableStream<string> | null 
   const a = answers.get(`${user}\n${id}`);
   if (!a || a.user !== user) return null;
   let i = 0;
+  let cancelled = false;
+  let waiting: (() => void) | undefined;
+  let heartbeat: ReturnType<typeof setInterval>;
   return new ReadableStream<string>({
+    start(controller) {
+      controller.enqueue(": stream-open\n\n");
+      heartbeat = setInterval(() => {
+        if ((controller.desiredSize ?? 0) > 0) controller.enqueue(": keep-alive\n\n");
+      }, 15_000);
+      heartbeat.unref?.();
+    },
     async pull(controller) {
-      while (i >= a.chunks.length && !a.done) await new Promise<void>((resolve) => a.waiting.add(resolve));
+      while (i >= a.chunks.length && !a.done && !cancelled) {
+        await new Promise<void>((resolve) => { waiting = resolve; a.waiting.add(resolve); });
+        waiting = undefined;
+      }
+      if (cancelled) return;
       if (i < a.chunks.length) {
         while (i < a.chunks.length) controller.enqueue(a.chunks[i++]);
-      } else controller.close();
+      } else {
+        clearInterval(heartbeat);
+        controller.close();
+      }
+    },
+    cancel() {
+      cancelled = true;
+      clearInterval(heartbeat);
+      if (waiting) { a.waiting.delete(waiting); waiting(); }
+      // Only the explicit Stop endpoint aborts generation; closing a reader just detaches it.
     },
   });
 }

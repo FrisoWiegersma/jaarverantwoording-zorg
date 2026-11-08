@@ -20,7 +20,7 @@ function when(iso: string) {
   return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
 }
 
-export function History({ current, onOpen, projectId }: { projectId?: string; current?: string; onOpen: (messages: UIMessage[]) => void }) {
+export function History({ current, onOpen, projectId }: { projectId?: string; current?: string; onOpen: (messages: UIMessage[], id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [list, setList] = useState<Saved[] | "error" | null>(null);
   // A delete asks once more, on the same spot: one tap arms it, the second deletes.
@@ -39,7 +39,7 @@ export function History({ current, onOpen, projectId }: { projectId?: string; cu
   const pick = async (id: string) => {
     const r = await fetch(`/digimv/chats/${encodeURIComponent(id)}`).catch(() => null);
     if (!r?.ok) return setList("error");
-    onOpen((await r.json()).messages);
+    onOpen((await r.json()).messages, id);
     setOpen(false);
   };
   const remove = async (id: string) => {

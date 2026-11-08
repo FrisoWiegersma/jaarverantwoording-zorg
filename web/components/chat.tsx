@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { getToolName, isToolUIPart, type UIMessage } from "ai";
+import { generateId, getToolName, isToolUIPart, type UIMessage } from "ai";
 import Link from "next/link";
 import { SquarePen } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -21,6 +21,8 @@ import { announceAnswer, NotifyBell } from "@/components/notify";
 import { OrgSearch } from "@/components/org-search";
 import { Welcome } from "@/components/welcome";
 import { hidePartialLink, parseCitations } from "@/lib/citations";
+import { missingAnswer } from "@/lib/chat-policy";
+import { conversationId, reconnectOnReturn, rememberConversation } from "@/lib/chat-session";
 import { cn } from "@/lib/utils";
 
 const richOf = (m: UIMessage) => m.parts.filter(isToolUIPart).flatMap((p) =>
@@ -115,22 +117,60 @@ function docsOf(messages: UIMessage[]) {
   return docs;
 }
 
-export function ChatPage({ projectId, projectName, conversation, initialQuestion, onSaved }: { projectId?: string; projectName?: string; conversation?: { id: string; messages: UIMessage[] }; initialQuestion?: string; onSaved?: () => void }) {
+type Conversation = { id: string; messages: UIMessage[] };
+type ChatProps = { projectId?: string; projectName?: string; conversation?: Conversation; initialQuestion?: string; onSaved?: () => void };
+
+export function ChatPage(props: ChatProps) {
+  const [session, setSession] = useState<Conversation | null>(props.conversation ?? null);
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => {
+    if (props.conversation) return;
+    let live = true;
+    const id = conversationId(new URL(window.location.href));
+    if (!id) {
+      Promise.resolve().then(() => { if (live) setSession({ id: generateId(), messages: [] }); });
+    } else {
+      fetch(`/digimv/chats/${encodeURIComponent(id)}`, { cache: "no-store" }).then(async (r) => {
+        if (r.status === 404) return { id, messages: [] };
+        if (!r.ok) throw new Error("Gesprek laden mislukt. Ververs de pagina om opnieuw te proberen.");
+        const saved = await r.json();
+        if ((saved.project_id ?? undefined) !== props.projectId) throw new Error("Dit gesprek hoort bij een andere werkruimte.");
+        return { id, messages: saved.messages };
+      }).then((saved) => { if (live) setSession(saved); }).catch((e) => { if (live) setLoadError(e.message); });
+    }
+    return () => { live = false; };
+  }, [props.conversation, props.projectId]);
+  if (!session) return <p className="p-6 text-center text-muted-foreground" role={loadError ? "alert" : "status"}>{loadError || "Gesprek laden…"}</p>;
+  return <ChatSession key={session.id} {...props} conversation={session} onOpen={(messages, id) => {
+    rememberConversation(messages.length ? id : null);
+    setSession({ id, messages });
+  }} />;
+}
+
+function ChatSession({ projectId, projectName, conversation, initialQuestion, onSaved, onOpen }: ChatProps & { conversation: Conversation; onOpen: (messages: UIMessage[], id: string) => void }) {
   // resume: a dropped connection (a phone that locked) picks the answer up again when the page is back in view.
   const chat = useChat({
     resume: true,
-    id: conversation?.id,
-    messages: conversation?.messages,
+    id: conversation.id,
+    messages: conversation.messages,
     onFinish: ({ messages, isAbort, isError }) => {
       const question = messages.findLast((m) => m.role === "user");
       if (question && !isAbort && !isError) announceAnswer(textOf(question));
       onSaved?.();
     },
   });
-  // The chat's id is drawn at random on first read: only read it when it is needed, never while rendering.
-  const { messages, sendMessage, status, stop, error, regenerate, setMessages } = chat;
+  const { messages, sendMessage, status, stop, error, regenerate, resumeStream } = chat;
   const [evidence, setEvidence] = useState<{ messageId: string; key: string } | null>(null);
   const busy = status === "submitted" || status === "streaming";
+  const statusRef = useRef(status);
+  useEffect(() => { statusRef.current = status; }, [status]);
+  useEffect(() => reconnectOnReturn(
+    () => ["submitted", "streaming", "error"].includes(statusRef.current),
+    async (shouldResume) => {
+      await stop();
+      if (shouldResume()) await resumeStream();
+    },
+  ), [stop, resumeStream]);
   const lastQuestion = useRef<HTMLHeadingElement>(null);
   const [draft, setDraft] = useState("");
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -141,16 +181,18 @@ export function ChatPage({ projectId, projectName, conversation, initialQuestion
   const citations = useMemo(() => parseCitations(shownText), [shownText]);
   const index = Math.max(0, citations.findIndex((c) => c.key === evidence?.key));
 
-  const ask = (text: string) => sendMessage({ text }, { body: { projectId } });
+  const ask = (text: string) => {
+    rememberConversation(chat.id);
+    return sendMessage({ text }, { body: { projectId } });
+  };
   // The answer runs on even when the connection drops, so Stop tells the server too.
   const halt = () => {
     stop();
     fetch(`/api/chat/${encodeURIComponent(chat.id)}/stream`, { method: "DELETE" }).catch(() => {});
   };
-  const load = (saved: UIMessage[]) => {
-    if (busy) halt();
-    setMessages(saved);
-    setEvidence(null);
+  const load = (saved: UIMessage[], id: string) => {
+    // Switching chats detaches the client; the server keeps finishing the previous answer.
+    onOpen(saved, id);
   };
 
   // From an organisation page: /?vraag=… asks its question. A fresh page first asks the server for an answer to
@@ -160,9 +202,9 @@ export function ChatPage({ projectId, projectName, conversation, initialQuestion
     const q = initialQuestion ?? new URLSearchParams(window.location.search).get("vraag");
     if (!q || asked.current) return;
     asked.current = true;
-    if (!projectId) window.history.replaceState(null, "", "/");
+    rememberConversation(chat.id);
     stop().then(() => sendMessage({ text: q }, { body: { projectId } }));
-  }, [stop, sendMessage, projectId, initialQuestion]);
+  }, [stop, sendMessage, projectId, initialQuestion, chat.id]);
   const onIndex = useCallback(
     (i: number) => evidence && setEvidence({ messageId: evidence.messageId, key: citations[i].key }),
     [evidence, citations]
@@ -188,13 +230,13 @@ export function ChatPage({ projectId, projectName, conversation, initialQuestion
               <OrgSearch />
               {/* ponytail: phones only notify through a service worker, so the bell is for desktops */}
               <NotifyBell className="hidden md:inline-flex" />
-              <History current={messages[0]?.id} onOpen={load} projectId={projectId} />
+              <History current={chat.id} onOpen={load} projectId={projectId} />
               <SwitchButton />
               {messages.length > 0 && (
                 <button
                   aria-label="Nieuwe vraag"
                   className="raised inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring @2xl:px-4"
-                  onClick={() => load([])}
+                  onClick={() => load([], generateId())}
                   type="button"
                 >
                   <SquarePen aria-hidden="true" className="size-[18px] @2xl:hidden" />
@@ -235,6 +277,7 @@ export function ChatPage({ projectId, projectName, conversation, initialQuestion
                     const steps = stepsOf(m, streaming);
                     const plainText = m.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n\n");
                     const text = streaming ? hidePartialLink(plainText) : plainText;
+                    const incomplete = !streaming && missingAnswer(m);
                     // Between tool calls the agent is still at work: never let the list read as finished.
                     if (streaming && steps.length && !steps.some((s) => s.status === "running")) {
                       steps.push({ id: "next", label: text ? "Antwoord schrijven" : "Verder zoeken", status: "running" });
@@ -245,6 +288,7 @@ export function ChatPage({ projectId, projectName, conversation, initialQuestion
                       <section className={cn("mt-5", isLastTurn && "min-h-[calc(100dvh-20rem)]")} key={m.id}>
                         {steps.length > 0 && <AILoadingState className="mb-5" steps={steps} />}
                         {thinking && <Thinking />}
+                        {incomplete && <div className="my-4 rounded-xl border p-4" role="status"><p>{incomplete}</p><button className="mt-3 min-h-11 rounded-full px-4 ring-1 ring-border" disabled={busy} onClick={() => ask("Ga verder met de oorspronkelijke vraag en gebruik de al gevonden bronnen. Geef een antwoord met wat je hebt en benoem wat nog ontbreekt.")}>Ga verder met de gevonden bronnen</button></div>}
                         {text && (
                           <Answer
                             activeKey={evidence?.messageId === m.id ? evidence.key : null}

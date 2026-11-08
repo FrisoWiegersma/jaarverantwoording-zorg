@@ -13,7 +13,7 @@ const figureSchema = z.object({
 });
 
 export const richAnswerSchema = z.object({
-  summary: z.string().max(12000).describe("Short Dutch explanation, with Markdown source links for any figures mentioned"),
+  summary: z.string().max(60000).describe("Dutch explanation, at most 60,000 characters, with Markdown source links for figures; keep it concise where possible"),
   figures: z.array(figureSchema).min(1).max(200).describe("One row per sourced figure; amounts exactly as filed, in Dutch notation"),
   view: z.enum(["table", "cards", "chart"]).describe("table by default; cards for a few key figures; chart for comparisons or trends"),
 });

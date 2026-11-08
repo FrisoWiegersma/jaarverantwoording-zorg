@@ -117,6 +117,20 @@ class ProjectsTest(unittest.TestCase):
         self.call("PUT", f"/projects/{self.pid}", json={**p, "allow_private": False})
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/model-context").status_code, 403)
 
+    def test_existing_chat_database_migrates_without_losing_history(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as folder, patch.object(digimv, "DATA", Path(folder)):
+            with sqlite3.connect(Path(folder) / "chats.db") as db:
+                db.execute("CREATE TABLE chats(user TEXT,id TEXT,title TEXT,updated TEXT,messages TEXT,PRIMARY KEY(user,id))")
+                db.execute("INSERT INTO chats VALUES (?,?,?,?,?)", ("alice@example.test", "legacy-id", "Oud gesprek", "2026-01-01", json.dumps([{"id":"first-message", "role":"user", "parts":[]}])) )
+            result = self.call("GET", "/chats/legacy-id")
+            self.assertEqual(result.status_code, 200)
+            self.assertIsNone(result.json()["project_id"])
+            self.assertEqual(result.json()["messages"][0]["id"], "first-message")
+            body = {"title": "Bijgewerkt", "messages": result.json()["messages"]}
+            self.assertEqual(self.call("PUT", "/chats/legacy-id", json=body).status_code, 200)
+            self.assertEqual(self.call("GET", "/chats").json()[0]["id"], "legacy-id")
+
     def test_markdown_knowledge_upload(self):
         text = "# Sectorcontext\nPersoneelskosten zijn geen bewijs voor kwaliteit van zorg.\n<script>untrusted()</script>"
         response = self.call("POST", f"/projects/{self.pid}/documents", files={"file": ("context.md", text.encode(), "text/markdown")})

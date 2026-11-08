@@ -60,10 +60,10 @@ The API image includes the SQLite tokenizer needed by the index and runs the off
 
 Keep `.env` out of git. The Docker build contexts exclude environment files, so keys are supplied at runtime rather than baked into images.
 
-For remote access, use an authenticated reverse proxy or tunnel on the Docker host. Set `APP_ORIGIN` to the external HTTPS origin, for example `https://reports.example.com`, then recreate the frontend:
+For remote access, use an authenticated reverse proxy or tunnel on the Docker host. Set `APP_ORIGIN` to the external HTTPS origin, for example `https://reports.example.com`, then recreate both services:
 
 ```sh
-docker compose up -d web
+docker compose up -d web api
 ```
 
 Protect the entire hostname, including `/api/*`, `/digimv/*`, and `/bron/*`. The app does not implement its own user login or rate limiting. Keep the loopback binding unless a different network arrangement is explicitly configured.
@@ -120,6 +120,8 @@ Use `-p zorg-restored` for subsequent commands on this restored instance. Your o
 ## Troubleshooting
 
 - **No organisations found immediately after startup:** check the index sync logs and upstream connectivity.
+- **A long answer ends without a result:** inspect `chat.finish` in the frontend logs. Research has a bounded budget and should finish with the available evidence or an explicit continuation message.
+- **A phone loses its connection:** reopen the same conversation URL or choose it from history. Keepalive/replay protects network disconnects; container restarts still interrupt generation.
 - **Chat fails:** check `docker compose logs web`, your key, and model access. Search itself does not require a key.
 - **Excel source links are missing or use the wrong host:** set `APP_ORIGIN` to the address used in the browser, including its port, and recreate `web`.
 - **Tokenizer errors:** rebuild the supplied API image. A host Python installation may link an older SQLite even when its Python version is recent.

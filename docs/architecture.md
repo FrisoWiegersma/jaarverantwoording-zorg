@@ -52,3 +52,13 @@ For Excel, the client extracts table rows and parses Dutch numeric notation. Cli
 - The API is internal to the Compose network. The frontend binds to host loopback. A remotely accessible deployment needs an authenticated reverse proxy; the application itself does not implement user accounts or rate limits.
 - Provider credentials remain on the server. Extracted pages sent to Gemini are public report content, but questions and model context also reach the provider.
 - The system has offline regression checks and manual browser validation, rather than a scored dataset of financial questions. Reported behaviour should be assessed with that limit in mind.
+
+## Long answers and interrupted connections
+
+A request gets up to 24 research rounds, followed by up to three rounds restricted to presenting the findings. The model must name missing information rather than silently exhaust its budget. A successful `present_answer` ends the loop; a validation error lets the model correct its input. Summaries are bounded at 60,000 characters and tables at 200 sourced figures. An unfinished turn gets an explicit continuation message.
+
+The same conversation ID is used in its URL (`?gesprek=…`), saved history and live stream. The question is saved before generation, followed by a checkpoint after each model step and a final save. This also keeps old saved conversation IDs valid. No message text is stored in browser storage.
+
+Both initial and replayed SSE streams send keepalives. Closing a client reader does not cancel server generation. On returning from a hidden page, reconnecting to the network or restoring a page from the browser cache, an unfinished client detaches its stale fetch and replays the server stream. Only the explicit Stop action aborts the server answer. The replay buffer remains in memory for 15 minutes after completion; after it expires, reopening the conversation reads its saved answer. A server restart still loses active generation, while saved checkpoints remain available.
+
+`chat.finish` logs the request ID, step count, finish reason and whether a presentation succeeded; `chat.error` logs the error class. These entries omit prompts, uploaded content and credentials.
