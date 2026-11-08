@@ -286,7 +286,7 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
                     return (
                       // The last turn fills the screen, so its question can sit at the top while the answer streams.
                       <section className={cn("mt-5", isLastTurn && "min-h-[calc(100dvh-20rem)]")} key={m.id}>
-                        {steps.length > 0 && <AILoadingState className="mb-5" steps={steps} />}
+                        {steps.length > 0 && <AILoadingState className="mb-5" completed={!streaming && !missingAnswer(m)} steps={steps} />}
                         {thinking && <Thinking />}
                         {incomplete && <div className="my-4 rounded-xl border p-4" role="status"><p>{incomplete}</p><button className="mt-3 min-h-11 rounded-full px-4 ring-1 ring-border" disabled={busy} onClick={() => ask("Ga verder met de oorspronkelijke vraag en gebruik de al gevonden bronnen. Geef een antwoord met wat je hebt en benoem wat nog ontbreekt.")}>Ga verder met de gevonden bronnen</button></div>}
                         {text && (

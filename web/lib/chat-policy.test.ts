@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { generateText, isStepCount, tool, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
-import { finalAnswerStep, finishWhenPresented, MAX_STEPS, missingAnswer, RESEARCH_STEPS } from "./chat-policy.ts";
+import { finalAnswerStep, finishWhenPresented, MAX_STEPS, missingAnswer, progressTitle, RESEARCH_STEPS } from "./chat-policy.ts";
 import { presentAnswer, richAnswerSchema } from "./rich-answer.ts";
 
 const answer = { summary: "Bronnen gecontroleerd. ".repeat(1000), view: "table" as const,
@@ -53,8 +53,26 @@ test("large research requests get a final answer after their bounded research bu
 
 test("tool-only or failed turns get an explicit explanation, completed answers do not", () => {
   const blank: UIMessage = { id: "a", role: "assistant", parts: [{ type: "step-start" }] };
+  assert.ok(missingAnswer({ ...blank, parts: [{ type: "text", text: "Ik ga dit onderzoeken." }, { type: "step-start" }] }));
   assert.match(missingAnswer(blank)!, /gevonden bronnen zijn bewaard/);
   assert.equal(missingAnswer({ ...blank, parts: [{ type: "text", text: "Een antwoord met bronnen." }] }), null);
   assert.equal(missingAnswer({ ...blank, parts: [{ type: "tool-present_answer", toolCallId: "p", state: "output-available", input: answer, output: presentAnswer(answer) }] }), null);
   assert.ok(missingAnswer({ ...blank, parts: [{ type: "tool-present_answer", toolCallId: "p", state: "output-error", input: {}, errorText: "Ongeldige samenvatting" }] }));
+});
+
+
+test("the budget transition forces presentation, with a final text fallback", () => {
+  assert.deepEqual(finalAnswerStep(RESEARCH_STEPS, "Onderzoek").toolChoice, { type: "tool", toolName: "present_answer" });
+  const fallback = finalAnswerStep(MAX_STEPS - 1, "Onderzoek");
+  assert.equal(fallback.toolChoice, "none");
+  assert.deepEqual(fallback.activeTools, []);
+  assert.match(fallback.instructions!, /gewone tekst met bronlinks/);
+});
+
+test("a recoverable tool error does not label a running or completed answer as stopped", () => {
+  const failed = { label: "PDF lezen", status: "error" };
+  assert.equal(progressTitle([failed, { label: "Antwoord schrijven", status: "running" }], false), "Antwoord schrijven");
+  assert.equal(progressTitle([failed, { label: "Cijfers klaargezet", status: "done" }], true), "Antwoord klaar · 1 stap mislukt");
+  assert.equal(progressTitle([failed], false), "Gestopt bij: PDF lezen");
+  assert.equal(progressTitle([{ label: "Cijfers klaargezet", status: "done" }], true, "4m 36s"), "Nagezocht in 4m 36s");
 });

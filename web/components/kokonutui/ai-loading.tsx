@@ -13,6 +13,7 @@
 import { ChevronDown } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
+import { progressTitle } from "@/lib/chat-policy";
 import { cn } from "@/lib/utils";
 
 type AgentStepStatus = "running" | "done" | "error";
@@ -27,6 +28,7 @@ export interface AgentStep {
 
 interface AILoadingStateProps {
   steps: AgentStep[];
+  completed?: boolean;
   className?: string;
 }
 
@@ -331,14 +333,14 @@ function StepRow({
 
 export default function AILoadingState({
   steps,
+  completed = false,
   className,
 }: AILoadingStateProps) {
   const listId = useId();
 
   const running = steps.find((step) => step.status === "running");
-  const failed = steps.find((step) => step.status === "error");
   const isDone =
-    steps.length > 0 && steps.every((step) => step.status === "done");
+    completed || (steps.length > 0 && steps.every((step) => step.status === "done"));
   const isActive = Boolean(running);
   const seconds = useElapsed(isActive, isDone);
   const times = useStepTimes(steps);
@@ -355,16 +357,7 @@ export default function AILoadingState({
     setIsOpen(!shouldCollapse);
   }
 
-  let title = "Aan de slag";
-  if (failed) {
-    title = `Gestopt bij: ${failed.label}`;
-  } else if (isDone) {
-    // A run that was already done when it mounted (an older message) was
-    // never timed here, so it doesn't claim "Worked for 0s".
-    title = seconds > 0 ? `Nagezocht in ${formatDuration(seconds)}` : "Nagezocht";
-  } else if (running) {
-    title = running.label;
-  }
+  const title = progressTitle(steps, completed, seconds > 0 ? formatDuration(seconds) : undefined);
 
   return (
     <div className={cn("flex w-full", className)}>
