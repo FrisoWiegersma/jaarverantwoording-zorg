@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 import digimv
+import projects
 
 
 @asynccontextmanager
@@ -22,10 +23,36 @@ async def lifespan(app):
     if not last or datetime.fromisoformat(last) < datetime.now(timezone.utc) - timedelta(hours=24):
         # corrections get re-published; refresh the index in the background, the old one stays readable meanwhile
         threading.Thread(target=digimv.sync, daemon=True).start()
+    stop = projects.start_worker()
     yield
+    stop.set()
 
 
 app = FastAPI(title="DigiMV jaarverantwoording", lifespan=lifespan)
+app.include_router(projects.router)
+
+
+@app.middleware("http")
+async def private_boundary(request: Request, call_next):
+    import os
+    from fastapi.responses import JSONResponse
+    private = request.url.path.startswith(("/projects", "/chats"))
+    if private and request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("origin")
+        expected = os.environ.get("APP_ORIGIN", "http://localhost:3210").rstrip("/")
+        if request.headers.get("sec-fetch-site") == "cross-site" or (origin and origin.rstrip("/") != expected):
+            return JSONResponse({"detail": "Ongeldige aanvraagherkomst"}, status_code=403)
+    if request.method == "POST" and request.url.path.startswith("/projects/") and request.url.path.endswith("/documents"):
+        length = request.headers.get("content-length", "")
+        if not length.isdigit():
+            return JSONResponse({"detail": "Content-Length vereist voor uploads"}, status_code=411)
+        if int(length) > projects.MAX_FILE + 1024 * 1024:
+            return JSONResponse({"detail": "Maximaal 25 MB per PDF"}, status_code=413)
+    response = await call_next(request)
+    if private:
+        response.headers["Cache-Control"] = "private, no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 def _doc_or_404(fn, *args):
@@ -126,11 +153,10 @@ def key_figures(org_id: str, year: int):
 # Their own file: a re-seeded digimv.db must not take anyone's conversations with it.
 
 def _chats():
-    digimv.DATA.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(digimv.DATA / "chats.db", timeout=30)
-    db.execute("CREATE TABLE IF NOT EXISTS chats("
-               "user TEXT, id TEXT, title TEXT, updated TEXT, messages TEXT, PRIMARY KEY(user, id))")
-    return db
+    # Initialise the shared private schema before the legacy chat connection opens.
+    with projects.database():
+        pass
+    return sqlite3.connect(digimv.DATA / "chats.db", timeout=30)
 
 
 def _user(request: Request):
@@ -145,35 +171,50 @@ ChatId = Annotated[str, Path(min_length=1, max_length=100)]
 class ChatIn(BaseModel):
     title: str = Field(max_length=300)
     messages: list[dict] = Field(min_length=1, max_length=200)
+    project_id: str | None = None
 
 
 @app.get("/chats")
-def chats(request: Request):
+def chats(request: Request, project_id: str | None = None):
+    if project_id:
+        with projects.database() as db:
+            projects.project(db, project_id, projects.owner(request))
     with closing(_chats()) as db:
-        rows = db.execute("SELECT id, title, updated FROM chats WHERE user=? ORDER BY updated DESC LIMIT 100",
-                          (_user(request),)).fetchall()
+        rows = db.execute("SELECT id, title, updated FROM chats WHERE user=? AND project_id IS ? ORDER BY updated DESC LIMIT 100",
+                          (_user(request), project_id)).fetchall()
     return [{"id": i, "title": t, "updated": u} for i, t, u in rows]
 
 
 @app.get("/chats/{chat_id}")
 def chat(request: Request, chat_id: ChatId):
     with closing(_chats()) as db:
-        row = db.execute("SELECT title, updated, messages FROM chats WHERE user=? AND id=?",
+        row = db.execute("SELECT title, updated, messages, project_id FROM chats WHERE user=? AND id=?",
                          (_user(request), chat_id)).fetchone()
     if not row:
         raise HTTPException(404, "conversation not found")
-    return {"id": chat_id, "title": row[0], "updated": row[1], "messages": json.loads(row[2])}
+    if row[3]:
+        with projects.database() as db:
+            projects.project(db, row[3], projects.owner(request))
+    return {"id": chat_id, "title": row[0], "updated": row[1], "messages": json.loads(row[2]), "project_id": row[3]}
 
 
 @app.put("/chats/{chat_id}")
 def save_chat(body: ChatIn, request: Request, chat_id: ChatId):
+    if body.project_id:
+        with projects.database() as db:
+            projects.project(db, body.project_id, projects.owner(request))
     messages = json.dumps(body.messages, ensure_ascii=False)
     if len(messages) > 20_000_000:
         raise HTTPException(413, "conversation too large")
     updated = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with closing(_chats()) as db, db:
-        db.execute("INSERT OR REPLACE INTO chats VALUES (?,?,?,?,?)",
-                   (_user(request), chat_id, body.title, updated, messages))
+        old = db.execute("SELECT project_id FROM chats WHERE user=? AND id=?", (_user(request), chat_id)).fetchone()
+        if old and old[0] != body.project_id:
+            raise HTTPException(409, "Dit gesprek hoort bij een andere werkruimte")
+        db.execute("INSERT OR REPLACE INTO chats(user,id,title,updated,messages,project_id) VALUES (?,?,?,?,?,?)",
+                   (_user(request), chat_id, body.title, updated, messages, body.project_id))
+        if body.project_id:
+            db.execute("UPDATE projects SET updated=? WHERE id=? AND owner=?", (updated, body.project_id, _user(request)))
     return {"id": chat_id, "updated": updated}
 
 

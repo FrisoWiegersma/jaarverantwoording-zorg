@@ -21,9 +21,10 @@ function wake(a: Answer) {
 
 /** A new answer for this chat; the previous one, if still running, is stopped. */
 export function startAnswer(id: string, user: string) {
-  answers.get(id)?.stop.abort();
+  const key = `${user}\n${id}`;
+  answers.get(key)?.stop.abort();
   const a: Answer = { user, chunks: [], done: false, waiting: new Set(), stop: new AbortController() };
-  answers.set(id, a);
+  answers.set(key, a);
   return a;
 }
 
@@ -40,13 +41,13 @@ export async function record(id: string, a: Answer, stream: ReadableStream<strin
   } finally {
     a.done = true;
     wake(a);
-    setTimeout(() => answers.get(id) === a && answers.delete(id), KEEP_MS).unref?.();
+    setTimeout(() => { const key = `${a.user}\n${id}`; if (answers.get(key) === a) answers.delete(key); }, KEEP_MS).unref?.();
   }
 }
 
 /** The answer from its start, then live until it ends. Null: nothing to resume. */
 export function replay(id: string, user: string): ReadableStream<string> | null {
-  const a = answers.get(id);
+  const a = answers.get(`${user}\n${id}`);
   if (!a || a.user !== user) return null;
   let i = 0;
   return new ReadableStream<string>({
@@ -60,8 +61,8 @@ export function replay(id: string, user: string): ReadableStream<string> | null 
 }
 
 export function stopAnswer(id: string, user: string) {
-  const a = answers.get(id);
+  const a = answers.get(`${user}\n${id}`);
   if (a?.user !== user) return;
   a.stop.abort();
-  answers.delete(id);
+  answers.delete(`${user}\n${id}`);
 }

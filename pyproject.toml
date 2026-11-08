@@ -7,5 +7,6 @@ dependencies = [
     "fastapi>=0.162.0",
     "mcp>=2.3.0",
     "pymupdf4llm>=2.1",
+    "python-multipart>=0.0.22",
     "uvicorn>=0.54.0",
 ]

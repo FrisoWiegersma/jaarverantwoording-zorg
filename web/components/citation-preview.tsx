@@ -9,7 +9,7 @@
 
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { type DocMeta, type Filed, formatFiled, pageWindow, type Shot, useCheck, useLoaded } from "@/components/evidence";
+import { PrivateSource, type PrivatePage, type DocMeta, type Filed, formatFiled, pageWindow, type Shot, useCheck, useLoaded } from "@/components/evidence";
 import type { Citation } from "@/lib/citations";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -163,6 +163,7 @@ function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
   const check = useCheck(c);
   const shot = c.kind === "page" && value && value !== "error" ? (value as Shot) : null;
   const filed = c.kind === "figure" && value && value !== "error" ? (value as Filed) : null;
+  if (c.kind === "project") return <PrivateSource c={c} value={value as PrivatePage | "error" | null} compact />;
   const title = c.kind === "page" ? doc?.org : filed?.org;
   const sub = c.kind === "page" ? `${doc?.type ?? "Document"} ${c.year} · pagina ${c.page}` : `DigiMV-vragenlijst ${c.year}`;
   return (

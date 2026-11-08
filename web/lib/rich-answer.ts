@@ -8,7 +8,7 @@ const figureSchema = z.object({
   year: z.number().int().min(2019).max(2100),
   amount: z.string().max(60).refine((s) => Number.isFinite(parseNumber(s)?.num), "Use Dutch number notation"),
   unit: z.string().min(1).max(80),
-  href: z.string().max(500).refine((s) => parseHref(s) !== null, "Use a DigiMV /bron/ citation"),
+  href: z.string().max(500).refine((s) => parseHref(s) !== null, "Use a /bron/ citation"),
   quote: z.string().min(1).max(200),
 });
 
@@ -26,7 +26,7 @@ const cell = (s: string) => s.replace(/[\\|\[\]<>`*_]/g, "\\$&").replace(/[\r\n]
 export function figureTable(figures: Figure[]) {
   const multiple = new Set(figures.map((f) => f.organization)).size > 1;
   return `| ${multiple ? "Organisatie | " : ""}Post | Jaar | Bedrag | Eenheid | Bron |\n| ${multiple ? "--- | " : ""}--- | ---: | ---: | --- | --- |\n` +
-    figures.map((f) => `| ${multiple ? `${cell(f.organization)} | ` : ""}${cell(f.label)} | ${f.year} | ${cell(f.amount)} | ${cell(f.unit)} | [${f.href.includes("/vragenlijst/") ? "DigiMV" : `p. ${f.href.split("/").at(-1)}`}](${f.href} "${f.quote.replace(/["|\r\n]/g, " ")}") |`).join("\n");
+    figures.map((f) => `| ${multiple ? `${cell(f.organization)} | ` : ""}${cell(f.label)} | ${f.year} | ${cell(f.amount)} | ${cell(f.unit)} | [${f.href.includes("/project/") ? "Projectbron" : f.href.includes("/vragenlijst/") ? "DigiMV" : `p. ${f.href.split("/").at(-1)}`}](${f.href} "${f.quote.replace(/["|\r\n]/g, " ")}") |`).join("\n");
 }
 
 /** The model chooses the presentation; OpenUI receives only validated component arguments. */

@@ -167,3 +167,9 @@
 .answer td[align="right"] {
   text-align: right;
 }
+
+/* Centred project dialogs reuse the drawer's focus management without its bottom-sheet extension. */
+.project-modal::after { display: none !important; }
+@media (min-width: 640px) {
+  .project-modal > div:first-child { display: none; }
+}

@@ -16,7 +16,7 @@ const EvidenceContext = createContext<{ question: string; activeKey: string | nu
 function Source({ figure: f }: { figure: Figure }) {
   const { activeKey, onCite } = useContext(EvidenceContext);
   const key = citationKey(f.href, f.quote);
-  return <CitationChip active={key === activeKey} href={f.href} label={f.href.includes("/vragenlijst/") ? "DigiMV" : `p. ${f.href.split("/").at(-1)}`} onClick={() => onCite(key)} quote={f.quote} />;
+  return <CitationChip active={key === activeKey} href={f.href} label={f.href.includes("/project/") ? "Projectbron" : f.href.includes("/vragenlijst/") ? "DigiMV" : `p. ${f.href.split("/").at(-1)}`} onClick={() => onCite(key)} quote={f.quote} />;
 }
 
 function FinancialAnswer({ summary, figures, view }: typeof richAnswerSchema._output) {

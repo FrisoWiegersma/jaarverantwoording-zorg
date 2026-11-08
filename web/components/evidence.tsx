@@ -14,13 +14,16 @@ export type DocMeta = { org: string; type: string };
 type Mark = [number, number, number, number];
 export type Shot = { kind: "page"; src: string; mark: Mark | null; found: "all" | "partial" | "none" };
 export type Filed = { kind: "figure"; org: string; field: { label: string; value: string; unit: string } | null };
-type Loaded = Shot | Filed | "error";
+export type PrivatePage = { kind: "project"; filename: string; text: string; source: string; documentKind: string; shot: Shot | null };
+type Loaded = Shot | Filed | PrivatePage | "error";
 type PageCitation = Extract<Citation, { kind: "page" }>;
 type FigureCitation = Extract<Citation, { kind: "figure" }>;
 
-const pagePath = (c: PageCitation) => `/digimv/documents/${c.year}/${c.docId}`;
+type PrivateCitation = Extract<Citation, { kind: "project" }>;
+const pagePath = (c: PageCitation | PrivateCitation) => c.kind === "project"
+  ? `/digimv/projects/${c.projectId}/documents/${c.documentId}` : `/digimv/documents/${c.year}/${c.docId}`;
 
-async function fetchShot(c: PageCitation): Promise<Shot> {
+async function fetchShot(c: PageCitation | PrivateCitation): Promise<Shot> {
   const query = c.quote ? `?quote=${encodeURIComponent(c.quote)}` : "";
   const r = await fetch(`${pagePath(c)}/pages/${c.page}.png${query}`);
   if (!r.ok) throw new Error(String(r.status));
@@ -42,7 +45,17 @@ async function fetchFiled(c: FigureCitation): Promise<Filed> {
 
 // ponytail: session-long cache, object URLs never revoked; fine for a few hundred page images
 const loaded = new Map<string, Promise<Loaded>>();
+async function fetchPrivate(c: PrivateCitation): Promise<PrivatePage> {
+  const r = await fetch(`${pagePath(c)}/pages/${c.page}`, { cache: "no-store" });
+  if (!r.ok) throw new Error("Privébron niet beschikbaar");
+  const d = await r.json();
+  return { kind: "project", filename: d.filename, text: d.text, source: d.source, documentKind: d.kind,
+    shot: d.kind === "pdf" ? await fetchShot(c) : null };
+}
+
 function load(c: Citation): Promise<Loaded> {
+  // Private material is never retained in the shared session cache.
+  if (c.kind === "project") return fetchPrivate(c).catch(() => "error" as const);
   let p = loaded.get(c.key);
   if (!p) {
     p = (c.kind === "page" ? fetchShot(c) : fetchFiled(c)).catch((): Loaded => {
@@ -59,9 +72,15 @@ export function useLoaded(c: Citation | undefined) {
   useEffect(() => {
     if (!c) return;
     let live = true;
-    load(c).then((value) => live && setState({ key: c.key, value }));
+    let privateUrl: string | undefined;
+    load(c).then((value) => {
+      if (value !== "error" && value.kind === "project") privateUrl = value.shot?.src;
+      if (live) setState({ key: c.key, value });
+      else if (privateUrl) URL.revokeObjectURL(privateUrl);
+    });
     return () => {
       live = false;
+      if (privateUrl) URL.revokeObjectURL(privateUrl);
     };
   }, [c]);
   return c && state?.key === c.key ? state.value : null;
@@ -101,7 +120,7 @@ function Status({ children }: { children: ReactNode }) {
 function Heading({ title, sub }: { title: string; sub: string }) {
   return (
     <div>
-      <p className="font-semibold text-[1.05rem] leading-snug">{title}</p>
+      <p className="break-words font-semibold text-[1.05rem] leading-snug [overflow-wrap:anywhere]">{title}</p>
       <p className="text-muted-foreground">{sub}</p>
     </div>
   );
@@ -209,6 +228,7 @@ function quoteMatches(quote: string, value: string) {
 export function useCheck(c: Citation | undefined) {
   const value = useLoaded(c);
   if (!c?.quote || !value || value === "error") return null;
+  if (value.kind === "project") return !value.text.replace(/\s+/g, " ").includes(c.quote.replace(/\s+/g, " "));
   if (value.kind === "page") return value.found !== "all";
   return !value.field || !quoteMatches(c.quote, value.field.value);
 }
@@ -273,7 +293,9 @@ export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocM
   const value = useLoaded(c);
   return (
     <div className="flex flex-col gap-5">
-      {c.kind === "page" ? (
+      {c.kind === "project" ? (
+        <PrivateSource c={c} value={value as PrivatePage | "error" | null} />
+      ) : c.kind === "page" ? (
         <PageEvidence c={c} doc={docs[`${c.year}/${c.docId}`]} shot={value as Shot | "error" | null} />
       ) : (
         <FigureEvidence c={c} filed={value as Filed | "error" | null} />
@@ -282,11 +304,30 @@ export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocM
   );
 }
 
+
+export function PrivateSource({ c, value, compact = false }: { c: PrivateCitation; value: PrivatePage | "error" | null; compact?: boolean }) {
+  if (!value) return <p>Privébron laden…</p>;
+  if (value === "error") return <p role="alert">Privébron niet beschikbaar. Controleer je aanmelding.</p>;
+  const matched = value.text.replace(/\s+/g, " ").includes(c.quote.replace(/\s+/g, " "));
+  return <div className="min-w-0 space-y-3 [overflow-wrap:anywhere]">
+    <Heading title={value.filename} sub={`Privébron · ${value.documentKind === "pdf" ? "pagina" : "sectie"} ${c.page} · ${value.source === "text" || value.source === "note" || value.source === "markdown" ? "tekst" : value.source === "needs_ocr" || value.source === "pending" ? "OCR niet beschikbaar" : "OCR — controleer de tekst"}`} />
+    {c.quote && <blockquote className="rounded-lg bg-marker p-3 text-marker-ink">{c.quote}</blockquote>}
+    {c.quote && <p className="text-sm text-muted-foreground">{matched ? "Citaat teruggevonden in de brontekst. Controleer de betekenis zelf." : "Citaat niet letterlijk teruggevonden. Controleer de originele pagina."}</p>}
+    {!compact && value.shot && <>
+      {/* eslint-disable-next-line @next/next/no-img-element -- authenticated rendered PDF page */}
+      <img alt={`Pagina ${c.page} van ${value.filename}`} className="w-full rounded-lg" src={value.shot.src} />
+    </>}
+    {!compact && value.text && <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-4 font-sans text-sm">{value.text}</pre>}
+    {!compact && value.documentKind !== "pdf" && <a className="underline" href={`${pagePath(c)}/original`}>Download {value.documentKind === "markdown" ? "kennisbestand (.md)" : "tekstbron"}</a>}
+    {!compact && value.documentKind === "pdf" && <a className="underline" href={`${pagePath(c)}/pdf#page=${c.page}`} target="_blank" rel="noopener">Open originele PDF op pagina {c.page}</a>}
+  </div>;
+}
+
 function EvidenceBody({ citations, index, onIndex, docs }: Omit<EvidenceProps, "open" | "onClose">) {
   const c = citations[index];
   const next = citations[index + 1];
   useEffect(() => {
-    if (next) load(next); // stepping on is instant
+    if (next && next.kind !== "project") load(next); // private pages are loaded only by their mounted view
   }, [next]);
   if (!c) return null;
 
@@ -340,6 +381,7 @@ function useWide() {
 }
 
 interface EvidenceProps {
+  drawer?: boolean;
   open: boolean;
   citations: Citation[];
   index: number;
@@ -351,7 +393,7 @@ interface EvidenceProps {
 /** Where an answer's figures come from: docked on a wide screen, a drawer from the bottom on a phone. */
 export function Evidence(props: EvidenceProps) {
   const { open, citations, index, onIndex, onClose } = props;
-  const wide = useWide();
+  const wide = useWide() && !props.drawer;
 
   // ← → step through the answer's sources, unless the person is typing.
   useEffect(() => {

@@ -297,7 +297,7 @@ def _is_scan(page):
     return visible < 50 or (visible < 200 and cover >= 0.5)
 
 
-def _gemini(pdf_bytes):
+def _gemini(pdf_bytes, before_request=None):
     """Transcribe a one-page PDF scan with Gemini. Returns (markdown, exact model version)."""
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
@@ -309,6 +309,8 @@ def _gemini(pdf_bytes):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     for attempt in range(4):
         try:
+            if before_request:
+                before_request()
             raw = _http(url, data=json.dumps(body).encode(), timeout=300,
                         headers={"x-goog-api-key": key, "Content-Type": "application/json"})
             break

@@ -12,7 +12,7 @@ test("citations", () => {
     "Gewone link [DigiMV](https://digimv.nl).";
   const c = parseCitations(text);
   assert.deepEqual(
-    c.map((x) => (x.kind === "page" ? [x.year, x.docId, x.page, x.quote] : [x.year, x.orgId, x.field, x.quote])),
+    c.map((x) => (x.kind === "page" ? [x.year, x.docId, x.page, x.quote] : x.kind === "figure" ? [x.year, x.orgId, x.field, x.quote] : [x.projectId, x.documentId, x.page, x.quote])),
     [
       [2023, 84870, 10, "Eigen vermogen 108.256"],
       [2023, 84870, 10, "41.414"],
@@ -40,4 +40,13 @@ test("citations", () => {
     evidenceUrl("/bron/2023/84870/10", "Eigen vermogen 108.256", "https://x.nl"),
     "https://x.nl/bron/2023/84870/10?q=Eigen%20vermogen%20108.256",
   );
+});
+
+
+test("private project citation links are strict and retain their quoted evidence", () => {
+  const pid = "a".repeat(32), did = "b".repeat(32);
+  const href = `/bron/project/${pid}/${did}/8`;
+  assert.deepEqual(parseHref(href), { kind: "project", projectId: pid, documentId: did, page: 8 });
+  assert.equal(parseCitations(`[p. 8](${href} "Omzet 123")`)[0].quote, "Omzet 123");
+  for (const bad of [href + "/extra", href.replace("/8", "/0"), href.replace(did, ".."), href + "?x=1"]) assert.equal(parseHref(bad), null);
 });

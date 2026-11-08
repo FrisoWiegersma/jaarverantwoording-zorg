@@ -20,14 +20,14 @@ function when(iso: string) {
   return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
 }
 
-export function History({ current, onOpen }: { current?: string; onOpen: (messages: UIMessage[]) => void }) {
+export function History({ current, onOpen, projectId }: { projectId?: string; current?: string; onOpen: (messages: UIMessage[]) => void }) {
   const [open, setOpen] = useState(false);
   const [list, setList] = useState<Saved[] | "error" | null>(null);
   // A delete asks once more, on the same spot: one tap arms it, the second deletes.
   const [armed, setArmed] = useState<string | null>(null);
 
   const load = () =>
-    fetch("/digimv/chats")
+    fetch(`/digimv/chats${projectId ? `?project_id=${projectId}` : ""}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(setList, () => setList("error"));
   const show = () => {

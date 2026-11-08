@@ -5,6 +5,7 @@
 
 export type Source =
   | { kind: "page"; year: number; docId: number; page: number }
+  | { kind: "project"; projectId: string; documentId: string; page: number }
   | { kind: "figure"; year: number; orgId: string; field: string };
 
 export type Citation = Source & { key: string; href: string; quote: string };
@@ -17,6 +18,8 @@ export function citationKey(href: string, quote: string | undefined) {
 }
 
 export function parseHref(href: string): Source | null {
+  const privateSource = href.match(/^\/bron\/project\/([a-f0-9]{32})\/([a-f0-9]{32})\/([1-9]\d*)$/);
+  if (privateSource) return { kind: "project", projectId: privateSource[1], documentId: privateSource[2], page: +privateSource[3] };
   let m = href.match(/^\/bron\/(\d{4})\/(\d+)\/(\d+)$/);
   if (m) return { kind: "page", year: +m[1], docId: +m[2], page: +m[3] };
   m = href.match(/^\/bron\/vragenlijst\/(\d{4})\/([^/\s]+)\/([^/\s]+)$/);
