@@ -1,5 +1,6 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import {
+  APICallError,
   convertToModelMessages,
   createUIMessageStreamResponse,
   generateId,
@@ -246,7 +247,8 @@ export async function POST(req: Request) {
       console.info("chat.finish", { id, ...choice, steps: steps.length, finishReason, presented: finishWhenPresented({ steps }) });
     },
     onError: ({ error }) => {
-      console.error("chat.error", { id, name: error instanceof Error ? error.name : "UnknownError" });
+      const status = APICallError.isInstance(error) ? error.statusCode : undefined;
+      console.error("chat.error", { id, name: error instanceof Error ? error.name : "UnknownError", status, message: error instanceof Error ? error.message.slice(0, 200) : undefined });
     },
     abortSignal: answer.stop.signal,
   });
