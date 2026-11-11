@@ -9,12 +9,13 @@
  * @website: https://kokonutui.com
  * @github: https://github.com/kokonut-labs/kokonutui
  *
- * Trimmed for this app: one model, no effort menu, attachments or slash commands. The reply state comes from
- * the chat (`busy`) instead of the submit promise, so suggestions sent from outside the box show Stop too.
+ * Trimmed for this app: no attachments or slash commands, and the model menu comes in as `footer` (the
+ * kokonutui model selector and context meter). The reply state comes from the chat (`busy`) instead of the
+ * submit promise, so suggestions sent from outside the box show Stop too.
  */
 
 import { ArrowUp } from "lucide-react";
-import { type Ref, useId, useImperativeHandle, useRef } from "react";
+import { type ReactNode, type Ref, useId, useImperativeHandle, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,8 @@ interface AIPromptProps {
   onStop: () => void;
   busy: boolean;
   placeholder?: string;
+  /** Controls in the row under the text, left of the send button. */
+  footer?: ReactNode;
   className?: string;
   ref?: Ref<HTMLTextAreaElement>;
 }
@@ -77,6 +80,7 @@ export default function AI_Prompt({
   onStop,
   busy,
   placeholder = "Stel een vraag over een jaarverslag",
+  footer,
   className,
   ref,
 }: AIPromptProps) {
@@ -122,7 +126,7 @@ export default function AI_Prompt({
     <div className={cn("w-full", className)}>
       <div
         className={cn(
-          "raised relative flex items-end gap-2 rounded-[22px] p-2 pl-1",
+          "raised relative flex flex-col gap-1 rounded-[22px] p-2",
           "outline-2 outline-transparent transition-[outline-color] duration-150 has-[textarea:focus-visible]:outline-ring/50"
         )}
       >
@@ -130,7 +134,7 @@ export default function AI_Prompt({
           Je vraag
         </label>
         <Textarea
-          className="min-h-[60px] max-h-[240px] w-full resize-none overflow-y-auto rounded-none border-none bg-transparent px-4 py-3 text-[1.05rem] leading-relaxed shadow-none placeholder:text-muted-foreground focus-visible:ring-0 md:text-[1.05rem] dark:bg-transparent"
+          className="min-h-[52px] max-h-[240px] w-full resize-none overflow-y-auto rounded-none border-none bg-transparent px-3 pt-2 pb-1 text-[1.05rem] leading-relaxed shadow-none placeholder:text-muted-foreground focus-visible:ring-0 md:text-[1.05rem] dark:bg-transparent"
           id={textareaId}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -139,7 +143,10 @@ export default function AI_Prompt({
           rows={1}
           value={value}
         />
-        <SendButton canSend={canSend} onSend={submit} onStop={stop} responding={busy} />
+        <div className="flex items-center gap-1">
+          <div className="flex min-w-0 flex-1 items-center gap-1">{footer}</div>
+          <SendButton canSend={canSend} onSend={submit} onStop={stop} responding={busy} />
+        </div>
       </div>
     </div>
   );

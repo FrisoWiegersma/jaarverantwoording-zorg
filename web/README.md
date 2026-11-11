@@ -14,8 +14,9 @@ npm ci
 npm run dev -- --port 3210
 ```
 
-Required: `GEMINI_API_KEY`. Optional: `CHAT_MODEL`, `DIGIMV_API` (default `http://127.0.0.1:8000`),
-`APP_ORIGIN` (public origin used to validate Excel hyperlinks; defaults to the request origin).
+Required: `GEMINI_API_KEY`. Optional: `DIGIMV_API` (default `http://127.0.0.1:8000`),
+`APP_ORIGIN` (public origin used to validate Excel hyperlinks; defaults to the request origin). The chat
+model and its thinking level are picked in the prompt; `lib/models.ts` lists the choices the API route accepts.
 
 The AI SDK stream carries DigiMV tools and a `present_answer` tool. The latter validates one figure
 per row and produces an OpenUI `FinancialAnswer` program. The model chooses a table, cards, or chart.

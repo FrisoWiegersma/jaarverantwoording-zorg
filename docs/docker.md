@@ -54,7 +54,6 @@ The API image includes the SQLite tokenizer needed by the index and runs the off
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Required | Your server-side provider key |
 | `APP_ORIGIN` | `http://localhost:3210` | The exact address users open; Excel source links must match it |
-| `CHAT_MODEL` | `gemini-3.8-flash` | Override the chat model |
 | `GEMINI_MODEL` | `gemini-3.5-flash-lite` | Override scanned-page OCR |
 | `APP_VERSION` | `latest` | Optional local image tag for a release |
 

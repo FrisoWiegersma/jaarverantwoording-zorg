@@ -12,6 +12,8 @@ import type { presentAnswer } from "@/lib/rich-answer";
 import { type DocMeta, Evidence } from "@/components/evidence";
 import { History } from "@/components/history";
 import AILoadingState, { type AgentStep } from "@/components/kokonutui/ai-loading";
+import AIContextMeter from "@/components/kokonutui/ai-context-meter";
+import AIModelSelector from "@/components/kokonutui/ai-model-selector";
 import AI_Prompt from "@/components/kokonutui/ai-prompt";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
 import ScrollIndex from "@/components/kokonutui/scroll-index";
@@ -23,6 +25,7 @@ import { Welcome } from "@/components/welcome";
 import { hidePartialLink, parseCitations } from "@/lib/citations";
 import { missingAnswer } from "@/lib/chat-policy";
 import { conversationId, reconnectOnReturn, rememberConversation } from "@/lib/chat-session";
+import { CONTEXT_WINDOW, type ContextUse, type ModelSelection, pickModel } from "@/lib/models";
 import { cn } from "@/lib/utils";
 
 const richOf = (m: UIMessage) => m.parts.filter(isToolUIPart).flatMap((p) =>
@@ -175,6 +178,20 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
   const [draft, setDraft] = useState("");
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const docs = useMemo(() => docsOf(messages), [messages]);
+  // Rendered only after the session loads in the browser, so reading the saved choice here can't mismatch SSR.
+  const [choice, setChoice] = useState<ModelSelection>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("model") ?? "{}");
+      return pickModel(saved.model, saved.effort);
+    } catch { return pickModel(); }
+  });
+  const choose = (next: ModelSelection) => {
+    setChoice(next);
+    try { localStorage.setItem("model", JSON.stringify(next)); } catch {}
+  };
+  const body = { projectId, ...choice };
+  const context = (messages.findLast((m) => (m.metadata as { context?: ContextUse })?.context)?.metadata as
+    { context: ContextUse } | undefined)?.context;
 
   const shownMessage = evidence ? messages.find((m) => m.id === evidence.messageId) : undefined;
   const shownText = shownMessage ? textOf(shownMessage) : "";
@@ -183,7 +200,7 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
 
   const ask = (text: string) => {
     rememberConversation(chat.id);
-    return sendMessage({ text }, { body: { projectId } });
+    return sendMessage({ text }, { body });
   };
   // The answer runs on even when the connection drops, so Stop tells the server too.
   const halt = () => {
@@ -203,8 +220,8 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
     if (!q || asked.current) return;
     asked.current = true;
     rememberConversation(chat.id);
-    stop().then(() => sendMessage({ text: q }, { body: { projectId } }));
-  }, [stop, sendMessage, projectId, initialQuestion, chat.id]);
+    stop().then(() => sendMessage({ text: q }, { body: { projectId, ...choice } }));
+  }, [stop, sendMessage, projectId, initialQuestion, chat.id, choice]);
   const onIndex = useCallback(
     (i: number) => evidence && setEvidence({ messageId: evidence.messageId, key: citations[i].key }),
     [evidence, citations]
@@ -315,7 +332,7 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
                       <p>Het antwoord kon niet worden opgehaald. {error.message}</p>
                       <button
                         className="mt-2 min-h-11 rounded-full px-4 font-semibold ring-1 ring-border hover:bg-card"
-                        onClick={() => regenerate({ body: { projectId } })}
+                        onClick={() => regenerate({ body })}
                         type="button"
                       >
                         Probeer opnieuw
@@ -329,7 +346,21 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
 
           <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
             <div className="mx-auto max-w-[46rem]">
-              <AI_Prompt busy={busy} onStop={halt} onSubmit={ask} onValueChange={setDraft} ref={promptRef} value={draft} />
+              <AI_Prompt
+                busy={busy}
+                footer={<>
+                  <AIModelSelector onChange={choose} value={choice} />
+                  {context && <AIContextMeter className="ml-auto" limit={CONTEXT_WINDOW} segments={[
+                    { id: "prompt", label: "Instructies en gesprek", tokens: context.prompt, color: "bg-muted-foreground/50" },
+                    { id: "sources", label: "Gelezen bronnen", tokens: context.sources, color: "bg-(--series-1)" },
+                  ]} />}
+                </>}
+                onStop={halt}
+                onSubmit={ask}
+                onValueChange={setDraft}
+                ref={promptRef}
+                value={draft}
+              />
               <p className="mt-2 text-center text-[0.85rem] text-muted-foreground">
                 Klik op een geel paginanummer om te zien waar het staat.
               </p>
