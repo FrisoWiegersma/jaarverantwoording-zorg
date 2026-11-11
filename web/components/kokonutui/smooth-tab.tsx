@@ -49,6 +49,10 @@ const NEIGHBOUR_OPACITY = 0.35;
 // Just under critical damping: a firm settle, a hint of overshoot only after a fast flick.
 const SPRING = { type: "spring", stiffness: 420, damping: 38 } as const;
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+// Room above and below the panel inside the clip, so the raised cards keep their shadows (the night shadow reaches
+// 56px down). Padding with the same negative margin: the layout still sees the panel's own height.
+const ROOM_TOP = 8;
+const ROOM_BOTTOM = 56;
 
 interface TabRect {
   left: number;
@@ -145,7 +149,7 @@ export default function SmoothTab({
       const lo = Math.floor(c);
       const viewport = viewportRef.current;
       if (viewport && heights.current.length) {
-        viewport.style.height = `${lerp(heights.current[lo] ?? 0, heights.current[Math.min(lo + 1, count - 1)] ?? 0, c - lo)}px`;
+        viewport.style.height = `${lerp(heights.current[lo] ?? 0, heights.current[Math.min(lo + 1, count - 1)] ?? 0, c - lo) + ROOM_TOP + ROOM_BOTTOM}px`;
       }
       const overlay = overlayRef.current;
       const r = indicatorRect(rects.current, p);
@@ -287,7 +291,7 @@ export default function SmoothTab({
   return (
     <div className={cn("flex w-full flex-col gap-3", className)}>
       <div>
-        <div aria-label={label} className="relative inline-flex max-w-full rounded-full bg-muted p-1 print:hidden" ref={tablistRef} role="tablist">
+        <div aria-label={label} className="relative inline-flex max-w-full rounded-full bg-muted p-1" ref={tablistRef} role="tablist">
           {items.map((item, i) => {
             const Icon = item.icon;
             return (
@@ -336,9 +340,10 @@ export default function SmoothTab({
         </div>
       </div>
 
-      {/* Clipped sideways only, so the raised cards keep their shadows. */}
+      {/* Clipped on every side: the hidden panels sit beside it, and a taller one must not hang below the one in
+          view, where it stretched the page (white space under a short table) and caught clicks. */}
       <div
-        className="-mx-3 touch-pan-y overflow-x-clip"
+        className="-mx-3 touch-pan-y overflow-clip"
         onClickCapture={(e) => {
           if (suppressClick.current) {
             suppressClick.current = false;
@@ -352,6 +357,7 @@ export default function SmoothTab({
         onPointerMove={onPointerMove}
         onPointerUp={(e) => endDrag(e, false)}
         ref={viewportRef}
+        style={{ marginTop: -ROOM_TOP, paddingTop: ROOM_TOP, marginBottom: -ROOM_BOTTOM, paddingBottom: ROOM_BOTTOM }}
       >
         {/* The track is as tall as the tallest panel and hangs below a shorter one, unclipped for the shadows; it
             must not take the clicks meant for what comes after it. The panels take their own. */}

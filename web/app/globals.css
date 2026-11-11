@@ -193,37 +193,3 @@
     animation: none;
   }
 }
-
-/* Ctrl+P on a chat: a report on paper. The day palette whatever the theme, no chrome (print:hidden in the
-   components), chips as the plain page reference they stand for, and nothing split across a page break. */
-@media print {
-  @page { margin: 16mm 18mm; }
-  :root,
-  :root.dark {
-    --background: #ffffff;
-    --foreground: #0e1626;
-    --card: #ffffff;
-    --muted: #e9edf4;
-    --muted-foreground: #586378;
-    --border: #dfe4ee;
-    --primary: #0e1626;
-    --primary-foreground: #ffffff;
-    --destructive: #b42318;
-    --raise-shadow: none;
-    --raise-top: transparent;
-    --raise-line: #dfe4ee;
-    color-scheme: light;
-  }
-  html { font-size: 11pt; }
-  [data-citation] {
-    height: auto !important;
-    padding: 0 !important;
-    background: none !important;
-    box-shadow: none !important;
-    color: inherit !important;
-    text-decoration: underline;
-    text-decoration-color: var(--marker-edge);
-  }
-  table, figure, .raised, li { break-inside: avoid; }
-  [data-question] { break-after: avoid; }
-}

@@ -318,13 +318,13 @@ export default function ScrollIndex({
 
   return (
     <div className={cn("@container relative min-h-0", className)}>
-      <main className="h-full overflow-y-auto print:h-auto print:overflow-visible" ref={boxRef}>
+      <main className="h-full overflow-y-auto" ref={boxRef}>
         {children}
       </main>
 
       <nav
         aria-label={label}
-        className={cn("absolute top-1/2 left-8 z-10 hidden w-12 -translate-y-1/2", sections.length > 1 && "@min-[56rem]:flex print:hidden")}
+        className={cn("absolute top-1/2 left-8 z-10 hidden w-12 -translate-y-1/2", sections.length > 1 && "@min-[56rem]:flex")}
       >
         <div className="relative w-full cursor-pointer touch-none select-none data-[dragging]:cursor-grabbing" ref={railRef} style={{ height: RAIL }}>
           {sections.map((section, index) => (

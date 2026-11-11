@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { generateId, getToolName, isToolUIPart, type UIMessage } from "ai";
 import Link from "next/link";
-import { Copy, Printer, SquarePen } from "lucide-react";
+import { Copy, SquarePen } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Answer, DrawnCheck } from "@/components/answer";
 import { CitationPreviewProvider } from "@/components/citation-preview";
@@ -154,7 +154,7 @@ function ChatSkeleton() {
 const plainAnswer = (text: string) =>
   text.replace(/\[([^\]\n]*)\]\(\/bron\/[^\s)"']+(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\)/g, "$1").trim();
 
-/** Under a finished answer: which model answered and how long it took, and the ways to take the answer with you. */
+/** Under a finished answer: which model answered and how long it took, and a copy of the answer to take along. */
 function AnswerBody({ children, done, meta, text }: { children: ReactNode; done: boolean; meta?: AnswerMeta; text: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<"ok" | "error" | null>(null);
@@ -190,48 +190,16 @@ function AnswerBody({ children, done, meta, text }: { children: ReactNode; done:
       {done && (
         <div className="mt-3 flex flex-wrap items-center gap-1 text-[0.9rem] text-muted-foreground">
           {label && <span className="mr-auto pr-2">{label}</span>}
-          <span className={cn("flex items-center gap-1 print:hidden", !label && "-ml-3")}>
-            <button className={button} onClick={copy} type="button">
-              {copied === "ok" ? <DrawnCheck /> : <Copy aria-hidden="true" className="size-4" />}
-              Kopieer
-            </button>
-            <button className={button} onClick={() => window.print()} type="button">
-              <Printer aria-hidden="true" className="size-4" />
-              Afdrukken
-            </button>
-          </span>
+          <button className={cn(button, !label && "-ml-3")} onClick={copy} type="button">
+            {copied === "ok" ? <DrawnCheck /> : <Copy aria-hidden="true" className="size-4" />}
+            Kopieer
+          </button>
           <span aria-live="polite" className="sr-only">
             {copied === "ok" ? "Antwoord gekopieerd" : copied === "error" ? "Kopiëren lukte niet" : ""}
           </span>
         </div>
       )}
     </>
-  );
-}
-
-/** On paper the chips can't be clicked, so each answer ends with its sources written out (and linked in a PDF). */
-function PrintSources({ text, docs }: { text: string; docs: Record<string, DocMeta> }) {
-  const citations = parseCitations(text);
-  if (!citations.length) return null;
-  return (
-    <section className="mt-6 hidden text-[0.9rem] print:block">
-      <h3 className="font-semibold">Bronnen</h3>
-      <ol className="mt-1 list-decimal space-y-1 pl-5">
-        {citations.map((c) => {
-          const doc = c.kind === "page" ? docs[`${c.year}/${c.docId}`] : undefined;
-          const where =
-            c.kind === "page" ? `p. ${c.page} · ${doc ? `${doc.type} ${c.year} · ${doc.org}` : `document ${c.docId} uit ${c.year}`}`
-            : c.kind === "figure" ? `DigiMV-vragenlijst ${c.year} · KvK ${c.orgId} · veld ${c.field}`
-            : `Projectbron, p. ${c.page}`;
-          return (
-            <li key={c.key}>
-              <a href={c.href}>{where}</a>
-              {c.quote && <> — “{c.quote}”</>}
-            </li>
-          );
-        })}
-      </ol>
-    </section>
   );
 }
 
@@ -353,9 +321,9 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
 
   return (
     <CitationPreviewProvider docs={docs}>
-      <div className={cn(projectId ? "flex h-full min-h-0" : "flex h-dvh", "print:block print:h-auto")}>
+      <div className={projectId ? "flex h-full min-h-0" : "flex h-dvh"}>
         <div className="flex min-w-0 flex-1 flex-col">
-          {!projectId && <header className="@container flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8 print:hidden">
+          {!projectId && <header className="@container flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
             <Logo />
             <div className="flex items-center gap-2">
               {!projectId && <Link className="raised rounded-full px-4 py-3" href="/projecten">Projecten</Link>}
@@ -419,10 +387,10 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
                     const rich = richOf(m);
                     return (
                       // The last turn fills the screen, so its question can sit at the top while the answer streams.
-                      <section className={cn("mt-5", isLastTurn && "min-h-[calc(100dvh-20rem)] print:min-h-0")} key={m.id}>
-                        {steps.length > 0 && <AILoadingState className="mb-5 print:hidden" completed={!streaming && !missingAnswer(m)} steps={steps} />}
+                      <section className={cn("mt-5", isLastTurn && "min-h-[calc(100dvh-20rem)]")} key={m.id}>
+                        {steps.length > 0 && <AILoadingState className="mb-5" completed={!streaming && !missingAnswer(m)} steps={steps} />}
                         {thinking && <Thinking />}
-                        {incomplete && <div className="my-4 rounded-xl border p-4 print:hidden" role="status"><p>{incomplete}</p><button className="mt-3 min-h-11 rounded-full px-4 ring-1 ring-border" disabled={busy} onClick={() => ask("Ga verder met de oorspronkelijke vraag en gebruik de al gevonden bronnen. Geef een antwoord met wat je hebt en benoem wat nog ontbreekt.")}>Ga verder met de gevonden bronnen</button></div>}
+                        {incomplete && <div className="my-4 rounded-xl border p-4" role="status"><p>{incomplete}</p><button className="mt-3 min-h-11 rounded-full px-4 ring-1 ring-border" disabled={busy} onClick={() => ask("Ga verder met de oorspronkelijke vraag en gebruik de al gevonden bronnen. Geef een antwoord met wat je hebt en benoem wat nog ontbreekt.")}>Ga verder met de gevonden bronnen</button></div>}
                         <AnswerBody done={!streaming && Boolean(text || rich.length)} meta={m.metadata as AnswerMeta | undefined} text={textOf(m)}>
                           {text && (
                             <Answer
@@ -438,17 +406,16 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
                               question={messages[i - 1] ? textOf(messages[i - 1]) : ""} />
                           ))}
                         </AnswerBody>
-                        {!streaming && <PrintSources docs={docs} text={textOf(m)} />}
                       </section>
                     );
                   })}
                   {waiting && (
-                    <section className="mt-5 min-h-[calc(100dvh-20rem)] print:hidden">
+                    <section className="mt-5 min-h-[calc(100dvh-20rem)]">
                       <Thinking />
                     </section>
                   )}
                   {error && (
-                    <div className="mt-6 rounded-xl px-4 py-3 ring-1 ring-destructive/40 print:hidden" role="alert">
+                    <div className="mt-6 rounded-xl px-4 py-3 ring-1 ring-destructive/40" role="alert">
                       <p>Het antwoord kon niet worden opgehaald. {error.message}</p>
                       <button
                         className="mt-2 min-h-11 rounded-full px-4 font-semibold ring-1 ring-border hover:bg-card"
@@ -464,7 +431,7 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
             </div>
           </ScrollIndex>
 
-          <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8 print:hidden">
+          <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
             <div className="mx-auto max-w-[46rem]">
               <AI_Prompt
                 busy={busy}
@@ -489,17 +456,15 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
           </div>
         </div>
 
-        <div className="contents print:hidden">
-          <Evidence
-            drawer={Boolean(projectId)}
-            citations={citations}
-            docs={docs}
-            index={index}
-            onClose={() => setEvidence(null)}
-            onIndex={onIndex}
-            open={Boolean(evidence && citations.length)}
-          />
-        </div>
+        <Evidence
+          drawer={Boolean(projectId)}
+          citations={citations}
+          docs={docs}
+          index={index}
+          onClose={() => setEvidence(null)}
+          onIndex={onIndex}
+          open={Boolean(evidence && citations.length)}
+        />
       </div>
     </CitationPreviewProvider>
   );
