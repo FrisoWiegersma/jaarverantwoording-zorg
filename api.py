@@ -1,6 +1,8 @@
 """HTTP API over the DigiMV index and knowledge base. Run: uv run --env-file .env uvicorn api:app"""
 
+import faulthandler
 import json
+import signal
 import sqlite3
 import threading
 from typing import Annotated
@@ -13,6 +15,10 @@ from pydantic import BaseModel, Field
 
 import digimv
 import projects
+
+# A frozen API logs nothing (uvicorn skips requests whose caller gave up), so on a freeze run
+# `docker compose kill -s SIGUSR1 api` and `docker compose logs api` shows where every thread is stuck.
+faulthandler.register(signal.SIGUSR1, all_threads=True)
 
 
 @asynccontextmanager
