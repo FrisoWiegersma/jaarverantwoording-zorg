@@ -318,7 +318,7 @@ export default function ScrollIndex({
 
   return (
     <div className={cn("@container relative min-h-0", className)}>
-      <main className="h-full overflow-y-auto" ref={boxRef}>
+      <main className="relative h-full overflow-y-auto" ref={boxRef}>
         {children}
       </main>
 
