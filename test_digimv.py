@@ -127,6 +127,14 @@ def run():
             digimv.pdf_path(2023, 1).parent.mkdir(parents=True)
             digimv.pdf_path(2023, 1).write_bytes(path.read_bytes())
             db.execute("UPDATE docs SET file_size=? WHERE year=2023 AND id=1", (path.stat().st_size,))
+            # a search naming an org-year nobody opened opens its documents first, converting no page
+            db.execute("DELETE FROM kb WHERE year=2023 AND doc_id=1")
+            db.execute("DELETE FROM pages_fts WHERE year=2023 AND doc_id=1")
+            assert not digimv.search_text("108", doc_id=1, db=db)  # no year: only what was opened before
+            hits = digimv.search_text("108", org_id="82905347", year=2023, db=db)
+            assert [h["page"] for h in hits] == [1], hits
+            cached = json.loads((digimv.md_dir(digimv.get_doc(2023, 1, db)) / "1.pages.json").read_text())["pages"]
+            assert [p["markdown"] for p in cached] == [None, None]
             r = digimv.get_document(2023, 1, "2", db=db)
             cached = json.loads((digimv.md_dir(r) / "1.pages.json").read_text())["pages"]
             assert cached[0]["markdown"] is None and cached[1]["markdown"] == "" and r["page_count"] == 2

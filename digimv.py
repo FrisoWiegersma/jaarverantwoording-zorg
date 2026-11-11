@@ -492,12 +492,30 @@ def render_page(path, page, quotes=(), dpi=110):
     return png, (box.y0 / h, box.x0 / w, box.y1 / h, box.x1 / w), "all" if all(found) else "partial"
 
 
+def _ensure_indexed(db, year, org_id=None, doc_id=None):
+    """Open (download, text layer, index; no Markdown) the documents a search names that nobody opened yet, so a
+    caller can search before reading instead of opening page 1-5 first just to make a document searchable."""
+    sql = """SELECT d.id FROM docs d LEFT JOIN kb ON kb.year=d.year AND kb.doc_id=d.id
+             WHERE d.year=? AND (kb.published IS NULL OR kb.published != d.published)"""
+    args = [year]
+    for col, val in (("org_id", org_id), ("id", doc_id)):
+        if val is not None:
+            sql += f" AND d.{col}=?"
+            args.append(val)
+    # ponytail: an org-year has 1-3 documents; a scanned one costs its OCR here, as it would on first get_document
+    for (doc,) in db.execute(sql, args).fetchall():
+        get_document(year, doc, pages="0", db=db)  # page 0 selects no page: nothing converts
+
+
 def search_text(q, org_id=None, year=None, doc_id=None, limit=20, db=None):
-    """Full-text search over every OCR'd page in the knowledge base."""
+    """Full-text search over every OCR'd page in the knowledge base. With a year and an org or document, the
+    documents it names are opened first if needed; otherwise only documents opened before are searched."""
     db = db or connect()
     match = _text_query(q)
     if not match:
         return []
+    if year is not None and (org_id is not None or doc_id is not None):
+        _ensure_indexed(db, year, org_id, doc_id)
     sql, args = """SELECT p.year, p.doc_id, p.page, p.org_id, d.type, d.file_name, p.md,
                           snippet(pages_fts, 0, '«', '»', ' … ', 24) AS snippet
                    FROM pages_fts p LEFT JOIN docs d ON d.year=p.year AND d.id=p.doc_id

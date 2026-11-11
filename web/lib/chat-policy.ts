@@ -2,15 +2,37 @@ import { getToolName, isToolUIPart, type UIMessage } from "ai";
 
 export const RESEARCH_STEPS = 24;
 export const MAX_STEPS = RESEARCH_STEPS + 3;
+/** Input tokens over all steps, the cost of an answer: every step resends the conversation. With parallel tool calls a
+ * step can read a lot, so research also ends here. ponytail: fixed; the dearest answers in the 2026-11-11 eval used
+ * 0.3M (fte of 7 UMCs) and 1.5M (an open-ended 7-UMC search). Tune from the input field of chat.finish. */
+export const RESEARCH_TOKENS = 600_000;
+
+type Steps = ReadonlyArray<{ usage: { inputTokens: number | undefined } }>;
+
+/** The step the final answer starts at: the step budget, or the step after the one that reached the token budget. */
+export function researchEnd(steps: Steps) {
+  let used = 0;
+  for (const [i, step] of steps.entries()) {
+    used += step.usage.inputTokens ?? 0;
+    if (used >= RESEARCH_TOKENS) return Math.min(i + 1, RESEARCH_STEPS);
+  }
+  return RESEARCH_STEPS;
+}
+
+/** Two tries at present_answer, then one in plain text, counted from where research ended. */
+export function outOfBudget({ steps }: { steps: Steps }) {
+  return steps.length >= researchEnd(steps) + 3;
+}
 
 /** Failed calls must remain in the loop so the model can correct their input. */
 export function finishWhenPresented({ steps }: { steps: ReadonlyArray<{ toolResults: ReadonlyArray<{ toolName: string }> }> }) {
   return steps.at(-1)?.toolResults.some((result) => result.toolName === "present_answer") ?? false;
 }
 
-export function finalAnswerStep(stepNumber: number, instructions: string) {
-  if (stepNumber < RESEARCH_STEPS) return {};
-  const plainTextFallback = stepNumber === MAX_STEPS - 1;
+export function finalAnswerStep(stepNumber: number, instructions: string, steps: Steps = []) {
+  const end = researchEnd(steps);
+  if (stepNumber < end) return {};
+  const plainTextFallback = stepNumber >= end + 2;
   return {
     activeTools: plainTextFallback ? [] : ["present_answer"] as ["present_answer"],
     toolChoice: plainTextFallback ? "none" as const : { type: "tool" as const, toolName: "present_answer" as const },

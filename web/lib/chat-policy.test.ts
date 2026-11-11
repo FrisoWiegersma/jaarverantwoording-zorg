@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { generateText, isStepCount, tool, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
-import { finalAnswerStep, finishWhenPresented, MAX_STEPS, missingAnswer, progressTitle, RESEARCH_STEPS } from "./chat-policy.ts";
+import { finalAnswerStep, finishWhenPresented, MAX_STEPS, missingAnswer, outOfBudget, progressTitle, RESEARCH_STEPS, RESEARCH_TOKENS, researchEnd } from "./chat-policy.ts";
 import { presentAnswer, richAnswerSchema } from "./rich-answer.ts";
 
 const answer = { summary: "Bronnen gecontroleerd. ".repeat(1000), view: "table" as const,
@@ -75,4 +75,17 @@ test("a recoverable tool error does not label a running or completed answer as s
   assert.equal(progressTitle([failed, { label: "Cijfers klaargezet", status: "done" }], true), "Antwoord klaar · 1 stap mislukt");
   assert.equal(progressTitle([failed], false), "Gestopt bij: PDF lezen");
   assert.equal(progressTitle([{ label: "Cijfers klaargezet", status: "done" }], true, "4m 36s"), "Nagezocht in 4m 36s");
+});
+
+test("the token budget ends research early, and the final steps count from there", () => {
+  const steps = (...input: number[]) => input.map((inputTokens) => ({ usage: { inputTokens } }));
+  assert.equal(researchEnd(steps(1000, 2000)), RESEARCH_STEPS);
+  const over = steps(RESEARCH_TOKENS / 2, RESEARCH_TOKENS / 2, 10);
+  assert.equal(researchEnd(over), 2);
+  assert.equal(finalAnswerStep(1, "Onderzoek", over.slice(0, 1)).toolChoice, undefined);
+  assert.deepEqual(finalAnswerStep(2, "Onderzoek", over.slice(0, 2)).toolChoice, { type: "tool", toolName: "present_answer" });
+  assert.equal(finalAnswerStep(4, "Onderzoek", [...over, ...steps(10)]).toolChoice, "none");
+  assert.equal(outOfBudget({ steps: over }), false);
+  assert.equal(outOfBudget({ steps: [...over, ...steps(10, 10)] }), true);
+  assert.equal(researchEnd(steps(undefined as unknown as number)), RESEARCH_STEPS);  // a provider without usage: steps only
 });

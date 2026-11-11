@@ -14,7 +14,7 @@ import {
   type UIMessage,
 } from "ai";
 import { z } from "zod";
-import { finalAnswerStep, finishWhenPresented, MAX_STEPS, missingAnswer } from "@/lib/chat-policy";
+import { finalAnswerStep, finishWhenPresented, MAX_STEPS, missingAnswer, outOfBudget } from "@/lib/chat-policy";
 import { presentAnswer, richAnswerSchema } from "@/lib/rich-answer";
 import { pickModel } from "@/lib/models";
 import { mutationAllowed, projectApi } from "@/lib/project-server";
@@ -28,6 +28,9 @@ const INSTRUCTIONS = `Je beantwoordt vragen over jaarverantwoordingen van Nederl
 De vrager heeft geen financiële achtergrond. Antwoord in het Nederlands: kort, helder, in gewone taal.
 
 Werkwijze
+Elke stap kost tijd en het aantal stappen is beperkt. Doe opzoekacties die niet op elkaars uitkomst wachten in één stap \
+tegelijk: gaat de vraag over meer organisaties of jaren, roep dan dezelfde tool voor allemaal tegelijk aan (eerst alle \
+search_organizations, dan alle get_figures of search_documents, dan alle get_document).
 1. search_organizations om de organisatie (org_id) en haar documenten te vinden. Geen resultaat? Probeer een korter deel van de naam \
 of de plaats ("Alrijne" in plaats van "Stichting Alrijne Zorggroep"). Het LUMC heet in het archief "Academisch Ziekenhuis Leiden".
 2. Cijfers vanaf 2020 (omzet, resultaat, eigen vermogen, totaal activa, fte, WNT): eerst get_figures(org_id, year, query). Dat zijn de \
@@ -37,8 +40,9 @@ cijfers die de organisatie zelf in de DigiMV-vragenlijst invulde, exact en binne
 van de organisatie zelf. Zoek dan bijvoorbeeld "geconsolideerd som der bedrijfsopbrengsten" of "geconsolideerd vermogen" (het eigen \
 vermogen van een groep heet groepsvermogen).
 3. get_document voor 2019, voor wat niet in de vragenlijst staat en voor de uitleg achter een getal; een paginabereik tegelijk. De \
-balans en de winst-en-verliesrekening staan meestal in het eerste derde deel. search_documents vindt de juiste pagina binnen een \
-document dat al eens geopend is. Wijkt een cijfer in een document af van de vragenlijst, noem dan beide en zeg welk welk is.
+balans en de winst-en-verliesrekening staan meestal in het eerste derde deel. Weet je niet op welke pagina iets \
+staat, zoek dan eerst met search_documents (org_id en year, of doc_id en year): dat werkt ook voor documenten die je nog niet \
+opende. Lees daarna alleen de gevonden pagina's. Wijkt een cijfer in een document af van de vragenlijst, noem dan beide en zeg welk welk is.
 4. Antwoord pas als je het getal zelf in een tooluitkomst hebt gelezen.
 5. Bij een vervolgvraag zie je alleen de tooluitkomsten van de vorige vraag; oudere zijn weggelaten, je eigen antwoorden met hun \
 bronlinks staan er nog wel. Heb je een ouder getal opnieuw nodig, vraag het dan opnieuw op (get_document met het jaar, doc_id en de \
@@ -74,6 +78,11 @@ async function api(path: string, params: Record<string, string | number | null |
   return body;
 }
 
+interface Figures {
+  org_id: string; year: number; name: string; found: boolean; consolidated: boolean; matched: number;
+  figures: { label: string; value: string; unit: string; var: string }[];
+}
+
 const tools = {
   present_answer: tool({
     description: "Present the final answer with OpenUI. Call once after reading the sources, for every answer containing figures. Supply the exact sourced figures, a short Dutch summary, and table/cards/chart. Do not repeat the answer afterwards.",
@@ -100,6 +109,11 @@ const tools = {
         documents: o.documents.map(({ year, id, type, file_name, published }) => ({ year, id, type, file_name, published })),
       }));
     },
+    // Every later step resends this, so the model gets one line per document ("year doc_id type: file").
+    toModelOutput: ({ output }) => ({
+      type: "json",
+      value: output.map(({ documents, ...o }) => ({ ...o, documents: documents.map((d) => `${d.year} ${d.id} ${d.type}: ${d.file_name}`) })),
+    }),
   }),
   get_figures: tool({
     description:
@@ -114,8 +128,13 @@ const tools = {
       query: z.string().optional(),
       limit: z.number().int().min(1).max(60).default(25),
     }),
-    execute: async ({ org_id, year, query, limit }) =>
+    execute: async ({ org_id, year, query, limit }): Promise<Figures> =>
       api(`/orgs/${encodeURIComponent(org_id)}/figures/${year}`, { q: query, limit }),
+    // The scope text is the description above; source and filing date the model never needs. Rows "label = value unit [var]".
+    toModelOutput: ({ output: { org_id, year, name, found, consolidated, matched, figures } }) => ({
+      type: "json",
+      value: { org_id, year, name, found, consolidated, matched, figures: figures.map((f) => `${f.label} = ${f.value} ${f.unit} [${f.var}]`) },
+    }),
   }),
   get_document: tool({
     description:
@@ -133,8 +152,9 @@ const tools = {
   }),
   search_documents: tool({
     description:
-      "Full-text search (word prefixes) in documents already opened with get_document, with page-level snippets. " +
-      'Use it to locate e.g. "eigen vermogen", "personeelskosten" or "WNT" inside a report, then read that page.',
+      "Full-text search (word prefixes) with page-level snippets. With org_id and year it searches all that organisation's " +
+      "documents of that year, with doc_id and year one document; it opens them first if needed, so no get_document " +
+      'beforehand. Use it to locate e.g. "eigen vermogen", "personeelskosten" or "WNT", then read only those pages.',
     inputSchema: z.object({
       query: z.string(),
       org_id: z.string().optional(),
@@ -220,7 +240,7 @@ export async function POST(req: Request) {
     .filter((m) => m.parts.length);
   // Never resend an old private conversation after project consent has been disabled.
   const modelMessages = projectId && !privateAllowed ? messages.slice(-1) : messages;
-  const history = await convertToModelMessages(modelMessages);
+  const history = await convertToModelMessages(modelMessages, { tools: activeTools });
   // Only the previous question keeps its tool results (the pages it read): otherwise a long chat resends every page on
   // every step. Older answers and their /bron links stay, and re-reading a page is a cache hit in the API.
   const users = history.flatMap((m, i) => (m.role === "user" ? [i] : []));
@@ -238,13 +258,18 @@ export async function POST(req: Request) {
     messages: pruneMessages({ messages: history, toolCalls: `before-last-${keep}-messages` }),
     tools: activeTools,
     maxRetries: projectId ? 0 : 2,
-    prepareStep: async ({ stepNumber }) => {
+    prepareStep: async ({ stepNumber, steps }) => {
       if (projectId && usedPrivate) await projectApi(req, `/projects/${projectId}/model-context`);
-      return finalAnswerStep(stepNumber, instructions);
+      return finalAnswerStep(stepNumber, instructions, steps);
     },
-    stopWhen: [isStepCount(MAX_STEPS), finishWhenPresented],
-    onFinish: ({ steps, finishReason }) => {
-      console.info("chat.finish", { id, ...choice, steps: steps.length, finishReason, presented: finishWhenPresented({ steps }) });
+    stopWhen: [isStepCount(MAX_STEPS), finishWhenPresented, outOfBudget],
+    onFinish: ({ steps, finishReason, totalUsage: u }) => {
+      // Every step resends the conversation, so input over all steps is what an answer costs; cached input is cheaper.
+      console.info("chat.finish", {
+        id, ...choice, steps: steps.length, calls: steps.reduce((n, s) => n + s.toolCalls.length, 0), finishReason,
+        presented: finishWhenPresented({ steps }), input: u.inputTokens, cached: u.inputTokenDetails.cacheReadTokens,
+        output: u.outputTokens, reasoning: u.outputTokenDetails.reasoningTokens,
+      });
     },
     onError: ({ error }) => {
       const status = APICallError.isInstance(error) ? error.statusCode : undefined;

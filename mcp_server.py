@@ -85,8 +85,9 @@ def search_documents(query: str, org_id: str | None = None, year: int | None = N
                      limit: int = 20) -> list[dict]:
     """Full-text search (word prefixes) in documents already converted to Markdown, with page-level snippets.
 
-    Only covers documents previously opened with get_document (or fetched via the CLI). Use it to locate
-    e.g. "eigen vermogen", "personeelskosten" or "WNT" inside a report, then read that page with get_document.
+    With year and org_id (or doc_id) it searches that organisation's documents of that year, opening them first if
+    needed; without, only documents opened before. Use it to locate e.g. "eigen vermogen", "personeelskosten" or
+    "WNT" inside a report, then read that page with get_document.
     Each hit has the page `heading`, e.g. "Geconsolideerde winst- en verliesrekening over 2025 (x 1.000)":
     use it to tell consolidated, enkelvoudige and gesegmenteerde statements apart before quoting a number.
     """
