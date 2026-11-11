@@ -52,8 +52,8 @@ function toPath(heights: number[]) {
   return d;
 }
 
-/** Each digit rolls on its own wheel; separators sit still. */
-function RollingNumber({ value }: { value: string }) {
+/** Each digit rolls on its own wheel; separators sit still. Also used for the answer cards in rich-answer.tsx. */
+export function RollingNumber({ value }: { value: string }) {
   const chars = value.split("");
   return (
     <span aria-hidden className="inline-flex tabular-nums">

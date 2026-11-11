@@ -1,11 +1,11 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { createLibrary, defineComponent, Renderer } from "@openuidev/react-lang";
 import { ChartLine, LayoutGrid, Table2 } from "lucide-react";
 import { Answer, CitationChip } from "@/components/answer";
 import CompareChart from "@/components/compare-chart";
-import MetricCard from "@/components/kokonutui/metric-card";
+import MetricCard, { RollingNumber } from "@/components/kokonutui/metric-card";
 import SmoothTab, { type SwipeTabItem } from "@/components/kokonutui/smooth-tab";
 import { citationKey } from "@/lib/citations";
 import { parseNumber } from "@/lib/excel";
@@ -19,6 +19,21 @@ function Source({ figure: f }: { figure: Figure }) {
   return <CitationChip active={key === activeKey} href={f.href} label={f.href.includes("/project/") ? "Projectbron" : f.href.includes("/vragenlijst/") ? "DigiMV" : `p. ${f.href.split("/").at(-1)}`} onClick={() => onCite(key)} quote={f.quote} />;
 }
 
+/** The amount as filed, rolled up from zeros once when the card appears, like an odometer. Lands on the exact text. */
+function Odometer({ amount }: { amount: string }) {
+  const [shown, setShown] = useState(() => amount.replace(/\d/g, "0"));
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setShown(amount));
+    return () => cancelAnimationFrame(frame);
+  }, [amount]);
+  return (
+    <>
+      <span className="sr-only">{amount}</span>
+      <RollingNumber value={shown} />
+    </>
+  );
+}
+
 function FinancialAnswer({ summary, figures, view }: typeof richAnswerSchema._output) {
   const context = useContext(EvidenceContext);
   // Every view ends with the source table and its Excel buttons.
@@ -29,7 +44,7 @@ function FinancialAnswer({ summary, figures, view }: typeof richAnswerSchema._ou
         <div className="raised min-w-0 rounded-xl p-4" key={i}>
           <p className="text-sm text-muted-foreground">{f.organization} · {f.year}</p>
           <p className="mt-1 font-semibold">{f.label}</p>
-          <p className="my-2 break-words text-2xl font-semibold tabular-nums">{f.amount} <span className="text-base font-normal">{f.unit}</span></p>
+          <p className="my-2 break-words text-2xl font-semibold tabular-nums"><Odometer amount={f.amount} /> <span className="text-base font-normal">{f.unit}</span></p>
           <Source figure={f} />
         </div>
       ))}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import { Suspense, ViewTransition } from "react";
 import { ProfileView } from "./profile-view";
 
 export const metadata: Metadata = { title: "Kerncijfers · Jaarverslagen zorg" };
@@ -8,8 +8,8 @@ export const metadata: Metadata = { title: "Kerncijfers · Jaarverslagen zorg" }
 export default function Organisatie() {
   return (
     // the organisation is in the URL, read on the client
-    <Suspense fallback={<div className="h-dvh" />}>
+    <ViewTransition default="none" enter="page" exit="page"><Suspense fallback={<div className="h-dvh" />}>
       <ProfileView />
-    </Suspense>
+    </Suspense></ViewTransition>
   );
 }

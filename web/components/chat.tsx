@@ -3,9 +3,9 @@
 import { useChat } from "@ai-sdk/react";
 import { generateId, getToolName, isToolUIPart, type UIMessage } from "ai";
 import Link from "next/link";
-import { SquarePen } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Answer } from "@/components/answer";
+import { Copy, Printer, SquarePen } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Answer, DrawnCheck } from "@/components/answer";
 import { CitationPreviewProvider } from "@/components/citation-preview";
 import { RichAnswer } from "@/components/rich-answer";
 import type { presentAnswer } from "@/lib/rich-answer";
@@ -15,6 +15,7 @@ import AILoadingState, { type AgentStep } from "@/components/kokonutui/ai-loadin
 import AIContextMeter from "@/components/kokonutui/ai-context-meter";
 import AIModelSelector from "@/components/kokonutui/ai-model-selector";
 import AI_Prompt from "@/components/kokonutui/ai-prompt";
+import CommandButton from "@/components/kokonutui/command-button";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
 import ScrollIndex from "@/components/kokonutui/scroll-index";
 import SwitchButton from "@/components/kokonutui/switch-button";
@@ -25,7 +26,7 @@ import { Welcome } from "@/components/welcome";
 import { hidePartialLink, parseCitations } from "@/lib/citations";
 import { missingAnswer } from "@/lib/chat-policy";
 import { conversationId, reconnectOnReturn, rememberConversation } from "@/lib/chat-session";
-import { CONTEXT_WINDOW, type ContextUse, type ModelSelection, pickModel } from "@/lib/models";
+import { type AnswerMeta, answerLabel, CONTEXT_WINDOW, type ModelSelection, pickModel } from "@/lib/models";
 import { cn } from "@/lib/utils";
 
 const richOf = (m: UIMessage) => m.parts.filter(isToolUIPart).flatMap((p) =>
@@ -120,6 +121,120 @@ function docsOf(messages: UIMessage[]) {
   return docs;
 }
 
+/** Typed into the empty prompt of a new chat, one after the other. */
+const EXAMPLES = [
+  "Wat was de omzet van Alrijne in 2024?",
+  "Vergelijk het eigen vermogen van twee ziekenhuizen",
+  "Hoeveel fte had Zuyderland in 2023?",
+];
+
+/** The shape of a chat while it loads. Fades in after a moment, so a page that is ready at once never flashes it. */
+function ChatSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-[46rem] px-5 pt-24 sm:px-8" role="status">
+      <span className="sr-only">Gesprek laden</span>
+      <div aria-hidden="true" style={{ animation: "page-fade 200ms 400ms both" }}>
+        <div className="space-y-4 motion-safe:animate-pulse">
+          <div className="h-7 w-3/4 rounded-lg bg-muted" />
+          <div className="h-4 w-40 rounded bg-muted" />
+          <div className="space-y-2.5 pt-4">
+            <div className="h-4 rounded bg-muted" />
+            <div className="h-4 w-11/12 rounded bg-muted" />
+            <div className="h-4 w-4/5 rounded bg-muted" />
+          </div>
+          <div className="h-44 rounded-xl bg-muted" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Markdown links to sources as their label, for pasting the answer as plain text. Same link shape as LINK in
+ * lib/citations.ts: the quoted title may hold brackets of its own. */
+const plainAnswer = (text: string) =>
+  text.replace(/\[([^\]\n]*)\]\(\/bron\/[^\s)"']+(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\)/g, "$1").trim();
+
+/** Under a finished answer: which model answered and how long it took, and the ways to take the answer with you. */
+function AnswerBody({ children, done, meta, text }: { children: ReactNode; done: boolean; meta?: AnswerMeta; text: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState<"ok" | "error" | null>(null);
+  const label = meta ? answerLabel(meta) : "";
+
+  // HTML for Word and mail, with the chips as links to their source; plain text for the rest.
+  const copy = async () => {
+    try {
+      const clone = ref.current!.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('[role="tablist"], [role="tabpanel"][inert], [data-no-copy], [aria-hidden="true"], svg').forEach((el) => el.remove());
+      clone.querySelectorAll<HTMLElement>("[data-citation]").forEach((chip) => {
+        const a = document.createElement("a");
+        a.href = new URL(chip.dataset.href ?? "/", window.location.origin).href;
+        a.textContent = chip.childNodes[0]?.textContent ?? "bron";
+        chip.replaceWith(a);
+      });
+      clone.querySelectorAll("button").forEach((b) => b.remove());
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/html": new Blob([clone.innerHTML], { type: "text/html" }),
+        "text/plain": new Blob([plainAnswer(text)], { type: "text/plain" }),
+      })]);
+      setCopied("ok");
+    } catch {
+      setCopied("error");
+    }
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const button = "inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 font-semibold text-[0.9rem] text-foreground transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+  return (
+    <>
+      <div ref={ref}>{children}</div>
+      {done && (
+        <div className="mt-3 flex flex-wrap items-center gap-1 text-[0.9rem] text-muted-foreground">
+          {label && <span className="mr-auto pr-2">{label}</span>}
+          <span className={cn("flex items-center gap-1 print:hidden", !label && "-ml-3")}>
+            <button className={button} onClick={copy} type="button">
+              {copied === "ok" ? <DrawnCheck /> : <Copy aria-hidden="true" className="size-4" />}
+              Kopieer
+            </button>
+            <button className={button} onClick={() => window.print()} type="button">
+              <Printer aria-hidden="true" className="size-4" />
+              Afdrukken
+            </button>
+          </span>
+          <span aria-live="polite" className="sr-only">
+            {copied === "ok" ? "Antwoord gekopieerd" : copied === "error" ? "Kopiëren lukte niet" : ""}
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** On paper the chips can't be clicked, so each answer ends with its sources written out (and linked in a PDF). */
+function PrintSources({ text, docs }: { text: string; docs: Record<string, DocMeta> }) {
+  const citations = parseCitations(text);
+  if (!citations.length) return null;
+  return (
+    <section className="mt-6 hidden text-[0.9rem] print:block">
+      <h3 className="font-semibold">Bronnen</h3>
+      <ol className="mt-1 list-decimal space-y-1 pl-5">
+        {citations.map((c) => {
+          const doc = c.kind === "page" ? docs[`${c.year}/${c.docId}`] : undefined;
+          const where =
+            c.kind === "page" ? `p. ${c.page} · ${doc ? `${doc.type} ${c.year} · ${doc.org}` : `document ${c.docId} uit ${c.year}`}`
+            : c.kind === "figure" ? `DigiMV-vragenlijst ${c.year} · KvK ${c.orgId} · veld ${c.field}`
+            : `Projectbron, p. ${c.page}`;
+          return (
+            <li key={c.key}>
+              <a href={c.href}>{where}</a>
+              {c.quote && <> — “{c.quote}”</>}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 type Conversation = { id: string; messages: UIMessage[] };
 type ChatProps = { projectId?: string; projectName?: string; conversation?: Conversation; initialQuestion?: string; onSaved?: () => void };
 
@@ -143,7 +258,8 @@ export function ChatPage(props: ChatProps) {
     }
     return () => { live = false; };
   }, [props.conversation, props.projectId]);
-  if (!session) return <p className="p-6 text-center text-muted-foreground" role={loadError ? "alert" : "status"}>{loadError || "Gesprek laden…"}</p>;
+  if (loadError) return <p className="p-6 text-center text-muted-foreground" role="alert">{loadError}</p>;
+  if (!session) return <ChatSkeleton />;
   return <ChatSession key={session.id} {...props} conversation={session} onOpen={(messages, id) => {
     rememberConversation(messages.length ? id : null);
     setSession({ id, messages });
@@ -190,8 +306,7 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
     try { localStorage.setItem("model", JSON.stringify(next)); } catch {}
   };
   const body = { projectId, ...choice };
-  const context = (messages.findLast((m) => (m.metadata as { context?: ContextUse })?.context)?.metadata as
-    { context: ContextUse } | undefined)?.context;
+  const context = messages.map((m) => (m.metadata as AnswerMeta | undefined)?.context).findLast(Boolean);
 
   const shownMessage = evidence ? messages.find((m) => m.id === evidence.messageId) : undefined;
   const shownText = shownMessage ? textOf(shownMessage) : "";
@@ -238,9 +353,9 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
 
   return (
     <CitationPreviewProvider docs={docs}>
-      <div className={projectId ? "flex h-full min-h-0" : "flex h-dvh"}>
+      <div className={cn(projectId ? "flex h-full min-h-0" : "flex h-dvh", "print:block print:h-auto")}>
         <div className="flex min-w-0 flex-1 flex-col">
-          {!projectId && <header className="@container flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
+          {!projectId && <header className="@container flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8 print:hidden">
             <Logo />
             <div className="flex items-center gap-2">
               {!projectId && <Link className="raised rounded-full px-4 py-3" href="/projecten">Projecten</Link>}
@@ -250,15 +365,16 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
               <History current={chat.id} onOpen={load} projectId={projectId} />
               <SwitchButton />
               {messages.length > 0 && (
-                <button
+                <CommandButton
                   aria-label="Nieuwe vraag"
-                  className="raised inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring @2xl:px-4"
+                  className="min-w-11 shrink-0 justify-center whitespace-nowrap font-normal @2xl:pl-4"
+                  keysClassName="hidden @2xl:flex"
                   onClick={() => load([], generateId())}
-                  type="button"
+                  shortcut="mod+shift+o"
                 >
                   <SquarePen aria-hidden="true" className="size-[18px] @2xl:hidden" />
                   <span className="hidden @2xl:inline">Nieuwe vraag</span>
-                </button>
+                </CommandButton>
               )}
             </div>
           </header>}
@@ -300,35 +416,39 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
                       steps.push({ id: "next", label: text ? "Antwoord schrijven" : "Verder zoeken", status: "running" });
                     }
                     const thinking = streaming && !text && !steps.some((s) => s.status === "running");
+                    const rich = richOf(m);
                     return (
                       // The last turn fills the screen, so its question can sit at the top while the answer streams.
-                      <section className={cn("mt-5", isLastTurn && "min-h-[calc(100dvh-20rem)]")} key={m.id}>
-                        {steps.length > 0 && <AILoadingState className="mb-5" completed={!streaming && !missingAnswer(m)} steps={steps} />}
+                      <section className={cn("mt-5", isLastTurn && "min-h-[calc(100dvh-20rem)] print:min-h-0")} key={m.id}>
+                        {steps.length > 0 && <AILoadingState className="mb-5 print:hidden" completed={!streaming && !missingAnswer(m)} steps={steps} />}
                         {thinking && <Thinking />}
-                        {incomplete && <div className="my-4 rounded-xl border p-4" role="status"><p>{incomplete}</p><button className="mt-3 min-h-11 rounded-full px-4 ring-1 ring-border" disabled={busy} onClick={() => ask("Ga verder met de oorspronkelijke vraag en gebruik de al gevonden bronnen. Geef een antwoord met wat je hebt en benoem wat nog ontbreekt.")}>Ga verder met de gevonden bronnen</button></div>}
-                        {text && (
-                          <Answer
-                            activeKey={evidence?.messageId === m.id ? evidence.key : null}
-                            onCite={(key) => setEvidence({ messageId: m.id, key })}
-                            question={messages[i - 1] ? textOf(messages[i - 1]) : ""}
-                            text={text}
-                          />
-                        )}
-                        {richOf(m).map((data, j) => (
-                          <RichAnswer activeKey={evidence?.messageId === m.id ? evidence.key : null} data={data} key={j}
-                            onCite={(key) => setEvidence({ messageId: m.id, key })}
-                            question={messages[i - 1] ? textOf(messages[i - 1]) : ""} />
-                        ))}
+                        {incomplete && <div className="my-4 rounded-xl border p-4 print:hidden" role="status"><p>{incomplete}</p><button className="mt-3 min-h-11 rounded-full px-4 ring-1 ring-border" disabled={busy} onClick={() => ask("Ga verder met de oorspronkelijke vraag en gebruik de al gevonden bronnen. Geef een antwoord met wat je hebt en benoem wat nog ontbreekt.")}>Ga verder met de gevonden bronnen</button></div>}
+                        <AnswerBody done={!streaming && Boolean(text || rich.length)} meta={m.metadata as AnswerMeta | undefined} text={textOf(m)}>
+                          {text && (
+                            <Answer
+                              activeKey={evidence?.messageId === m.id ? evidence.key : null}
+                              onCite={(key) => setEvidence({ messageId: m.id, key })}
+                              question={messages[i - 1] ? textOf(messages[i - 1]) : ""}
+                              text={text}
+                            />
+                          )}
+                          {rich.map((data, j) => (
+                            <RichAnswer activeKey={evidence?.messageId === m.id ? evidence.key : null} data={data} key={j}
+                              onCite={(key) => setEvidence({ messageId: m.id, key })}
+                              question={messages[i - 1] ? textOf(messages[i - 1]) : ""} />
+                          ))}
+                        </AnswerBody>
+                        {!streaming && <PrintSources docs={docs} text={textOf(m)} />}
                       </section>
                     );
                   })}
                   {waiting && (
-                    <section className="mt-5 min-h-[calc(100dvh-20rem)]">
+                    <section className="mt-5 min-h-[calc(100dvh-20rem)] print:hidden">
                       <Thinking />
                     </section>
                   )}
                   {error && (
-                    <div className="mt-6 rounded-xl px-4 py-3 ring-1 ring-destructive/40" role="alert">
+                    <div className="mt-6 rounded-xl px-4 py-3 ring-1 ring-destructive/40 print:hidden" role="alert">
                       <p>Het antwoord kon niet worden opgehaald. {error.message}</p>
                       <button
                         className="mt-2 min-h-11 rounded-full px-4 font-semibold ring-1 ring-border hover:bg-card"
@@ -344,10 +464,11 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
             </div>
           </ScrollIndex>
 
-          <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
+          <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8 print:hidden">
             <div className="mx-auto max-w-[46rem]">
               <AI_Prompt
                 busy={busy}
+                examples={messages.length || projectId ? undefined : EXAMPLES}
                 footer={<>
                   <AIModelSelector onChange={choose} value={choice} />
                   {context && <AIContextMeter className="ml-auto" limit={CONTEXT_WINDOW} segments={[
@@ -368,15 +489,17 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
           </div>
         </div>
 
-        <Evidence
-          drawer={Boolean(projectId)}
-          citations={citations}
-          docs={docs}
-          index={index}
-          onClose={() => setEvidence(null)}
-          onIndex={onIndex}
-          open={Boolean(evidence && citations.length)}
-        />
+        <div className="contents print:hidden">
+          <Evidence
+            drawer={Boolean(projectId)}
+            citations={citations}
+            docs={docs}
+            index={index}
+            onClose={() => setEvidence(null)}
+            onIndex={onIndex}
+            open={Boolean(evidence && citations.length)}
+          />
+        </div>
       </div>
     </CitationPreviewProvider>
   );

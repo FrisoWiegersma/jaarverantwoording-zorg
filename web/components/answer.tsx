@@ -90,7 +90,7 @@ function Spinner() {
   );
 }
 
-function DrawnCheck() {
+export function DrawnCheck() {
   const still = useReducedMotion();
   return (
     <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 16 16">
@@ -147,7 +147,7 @@ function TableCard({ question, children }: { question: string; children: ReactNo
       <div aria-label="Cijfertabel" className="overflow-x-auto px-4 pt-1 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" data-no-swipe="" role="region" tabIndex={0}>
         <table ref={table}>{children}</table>
       </div>
-      <div className="flex flex-wrap items-center gap-1 border-t px-2 py-1.5">
+      <div className="flex flex-wrap items-center gap-1 border-t px-2 py-1.5 print:hidden" data-no-copy="">
         <button className={button} onClick={copy} type="button">
           {done === "copy" ? <DrawnCheck /> : <ClipboardCopy aria-hidden="true" className="size-4" />}
           Kopieer voor Excel

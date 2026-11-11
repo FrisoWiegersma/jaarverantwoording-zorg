@@ -287,7 +287,7 @@ export default function SmoothTab({
   return (
     <div className={cn("flex w-full flex-col gap-3", className)}>
       <div>
-        <div aria-label={label} className="relative inline-flex max-w-full rounded-full bg-muted p-1" ref={tablistRef} role="tablist">
+        <div aria-label={label} className="relative inline-flex max-w-full rounded-full bg-muted p-1 print:hidden" ref={tablistRef} role="tablist">
           {items.map((item, i) => {
             const Icon = item.icon;
             return (
@@ -353,15 +353,17 @@ export default function SmoothTab({
         onPointerUp={(e) => endDrag(e, false)}
         ref={viewportRef}
       >
+        {/* The track is as tall as the tallest panel and hangs below a shorter one, unclipped for the shadows; it
+            must not take the clicks meant for what comes after it. The panels take their own. */}
         <div
-          className="flex items-start will-change-transform"
+          className="pointer-events-none flex items-start will-change-transform"
           ref={trackRef}
           style={{ width: `${count * 100}%`, transform: `translate3d(${(-initial * 100) / count}%, 0, 0)` }}
         >
           {items.map((item, i) => (
             <div
               aria-labelledby={tabId(i)}
-              className="flow-root px-3 focus-visible:outline-hidden"
+              className="pointer-events-auto flow-root px-3 focus-visible:outline-hidden"
               id={panelId(i)}
               inert={i !== selected}
               key={item.id}

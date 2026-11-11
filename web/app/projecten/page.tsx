@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, ViewTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FolderOpen, Plus, X } from "lucide-react";
 import ActionSearchBar from "@/components/kokonutui/action-search-bar";
@@ -24,7 +24,7 @@ export default function Projects() {
     try { const p = await projectRequest("", "POST", { name }); router.push(`/projecten/${p.id}`); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
-  return <div className="min-h-dvh">
+  return <ViewTransition default="none" enter="page" exit="page"><div className="min-h-dvh">
     <header className="flex h-16 items-center justify-between px-4 sm:px-8"><Link className="inline-flex min-h-11 items-center" href="/"><Logo /></Link><div className="flex items-center gap-3"><Link className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground" href="/">Chat</Link><SwitchButton /></div></header>
     <main className="mx-auto max-w-3xl px-4 py-8 sm:py-12 sm:px-8">
       <div className="flex items-center justify-between gap-4"><h1 className="text-3xl font-semibold">Projecten</h1><button className="raised inline-flex min-h-11 items-center gap-2 rounded-full px-4" onClick={() => setCreating(!creating)}><Plus className="size-4" />Nieuw project</button></div>
@@ -37,5 +37,5 @@ export default function Projects() {
       {!!items.length && <ActionSearchBar label="Zoek een project" placeholder="Zoek projecten…" onQueryChange={setQuery} onSelect={(item) => router.push(`/projecten/${item.id}`)} empty="Geen projecten gevonden." className="mb-5 max-w-none" items={items.filter((p) => p.name.toLowerCase().includes(query.toLowerCase())).map((p) => ({ id: p.id, label: p.name, icon: <FolderOpen className="size-4" /> }))} />}
       <ul className="divide-y">{items.filter((p) => p.name.toLowerCase().includes(query.toLowerCase())).map((p) => <li key={p.id}><Link href={`/projecten/${p.id}`} className="flex items-center gap-4 rounded-xl px-3 py-5 hover:bg-muted"><FolderOpen className="size-5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate font-medium">{p.name}</span><span className="text-sm text-muted-foreground">{new Date(p.updated).toLocaleDateString("nl-NL")}</span></Link></li>)}</ul>
     </main>
-  </div>;
+  </div></ViewTransition>;
 }

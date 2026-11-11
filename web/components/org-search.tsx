@@ -5,7 +5,7 @@
  * comparison.
  */
 
-import { Building2, Search } from "lucide-react";
+import { Building2, History, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import ActionSearchBar, { type CommandItem, isPaletteCombo, Kbd, useIsMac } from "@/components/kokonutui/action-search-bar";
@@ -13,6 +13,27 @@ import { cn } from "@/lib/utils";
 
 export type Org = { org_id: string; name: string; town: string | null; years: number[] };
 type Status = "hint" | "searching" | "none" | "error" | "done";
+
+const RECENT = "recent-orgs";
+
+/** Organisations whose page this browser opened last, newest first. Only what the palette shows is kept. */
+export function recentOrgs(): Org[] {
+  try {
+    const list: unknown = JSON.parse(localStorage.getItem(RECENT) ?? "[]");
+    return Array.isArray(list)
+      ? list.filter((o): o is Org => typeof o?.org_id === "string" && typeof o.name === "string" && Array.isArray(o.years) && o.years.length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberOrg({ org_id, name, town, years }: Org) {
+  try {
+    const next = [{ org_id, name, town, years }, ...recentOrgs().filter((o) => o.org_id !== org_id)].slice(0, 5);
+    localStorage.setItem(RECENT, JSON.stringify(next));
+  } catch {}
+}
 
 const span = (years: number[]) => `${Math.min(...years)}–${Math.max(...years)}`;
 const base = (org: Org): CommandItem => ({
@@ -31,8 +52,16 @@ function OrgDialog({ label, placeholder, chooseLabel, exclude, item, onSelect, o
   onSelect: (value: string) => void;
   onClose: () => void;
 }) {
-  const [items, setItems] = useState<CommandItem[]>([]);
-  const [status, setStatus] = useState<Status>("hint");
+  // Before anything is typed: the organisations opened last. The dialog only mounts in the browser, on a click.
+  const recent = useCallback(
+    () => recentOrgs().filter((o) => !exclude?.includes(o.org_id)).map((o): CommandItem => {
+      const row = item(o);
+      return { ...row, icon: <History className="size-4" />, detail: ["Recent bekeken", row.detail].filter(Boolean).join(" · ") };
+    }),
+    [exclude, item]
+  );
+  const [items, setItems] = useState<CommandItem[]>(recent);
+  const [status, setStatus] = useState<Status>(() => (items.length ? "done" : "hint"));
   const [query, setQuery] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pending = useRef<AbortController>(undefined);
@@ -52,8 +81,9 @@ function OrgDialog({ label, placeholder, chooseLabel, exclude, item, onSelect, o
       const term = q.trim();
       setQuery(term);
       if (term.length < 2) {
-        setItems([]);
-        setStatus("hint");
+        const rows = recent();
+        setItems(rows);
+        setStatus(rows.length ? "done" : "hint");
         return;
       }
       setStatus("searching");
@@ -73,7 +103,7 @@ function OrgDialog({ label, placeholder, chooseLabel, exclude, item, onSelect, o
         }
       }, 150);
     },
-    [exclude, item]
+    [exclude, item, recent]
   );
 
   const empty = {

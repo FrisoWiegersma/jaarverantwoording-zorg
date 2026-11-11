@@ -10,7 +10,7 @@ import { Evidence } from "@/components/evidence";
 import MetricCard, { type TrendPoint } from "@/components/kokonutui/metric-card";
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { Logo } from "@/components/logo";
-import { CompareWith, type Org, OrgSearch } from "@/components/org-search";
+import { CompareWith, type Org, OrgSearch, rememberOrg } from "@/components/org-search";
 import { citationOf, dutch, gapNote, METRICS, useKeyFigures } from "@/lib/key-figures";
 
 /** Questions the agent answers well, over the latest years filed; ranges stay short so answers stay quick. */
@@ -43,6 +43,10 @@ function Profile({ id }: { id: string }) {
   useEffect(() => {
     if (name) document.title = `${name} · Jaarverslagen zorg`;
   }, [name]);
+  // For ⌘K: the organisations opened last come first, before anything is typed.
+  useEffect(() => {
+    if (org && typeof org === "object" && org.years.length) rememberOrg(org);
+  }, [org]);
 
   const series = METRICS.map((m) => ({
     ...m,

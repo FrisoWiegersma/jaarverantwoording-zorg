@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import { Suspense, ViewTransition } from "react";
 import { CompareView } from "./compare-view";
 
 export const metadata: Metadata = { title: "Vergelijken · Jaarverslagen zorg" };
@@ -8,8 +8,8 @@ export const metadata: Metadata = { title: "Vergelijken · Jaarverslagen zorg" }
 export default function Vergelijk() {
   return (
     // the organisations are in the URL, read on the client
-    <Suspense fallback={<div className="h-dvh" />}>
+    <ViewTransition default="none" enter="page" exit="page"><Suspense fallback={<div className="h-dvh" />}>
       <CompareView />
-    </Suspense>
+    </Suspense></ViewTransition>
   );
 }

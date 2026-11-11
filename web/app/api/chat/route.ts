@@ -250,15 +250,19 @@ export async function POST(req: Request) {
     },
     abortSignal: answer.stop.signal,
   });
-  // The context meter: the first step's input is instructions plus history, the last step's adds what was read.
+  // The answer footer (model, effort, time) and the context meter: the first step's input is instructions plus
+  // history, the last step's adds what was read. Server clock on both ends, so the duration is the real one.
   let promptTokens: number | undefined;
   return createUIMessageStreamResponse({
     stream: toUIMessageStream({
       stream: result.stream, originalMessages: messages, generateMessageId: generateId,
       messageMetadata: ({ part }) => {
-        if (part.type !== "finish-step" || part.usage.inputTokens == null) return;
-        promptTokens ??= part.usage.inputTokens;
-        return { model: choice.model, context: { prompt: promptTokens, sources: part.usage.inputTokens - promptTokens } };
+        if (part.type === "start") return { model: choice.model, effort: choice.effort, startedAt: Date.now() };
+        if (part.type !== "finish-step") return;
+        const input = part.usage.inputTokens;
+        if (input == null) return { finishedAt: Date.now() };
+        promptTokens ??= input;
+        return { finishedAt: Date.now(), context: { prompt: promptTokens, sources: input - promptTokens } };
       },
       onStepEnd: ({ messages }) => save(id, messages, user, projectId),
       onEnd: async ({ messages }) => {

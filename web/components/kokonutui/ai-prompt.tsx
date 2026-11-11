@@ -15,7 +15,8 @@
  */
 
 import { ArrowUp } from "lucide-react";
-import { type ReactNode, type Ref, useId, useImperativeHandle, useRef } from "react";
+import { type ReactNode, type Ref, useId, useImperativeHandle, useRef, useState } from "react";
+import TypewriterTitle from "@/components/kokonutui/type-writer";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,11 @@ interface AIPromptProps {
   onStop: () => void;
   busy: boolean;
   placeholder?: string;
+  /**
+   * Questions typed into the empty box one after the other (Kokonut Typewriter), while it is not focused. The
+   * placeholder stays for screen readers; phones keep the plain placeholder, the phrases don't fit there.
+   */
+  examples?: string[];
   /** Controls in the row under the text, left of the send button. */
   footer?: ReactNode;
   className?: string;
@@ -80,6 +86,7 @@ export default function AI_Prompt({
   onStop,
   busy,
   placeholder = "Stel een vraag over een jaarverslag",
+  examples,
   footer,
   className,
   ref,
@@ -90,6 +97,8 @@ export default function AI_Prompt({
   useImperativeHandle(ref, () => textareaRef.current!, []);
   const textareaId = useId();
   const canSend = value.trim().length > 0 && !busy;
+  const [focused, setFocused] = useState(false);
+  const typing = Boolean(examples?.length) && !value && !focused && !busy;
 
   const submit = () => {
     if (!canSend) return;
@@ -133,16 +142,34 @@ export default function AI_Prompt({
         <label className="sr-only" htmlFor={textareaId}>
           Je vraag
         </label>
-        <Textarea
-          className="min-h-[52px] max-h-[240px] w-full resize-none overflow-y-auto rounded-none border-none bg-transparent px-3 pt-2 pb-1 text-[1.05rem] leading-relaxed shadow-none placeholder:text-muted-foreground focus-visible:ring-0 md:text-[1.05rem] dark:bg-transparent"
-          id={textareaId}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={busy ? "Bezig met antwoorden. Esc stopt het antwoord." : placeholder}
-          ref={textareaRef}
-          rows={1}
-          value={value}
-        />
+        <div className="relative">
+          <Textarea
+            className={cn(
+              "min-h-[52px] max-h-[240px] w-full resize-none overflow-y-auto rounded-none border-none bg-transparent px-3 pt-2 pb-1 text-[1.05rem] leading-relaxed shadow-none placeholder:text-muted-foreground focus-visible:ring-0 md:text-[1.05rem] dark:bg-transparent",
+              typing && "sm:placeholder:text-transparent"
+            )}
+            id={textareaId}
+            onBlur={() => setFocused(false)}
+            onChange={(e) => setValue(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onKeyDown={handleKeyDown}
+            placeholder={busy ? "Bezig met antwoorden. Esc stopt het antwoord." : placeholder}
+            ref={textareaRef}
+            rows={1}
+            value={value}
+          />
+          {typing && (
+            <div aria-hidden="true" className="pointer-events-none absolute inset-x-3 top-2 hidden overflow-hidden text-[1.05rem] text-muted-foreground leading-relaxed sm:block">
+              <TypewriterTitle
+                as="span"
+                deleteMode="select"
+                pauseBeforeDelete={1800}
+                sequences={examples!.map((text) => ({ text, deleteAfter: true }))}
+                startDelay={600}
+              />
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <div className="flex min-w-0 flex-1 items-center gap-1">{footer}</div>
           <SendButton canSend={canSend} onSend={submit} onStop={stop} responding={busy} />

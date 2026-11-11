@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, ViewTransition } from "react";
 import { Logo } from "@/components/logo";
 import { BronView } from "./bron-view";
 
@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Waar het staat" };
 /** One citation on its own page: where a Bron link in Excel lands. */
 export default function Bron() {
   return (
-    <div className="min-h-dvh">
+    <ViewTransition default="none" enter="page" exit="page"><div className="min-h-dvh">
       <header className="flex h-16 items-center px-5 sm:px-8">
         <Link className="rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" href="/">
           <Logo />
@@ -24,6 +24,6 @@ export default function Bron() {
           </Suspense>
         </div>
       </main>
-    </div>
+    </div></ViewTransition>
   );
 }
