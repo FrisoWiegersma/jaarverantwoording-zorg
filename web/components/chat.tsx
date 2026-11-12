@@ -27,6 +27,7 @@ import { hidePartialLink, parseCitations } from "@/lib/citations";
 import { missingAnswer } from "@/lib/chat-policy";
 import { conversationId, reconnectOnReturn, rememberConversation } from "@/lib/chat-session";
 import { type AnswerMeta, answerLabel, CONTEXT_WINDOW, type ModelSelection, pickModel } from "@/lib/models";
+import { EXAMPLES } from "@/lib/sources";
 import { cn } from "@/lib/utils";
 
 const richOf = (m: UIMessage) => m.parts.filter(isToolUIPart).flatMap((p) =>
@@ -210,13 +211,6 @@ function docsOf(messages: UIMessage[]) {
   }
   return docs;
 }
-
-/** Typed into the empty prompt of a new chat, one after the other. */
-const EXAMPLES = [
-  "Wat was de omzet van Alrijne in 2024?",
-  "Vergelijk het eigen vermogen van twee ziekenhuizen",
-  "Hoeveel fte had Zuyderland in 2023?",
-];
 
 /** The shape of a chat while it loads. Fades in after a moment, so a page that is ready at once never flashes it. */
 function ChatSkeleton() {

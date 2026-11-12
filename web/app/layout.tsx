@@ -10,7 +10,7 @@ const atkinson = Atkinson_Hyperlegible_Next({
 
 export const metadata: Metadata = {
   title: "Jaarverslagen zorg",
-  description: "Vraag het de jaarverslagen van Nederlandse zorgorganisaties. Elk bedrag met de pagina waar het staat.",
+  description: "Vraag het de openbare bronnen over zorgorganisaties, gemeenten en regio's. Bij elk cijfer zie je waar het staat.",
 };
 
 // Before first paint: the saved theme, else the OS setting, which it keeps following until a choice is saved.

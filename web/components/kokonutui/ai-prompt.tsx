@@ -85,7 +85,7 @@ export default function AI_Prompt({
   onSubmit,
   onStop,
   busy,
-  placeholder = "Stel een vraag over een jaarverslag",
+  placeholder = "Stel een vraag over een zorgorganisatie, gemeente of document",
   examples,
   footer,
   className,
