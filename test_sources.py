@@ -1,4 +1,4 @@
-"""Offline check of the LRZa, CBS Iv3 and Rechtspraak parsing and caching. Run: python test_sources.py
+"""Offline check of the LRZa, CBS Iv3, Rechtspraak, GLEIF and EU sanctions parsing and caching. Run: python test_sources.py
 
 Fixtures have the shapes the live services returned on 2026-11-12; `python sources.py check` tests the live services.
 """
@@ -289,6 +289,131 @@ def rulings():
         assert "get_ruling" in str(e)
 
 
+ASML, CYMER, PARENT = "724500Y6DUVHQD6OXN27", "724500LOHLW87RGDPK21", "724500ETWED87NSA6T26"  # real, valid LEIs
+
+
+def lei_rec(lei, name, kvk, status="ISSUED", ra=sources.KVK_RA, direct=None, ultimate=None):
+    """An LEI record as GLEIF's JSON:API gives it; direct/ultimate are its parent links."""
+    base = f"{sources.GLEIF}/lei-records/{lei}"
+    links = lambda which, kind: ({"reporting-exception": f"{base}/{which}-parent-reporting-exception"} if kind == "exception"
+                                 else {"lei-record": f"{base}/{which}-parent", "relationship-record": f"{base}/{which}-parent-relationship"}
+                                 if kind == "parent" else {})
+    address = {"addressLines": ["De Run 6501"], "postalCode": "5504DR", "city": "Veldhoven", "country": "NL"}
+    return {"type": "lei-records", "id": lei, "attributes": {
+        "lei": lei, "registration": {"status": status, "initialRegistrationDate": "2014-02-09T23:00:00Z",
+                                     "lastUpdateDate": "2026-02-10T06:10:40Z", "nextRenewalDate": "2027-02-10T11:30:37Z",
+                                     "corroborationLevel": "FULLY_CORROBORATED"},
+        "entity": {"legalName": {"name": name}, "otherNames": [], "registeredAt": {"id": ra}, "registeredAs": kvk,
+                   "legalAddress": address, "headquartersAddress": address, "jurisdiction": "NL",
+                   "legalForm": {"id": "B5PM"}, "status": "ACTIVE", "creationDate": "1994-10-02T23:00:00Z"}},
+        "relationships": {"direct-parent": {"links": links("direct", direct)},
+                          "ultimate-parent": {"links": links("ultimate", ultimate)}}}
+
+
+def gleif():
+    for bad in ["724500Y6DUVHQD6OXN28", "724500Y6DUVHQD6OXN2", "17085815"]:  # wrong check digits, too short, a KvK
+        try:
+            sources._lei(bad)
+            raise AssertionError(bad)
+        except ValueError:
+            pass
+    assert sources._lei(" 724500y6duvhqd6oxn27 ") == ASML
+    try:  # a link in a response may only lead back to GLEIF
+        sources._gleif("https://evil.example/api/v1/lei-records")
+        raise AssertionError("followed a link off GLEIF")
+    except ValueError:
+        pass
+
+    page = lambda *recs, total=None: json.dumps({"data": list(recs), "meta": {"pagination": {"total": total or len(recs)}}}).encode()
+    one = lambda rec: json.dumps({"data": rec}).encode()
+    main = lei_rec(ASML, "ASML Holding N.V.", "17085815", direct="exception", ultimate="parent")
+    db = sources.connect(":memory:")
+    http, calls = fake_http({
+        "registeredAs%5D=17085815": page(lei_rec(CYMER, "Old record", "17085815", status="LAPSED"), main,
+                                         lei_rec(PARENT, "Registered elsewhere", "17085815", ra="RA000999")),
+        "registeredAs%5D=28099814": page(),
+        f"{ASML}/direct-children": page(lei_rec(CYMER, "Cymer B.V.", "33302949"), total=11),
+        f"{ASML}/direct-parent-reporting-exception": one({"attributes": {"reason": "NO_KNOWN_PERSON"}}),
+        f"{ASML}/ultimate-parent-relationship": one({"attributes": {"relationship": {
+            "type": "IS_ULTIMATELY_CONSOLIDATED_BY", "status": "ACTIVE",
+            "periods": [{"startDate": "2013-05-29T22:00:00Z", "type": "RELATIONSHIP_PERIOD"}]}}}),
+        f"{ASML}/ultimate-parent": one(lei_rec(PARENT, "Parent B.V.", "62375644")),
+    })
+    digimv._http = http
+    r = sources.lei_record(kvk="17085815", db=db)
+    e = r["entity"]
+    assert (e["lei"], e["kvk"], e["registration_status"], e["legal_form_code"]) == (ASML, "17085815", "ISSUED", "B5PM"), e
+    assert e["legal_address"] == "De Run 6501, 5504DR Veldhoven, NL" and e["last_update"] == "2026-02-10"
+    assert [o["name"] for o in r["other_records"]] == ["Old record"]  # lapsed: named, not chosen; RA000999 dropped
+    assert r["direct_parent"] == {"entity": None, "exception": "NO_KNOWN_PERSON",
+                                  "meaning": sources.PARENT_EXCEPTIONS["NO_KNOWN_PERSON"]}
+    u = r["ultimate_parent"]
+    assert (u["entity"]["lei"], u["entity"]["kvk"], u["relationship_status"]) == (PARENT, "62375644", "ACTIVE")
+    assert u["periods"] == [{"startDate": "2013-05-29", "type": "RELATIONSHIP_PERIOD"}]
+    assert (r["direct_children"]["total"], r["direct_children"]["truncated"]) == (11, True)
+    n = len(calls)
+    assert sources.lei_record(kvk="17085815", db=db)["entity"]["lei"] == ASML and len(calls) == n  # cached
+    assert sources.lei_record(kvk="28099814", db=db)["found"] is False
+    try:
+        sources.lei_record(kvk="17085815", lei=ASML, db=db)
+        raise AssertionError("both keys accepted")
+    except ValueError:
+        pass
+
+
+SANCTIONS_CSV = "﻿" + "\r\n".join(";".join(r) for r in [
+    ["fileGenerationDate", "Entity_LogicalId", "Entity_EU_ReferenceNumber", "Entity_UnitedNationId", "Entity_DesignationDate",
+     "Entity_Remark", "Entity_SubjectType_ClassificationCode", "Entity_Regulation_NumberTitle", "Entity_Regulation_Programme",
+     "Entity_Regulation_PublicationUrl", "NameAlias_WholeName", "NameAlias_Function", "Address_CountryDescription",
+     "BirthDate_BirthDate", "Identification_Number", "Identification_TypeCode", "Citizenship_CountryDescription"],
+    ["23/10/2026", "2220", "EU.1338.4", "", "2006-07-06", "(Date of UN designation: 2006-07-06)", "enterprise",
+     "2023/329 (OJ L43I)", "TAQA", "https://eur-lex.europa.eu/x", "Al-Haramain (The Netherlands branch)", "", "NETHERLANDS", "", "", "", ""],
+    ["23/10/2026", "2220", "EU.1338.4", "", "2006-07-06", "(Date of UN designation: 2006-07-06)", "enterprise",
+     "2023/329 (OJ L43I)", "TAQA", "https://eur-lex.europa.eu/x", "Al-Haramain (Nederlandse tak)", "", "NETHERLANDS", "", "", "", ""],
+    ["23/10/2026", "2220", "EU.1338.4", "", "2006-07-06", "(Date of UN designation: 2006-07-06)", "enterprise",
+     "2023/329 (OJ L43I)", "TAQA", "https://eur-lex.europa.eu/x", "", "", "", "", "", "", ""],
+    ["23/10/2026", "9001", "EU.9.1", "", "2022-03-15", "", "person", "2022/336", "UKR", "", "Jürgen Müller", "Director",
+     "", "1960-01-02", "AB123", "passport", "Russian Federation"],
+]) + "\r\n"
+
+
+def sanctions():
+    lt, ents = sources.parse_sanctions(SANCTIONS_CSV)
+    assert lt == "2026-10-23" and len(ents) == 2
+    assert ents["2220"]["names"] == ["Al-Haramain (The Netherlands branch)", "Al-Haramain (Nederlandse tak)"]  # no empties
+    assert ents["2220"]["address_countries"] == ["NETHERLANDS"] and ents["9001"]["identifications"] == ["passport AB123"]
+
+    db = sources.connect(":memory:")
+    http, calls = fake_http({"csvFullSanctionsList": SANCTIONS_CSV.encode()})
+    digimv._http = http
+    r = sources.search_sanctions("al haramain", db=db)
+    assert (r["total"], r["list_date"], r["entities_on_list"]) == (1, "2026-10-23", 2), r
+    assert r["results"][0]["matched_names"] == ["Al-Haramain (The Netherlands branch)", "Al-Haramain (Nederlandse tak)"]
+    assert sources.search_sanctions("haram", db=db)["total"] == 0  # whole words only
+    assert sources.search_sanctions("MULLER jurgen", db=db)["results"][0]["birth_dates"] == ["1960-01-02"]  # accents, order
+    assert sources.search_sanctions("muller", kind="enterprise", db=db)["total"] == 0
+    assert len(calls) == 1, "the list is downloaded once a day"
+    for bad in ["", "al", "?!"]:
+        try:
+            sources.search_sanctions(bad, db=db)
+            raise AssertionError(bad)
+        except ValueError:
+            pass
+
+    # A day later the download is cut short: the last good list stays, with a warning.
+    db.execute("UPDATE sanctions_meta SET fetched_at='2000-01-01T00:00:00+00:00'")
+    digimv._http, _ = fake_http({"csvFullSanctionsList": SANCTIONS_CSV.split("\r\n", 4)[0].encode() + b"\r\n" +
+                                 SANCTIONS_CSV.split("\r\n")[4].encode()})
+    r = sources.search_sanctions("haramain", db=db)
+    assert r["total"] == 1 and "Could not refresh" in r["warning"], r
+    digimv._http, _ = fake_http({"csvFullSanctionsList": 503})
+    try:  # no list at all: an error, never "no match"
+        sources.search_sanctions("haramain", db=sources.connect(":memory:"))
+        raise AssertionError("searched without a list")
+    except RuntimeError:
+        pass
+
+
 def run():
     real = digimv._http
     try:
@@ -296,6 +421,8 @@ def run():
         iv3()
         chunks()
         rulings()
+        gleif()
+        sanctions()
     finally:
         digimv._http = real
     print("sources ok")

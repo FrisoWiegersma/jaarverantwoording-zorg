@@ -1,5 +1,6 @@
 """Public sources next to DigiMV: the care-provider register (LRZa), the accounts of municipalities, joint
-arrangements, provinces and water boards (CBS Iv3), and court rulings (Rechtspraak).
+arrangements, provinces and water boards (CBS Iv3), court rulings (Rechtspraak), Legal Entity Identifiers with
+reported parents and children (GLEIF), and the EU financial sanctions list.
 
 Same rules as digimv.py: values verbatim with their source, cached once fetched, and anything missing reported as
 missing, never filled in. Checked against the live services on 2026-11-12:
@@ -10,12 +11,18 @@ missing, never filled in. Checked against the live services on 2026-11-12:
   Rulings  text: https://data.rechtspraak.nl/uitspraken/content?id={ECLI} (official open data, CC0)
            search: https://uitspraken.rechtspraak.nl/api/zoek, the JSON behind rechtspraak.nl's own search. The open
            data API has no text search; this one is undocumented and may change.
+  GLEIF    https://api.gleif.org/api/v1/lei-records?filter[entity.registeredAs]={kvk} (JSON:API, CC0); a parent is a
+           link to its record or to a reporting exception with a reason.
+  EU list  one CSV (~25 MB, ';', UTF-8 with BOM), one row per entity x name x address x ...: grouped by Entity_LogicalId.
 """
 
 import argparse
+import csv
+import io
 import json
 import re
 import sys
+import threading
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -33,6 +40,10 @@ CREATE INDEX IF NOT EXISTS iv3_rows_key ON iv3_rows(tbl, body, report);
 CREATE TABLE IF NOT EXISTS iv3_log(tbl TEXT, body TEXT, report TEXT, modified TEXT, n INT, PRIMARY KEY(tbl, body, report));
 CREATE TABLE IF NOT EXISTS rulings(ecli TEXT PRIMARY KEY, fetched_at TEXT, v INT, parsed TEXT);
 CREATE TABLE IF NOT EXISTS sources_log(name TEXT PRIMARY KEY, fetched_at TEXT);
+CREATE TABLE IF NOT EXISTS gleif(key TEXT PRIMARY KEY, fetched_at TEXT, parsed TEXT);
+CREATE TABLE IF NOT EXISTS sanctions(entity TEXT PRIMARY KEY, data TEXT);
+CREATE TABLE IF NOT EXISTS sanction_names(entity TEXT, words TEXT);
+CREATE TABLE IF NOT EXISTS sanctions_meta(fetched_at TEXT, list_date TEXT, entities INT);
 """
 
 
@@ -691,6 +702,244 @@ def get_ruling(ecli, part=1, db=None):
             "scope": RULINGS_SCOPE}
 
 
+# ---------------------------------------------------------------- GLEIF (Legal Entity Identifiers)
+
+GLEIF = "https://api.gleif.org/api/v1"
+GLEIF_TTL = timedelta(days=1)  # the golden copy is published three times a day
+KVK_RA = "RA000463"  # GLEIF's code for the Dutch Handelsregister
+GLEIF_SCOPE = ("Legal Entity Identifier records (GLEIF, open data CC0), as the entity registered them with its LEI issuer. "
+               "Parents are the accounting-consolidation parents the entity reported: not its owners, members or ultimate "
+               "beneficial owners (UBO). A LAPSED registration was not renewed, so its data may be out of date. Many Dutch "
+               "foundations and care providers have no LEI: no record is not a finding about the organisation.")
+# Why a parent is not reported (GLEIF's reporting-exception reasons).
+PARENT_EXCEPTIONS = {
+    "NO_KNOWN_PERSON": "no known person or entity controls it",
+    "NATURAL_PERSONS": "controlled by natural persons, who are not reported",
+    "NON_CONSOLIDATING": "its parent does not consolidate it in its accounts",
+    "NON_PUBLIC": "the entity says the parent may not be made public",
+    "BINDING_LEGAL_COMMITMENTS": "the entity says a legal commitment keeps the parent private",
+    "LEGAL_OBSTACLES": "the entity says the law keeps the parent private",
+    "DISCLOSURE_DETRIMENTAL": "the entity says disclosure would harm it or the parent",
+    "CONSENT_NOT_OBTAINED": "the parent did not consent to disclosure",
+    "DETRIMENT_NOT_EXCLUDED": "the entity says harm from disclosure cannot be excluded",
+}
+
+
+def _lei(lei):
+    """An LEI (ISO 17442): 18 characters and two check digits, mod 97 = 1 like an IBAN."""
+    lei = (lei or "").strip().upper()
+    if not re.fullmatch(r"[A-Z0-9]{18}\d{2}", lei) or int("".join(str(int(c, 36)) for c in lei)) % 97 != 1:
+        raise ValueError(f"an LEI has 20 characters with valid check digits, got {lei!r}")
+    return lei
+
+
+def _gleif(url):
+    """GLEIF JSON:API document, or None on 404. Only GLEIF's own URLs are followed, also from its links."""
+    if not url.startswith(GLEIF + "/"):
+        raise ValueError(f"not a GLEIF API URL: {url}")
+    try:
+        return json.loads(digimv._http(url, headers={"Accept": "application/vnd.api+json"}, timeout=60))
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise RuntimeError(f"GLEIF answered HTTP {e.code}") from e
+
+
+def _address(a):
+    return ", ".join(x for x in [*(a.get("addressLines") or []), " ".join(filter(None, [a.get("postalCode"), a.get("city")])),
+                                 a.get("country")] if x)
+
+
+def gleif_brief(rec):
+    """Who an LEI record is: enough to tell entities apart in a list."""
+    a = rec["attributes"]
+    e = a["entity"]
+    return {"lei": a["lei"], "name": e["legalName"]["name"],
+            "kvk": e["registeredAs"] if (e.get("registeredAt") or {}).get("id") == KVK_RA else None,
+            "city": e["legalAddress"].get("city"), "country": e["legalAddress"].get("country"),
+            "entity_status": e["status"], "registration_status": a["registration"]["status"],
+            "source": f"https://search.gleif.org/#/record/{a['lei']}"}
+
+
+def gleif_entity(rec):
+    """The whole record, values as GLEIF has them; dates cut to the day."""
+    a = rec["attributes"]
+    e, r = a["entity"], a["registration"]
+    day = lambda s: s and s[:10]
+    return {**gleif_brief(rec),
+            "other_names": [n["name"] for n in e.get("otherNames") or []],
+            "registered_at": (e.get("registeredAt") or {}).get("id"), "registered_as": e.get("registeredAs"),
+            "legal_form_code": (e.get("legalForm") or {}).get("id"), "jurisdiction": e.get("jurisdiction"),
+            "legal_address": _address(e["legalAddress"]), "headquarters_address": _address(e["headquartersAddress"]),
+            "created": day(e.get("creationDate")), "registered": day(r.get("initialRegistrationDate")),
+            "last_update": day(r.get("lastUpdateDate")), "next_renewal": day(r.get("nextRenewalDate")),
+            "corroboration": r.get("corroborationLevel")}
+
+
+def _parent(rec, which):
+    """The direct or ultimate parent as reported, or the reason none is."""
+    links = ((rec.get("relationships") or {}).get(f"{which}-parent") or {}).get("links") or {}
+    if links.get("lei-record"):
+        parent = _gleif(links["lei-record"])
+        rel = _gleif(links["relationship-record"]) if links.get("relationship-record") else None
+        rel = ((rel or {}).get("data") or {}).get("attributes", {}).get("relationship") or {}
+        if parent:
+            return {"entity": gleif_brief(parent["data"]), "relationship": rel.get("type"),
+                    "relationship_status": rel.get("status"),
+                    "periods": [{k: (v[:10] if k.endswith("Date") else v) for k, v in p.items()} for p in rel.get("periods") or []]}
+    if links.get("reporting-exception"):
+        exc = _gleif(links["reporting-exception"])
+        reason = ((exc or {}).get("data") or {}).get("attributes", {}).get("reason")
+        if reason:
+            return {"entity": None, "exception": reason, "meaning": PARENT_EXCEPTIONS.get(reason, "see GLEIF's code list")}
+    return {"entity": None, "exception": None, "meaning": "nothing reported"}
+
+
+def lei_record(kvk=None, lei=None, refresh=False, db=None):
+    """An entity's LEI record by KvK number or LEI, with its reported parents and direct children."""
+    if bool(kvk) == bool(lei):
+        raise ValueError("give a KvK number or an LEI")
+    key = f"kvk:{_kvk(kvk)}" if kvk else f"lei:{_lei(lei)}"
+    db = db or connect()
+    row = db.execute("SELECT fetched_at, parsed FROM gleif WHERE key=?", (key,)).fetchone()
+    if refresh or not row or _older(row["fetched_at"], GLEIF_TTL):
+        if kvk:
+            found = _gleif(f"{GLEIF}/lei-records?" + urllib.parse.urlencode(
+                {"filter[entity.registeredAs]": key[4:], "filter[entity.legalAddress.country]": "NL", "page[size]": 10}))
+            recs = [r for r in found["data"] if (r["attributes"]["entity"].get("registeredAt") or {}).get("id") == KVK_RA]
+        else:
+            one = _gleif(f"{GLEIF}/lei-records/{key[4:]}")
+            recs = [one["data"]] if one else []
+        # An issued, active record first; the rest are named so nothing is hidden.
+        recs.sort(key=lambda r: (r["attributes"]["registration"]["status"] != "ISSUED", r["attributes"]["entity"]["status"] != "ACTIVE"))
+        if recs:
+            main = recs[0]
+            kids = _gleif(f"{GLEIF}/lei-records/{main['id']}/direct-children?page[size]=100") or {"data": [], "meta": {}}
+            total = ((kids.get("meta") or {}).get("pagination") or {}).get("total", len(kids["data"]))
+            parsed = {"found": True, "entity": gleif_entity(main),
+                      "other_records": [gleif_brief(r) for r in recs[1:]],
+                      "direct_parent": _parent(main, "direct"), "ultimate_parent": _parent(main, "ultimate"),
+                      "direct_children": {"total": total, "returned": len(kids["data"]), "truncated": total > len(kids["data"]),
+                                          "results": [gleif_brief(r) for r in kids["data"]]}}
+        else:
+            parsed = {"found": False, "note": "No LEI record for this " + ("KvK number." if kvk else "LEI.")}
+        stamp = _iso(_now())
+        with db:
+            db.execute("INSERT OR REPLACE INTO gleif VALUES (?,?,?)", (key, stamp, json.dumps(parsed, ensure_ascii=False)))
+        row = {"fetched_at": stamp, "parsed": json.dumps(parsed)}
+    return {**json.loads(row["parsed"]), "fetched": row["fetched_at"], "scope": GLEIF_SCOPE}
+
+
+def search_lei(name, country="NL", limit=20):
+    """Live LEI search by name: every word must be in the legal or another name."""
+    if len((name or "").strip()) < 2:
+        raise ValueError("give at least two characters of a name")
+    q = {"filter[entity.names]": name.strip(), "page[size]": min(int(limit), 100)}
+    if country:
+        q["filter[entity.legalAddress.country]"] = country.upper()
+    d = _gleif(f"{GLEIF}/lei-records?" + urllib.parse.urlencode(q))
+    total = d["meta"]["pagination"]["total"]
+    return {"total": total, "returned": len(d["data"]), "truncated": total > len(d["data"]),
+            "results": [gleif_brief(r) for r in d["data"]], "source": "https://search.gleif.org/", "scope": GLEIF_SCOPE}
+
+
+# ---------------------------------------------------------------- EU financial sanctions
+
+EU_SANCTIONS = ("https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList_1_1/content"
+                "?token=dG9rZW4tMjAxNw")  # the public token the EU's own download page uses
+SANCTIONS_TTL = timedelta(days=1)
+SANCTIONS_SCOPE = ("Consolidated list of persons, groups and entities subject to EU financial sanctions (European "
+                   "Commission, FSF). A name match is a possible match, never an identification: compare birth date, "
+                   "nationality, address and registration numbers. Matching is on whole words of every name and alias, so "
+                   "spellings and transliterations not on the list are missed. Not on this list says nothing about the "
+                   "Dutch national terrorism list, the UN, US (OFAC) or UK lists.")
+_sanctions_lock = threading.Lock()
+
+
+def parse_sanctions(text):
+    """The EU CSV (one row per entity x name x address x ...) -> (list date, {entity id: record}). Values verbatim."""
+    rows = csv.DictReader(io.StringIO(text.lstrip("﻿"), newline=""), delimiter=";")
+    out, list_date = {}, None
+    add = lambda xs, v: v and v not in xs and xs.append(v)
+    for r in rows:
+        list_date = list_date or r.get("fileGenerationDate")
+        e = out.setdefault(r["Entity_LogicalId"], {
+            "id": r["Entity_LogicalId"], "eu_reference": r["Entity_EU_ReferenceNumber"] or None,
+            "un_id": r["Entity_UnitedNationId"] or None, "type": r["Entity_SubjectType_ClassificationCode"],
+            "designated": r["Entity_DesignationDate"] or None, "programme": r["Entity_Regulation_Programme"],
+            "regulation": r["Entity_Regulation_NumberTitle"], "regulation_url": r["Entity_Regulation_PublicationUrl"] or None,
+            "remark": r["Entity_Remark"] or None, "names": [], "functions": [], "birth_dates": [], "citizenships": [],
+            "address_countries": [], "identifications": []})
+        add(e["names"], r["NameAlias_WholeName"].strip())
+        add(e["functions"], r["NameAlias_Function"].strip())
+        add(e["birth_dates"], r["BirthDate_BirthDate"])
+        add(e["citizenships"], r["Citizenship_CountryDescription"])
+        add(e["address_countries"], r["Address_CountryDescription"])
+        if r["Identification_Number"]:
+            add(e["identifications"], f"{r['Identification_TypeCode']} {r['Identification_Number']}".strip())
+    if list_date and re.fullmatch(r"\d{2}/\d{2}/\d{4}", list_date):
+        d, m, y = list_date.split("/")
+        list_date = f"{y}-{m}-{d}"
+    return list_date, out
+
+
+def _words(s):
+    return " " + " ".join(re.findall(r"[a-z0-9]+", _fold(s))) + " "
+
+
+def _sanctions(db, refresh=False):
+    """Load the list into the database once a day. A download that fails, or has far fewer entities than the list
+    we have, keeps the list we have and says so."""
+    with _sanctions_lock:
+        meta = db.execute("SELECT fetched_at, list_date, entities FROM sanctions_meta").fetchone()
+        if meta and not refresh and not _older(meta["fetched_at"], SANCTIONS_TTL):
+            return dict(meta), None
+        try:
+            list_date, ents = parse_sanctions(digimv._http(EU_SANCTIONS, timeout=180).decode("utf-8-sig"))
+            if not ents or (meta and len(ents) < 0.8 * meta["entities"]):
+                raise RuntimeError(f"the new list has {len(ents)} entities, the last one {meta and meta['entities']}")
+        except Exception as e:  # keep serving the last good list
+            if not meta:
+                raise RuntimeError(f"EU sanctions list not available: {e}") from e
+            return dict(meta), f"Could not refresh the list ({e}); this is the list fetched {meta['fetched_at']}."
+        stamp = _iso(_now())
+        with db:
+            db.execute("DELETE FROM sanctions")
+            db.execute("DELETE FROM sanction_names")
+            db.execute("DELETE FROM sanctions_meta")
+            db.executemany("INSERT INTO sanctions VALUES (?,?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in ents.items()])
+            db.executemany("INSERT INTO sanction_names VALUES (?,?)", [(k, _words(n)) for k, v in ents.items() for n in v["names"]])
+            db.execute("INSERT INTO sanctions_meta VALUES (?,?,?)", (stamp, list_date, len(ents)))
+        return {"fetched_at": stamp, "list_date": list_date, "entities": len(ents)}, None
+
+
+def search_sanctions(name, kind=None, limit=20, db=None):
+    """Entities on the EU sanctions list with a name or alias holding every word of `name` (case and accents
+    ignored). kind: person or enterprise."""
+    words = re.findall(r"[a-z0-9]+", _fold(name or ""))
+    if not words or sum(map(len, words)) < 3:
+        raise ValueError("give a name of at least three letters")
+    if kind not in (None, "person", "enterprise"):
+        raise ValueError("kind is person or enterprise")
+    db = db or connect()
+    meta, warning = _sanctions(db)
+    where = " AND ".join("n.words LIKE ?" for _ in words)
+    ids = [r[0] for r in db.execute(f"SELECT DISTINCT n.entity FROM sanction_names n WHERE {where}", [f"% {w} %" for w in words])]
+    hits = [json.loads(r[0]) for r in db.execute(
+        f"SELECT data FROM sanctions WHERE entity IN ({','.join('?' * len(ids))})", ids)] if ids else []
+    hits = [h for h in hits if not kind or h["type"] == kind]
+    hits.sort(key=lambda h: (h["type"], h["names"][0] if h["names"] else ""))
+    for h in hits:
+        h["matched_names"] = [n for n in h["names"] if all(f" {w} " in _words(n) for w in words)]
+        h["names_total"], h["names"] = len(h["names"]), h["names"][:12]
+        h["remark"] = h["remark"] and h["remark"][:400]
+    return {"query": name, "total": len(hits), "returned": min(len(hits), limit), "truncated": len(hits) > limit,
+            "results": hits[:limit], "list_date": meta["list_date"], "entities_on_list": meta["entities"],
+            "fetched": meta["fetched_at"], **({"warning": warning} if warning else {}),
+            "source": "https://data.europa.eu/data/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions",
+            "scope": SANCTIONS_SCOPE}
+
+
 # ---------------------------------------------------------------- live check + CLI
 
 def check():
@@ -708,6 +957,13 @@ def check():
             c["eenheid"] == IV3_UNIT for c in r["cells"]))(iv3("gemeenten", 2025, "GM0546", "6.7")),
         "rulings search": lambda: search_rulings("Stichting Basalt")["total"] >= 1,
         "ruling text": lambda: get_ruling("ECLI:NL:RBAMS:2019:441")["text_available"],
+        "lei by kvk": lambda: (lambda r: r["entity"]["lei"] == "724500Y6DUVHQD6OXN27" and r["direct_children"]["total"] > 0
+                               and r["direct_parent"]["exception"])(lei_record(kvk="17085815", refresh=True)),
+        "lei parent": lambda: lei_record(lei="724500LOHLW87RGDPK21", refresh=True)["direct_parent"]["entity"]["lei"]
+                              == "724500Y6DUVHQD6OXN27",
+        "lei search": lambda: any(h["kvk"] == "62375644" for h in search_lei("Zuyderland Medisch Centrum")["results"]),
+        "eu sanctions": lambda: (lambda r: r["entities_on_list"] > 1000 and any(
+            h["eu_reference"] == "EU.1338.4" for h in r["results"]))(search_sanctions("Al-Haramain Netherlands")),
     }
     ok = True
     for name, t in tests.items():
@@ -741,6 +997,13 @@ def main(argv=None):
     s = sub.add_parser("ruling", help="read a ruling")
     s.add_argument("ecli")
     s.add_argument("--part", type=int, default=1)
+    s = sub.add_parser("lei", help="LEI record with parents and children, by KvK number or LEI")
+    s.add_argument("--kvk")
+    s.add_argument("--lei")
+    sub.add_parser("lei-search", help="LEI records by name").add_argument("name")
+    s = sub.add_parser("sanctions", help="search the EU sanctions list by name")
+    s.add_argument("name")
+    s.add_argument("--kind", choices=["person", "enterprise"])
     sub.add_parser("check", help="one live call per source")
     a = ap.parse_args(argv)
     if a.cmd == "check":
@@ -752,6 +1015,9 @@ def main(argv=None):
         "iv3": lambda: iv3(a.kind, a.year, a.code, a.taakveld, a.verslagsoort),
         "rulings": lambda: search_rulings(a.q),
         "ruling": lambda: get_ruling(a.ecli, a.part),
+        "lei": lambda: lei_record(kvk=a.kvk, lei=a.lei),
+        "lei-search": lambda: search_lei(a.name),
+        "sanctions": lambda: search_sanctions(a.name, a.kind),
     }[a.cmd]()
     print(json.dumps(out, ensure_ascii=False, indent=1))
     return 0

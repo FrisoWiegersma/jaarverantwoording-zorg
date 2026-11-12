@@ -203,6 +203,24 @@ def register(kvk: str):
     return _source(sources.register, kvk)
 
 
+@app.get("/lei/search")
+def lei_search(q: str, country: str = "NL"):
+    """Live LEI search by name (every word must match), with KvK number where registered there."""
+    return _source(sources.search_lei, q, country)
+
+
+@app.get("/lei")
+def lei(kvk: str | None = None, lei: str | None = None):
+    """An LEI record by KvK number or LEI, with its reported direct and ultimate parent and direct children."""
+    return _source(sources.lei_record, kvk, lei)
+
+
+@app.get("/sanctions/search")
+def sanctions_search(q: str, kind: str | None = None):
+    """Possible matches on the EU financial sanctions list: every word of q in a name or alias."""
+    return _source(sources.search_sanctions, q, kind)
+
+
 @app.get("/iv3/bodies")
 def iv3_bodies(q: str, kind: str | None = None, year: int | None = None):
     """Municipalities, joint arrangements, provinces and water boards by name or code."""
