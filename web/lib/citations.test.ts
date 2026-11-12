@@ -12,7 +12,7 @@ test("citations", () => {
     "Gewone link [DigiMV](https://digimv.nl).";
   const c = parseCitations(text);
   assert.deepEqual(
-    c.map((x) => (x.kind === "page" ? [x.year, x.docId, x.page, x.quote] : x.kind === "figure" ? [x.year, x.orgId, x.field, x.quote] : x.kind === "project" ? [x.projectId, x.documentId, x.page, x.quote] : [x.table, x.code, x.quote])),
+    c.map((x) => (x.kind === "page" ? [x.year, x.docId, x.page, x.quote] : x.kind === "figure" ? [x.year, x.orgId, x.field, x.quote] : x.kind === "project" ? [x.projectId, x.documentId, x.page, x.quote] : x.kind === "iv3" ? [x.table, x.code, x.quote] : [x.docId, x.page, x.quote])),
     [
       [2023, 84870, 10, "Eigen vermogen 108.256"],
       [2023, 84870, 10, "41.414"],
@@ -59,5 +59,14 @@ test("iv3 cell links keep the verbatim keys and refuse anything else", () => {
   });
   assert.equal(parseCitations(`[CBS Iv3](${href} "16.646")`)[0].quote, "16.646");
   for (const bad of [href + "/x", href.replace("6.712", "%zz"), "/bron/iv3/45071ned/GM0546/2025X005/6.712/L3.4.1", "/bron/iv3/45071NED/GM0546"])
+    assert.equal(parseHref(bad), null);
+});
+
+test("public PDF pages cite our cached copy by its 20-hex id", () => {
+  const href = "/bron/doc/00f146ee3399cf9b69cb/8";
+  assert.deepEqual(parseHref(href), { kind: "doc", docId: "00f146ee3399cf9b69cb", page: 8 });
+  const [c] = parseCitations(`een budgetplafond [p. 8](${href} "maximaal € 150.000")`);
+  assert.equal(c.quote, "maximaal € 150.000");
+  for (const bad of [href + "/x", href.replace("/8", "/0"), "/bron/doc/00F146EE3399CF9B69CB/8", "/bron/doc/../8", "/bron/doc/00f146ee3399cf9b69c/8"])
     assert.equal(parseHref(bad), null);
 });

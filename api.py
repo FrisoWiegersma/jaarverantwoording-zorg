@@ -270,6 +270,28 @@ def public_read(url: str, pages: str = "1-5", refresh: bool = False):
     return _source(documents.read, url, pages, refresh)
 
 
+@app.get("/public/documents/{doc_id}")
+def public_document(doc_id: str):
+    """A cached public document: title, original URL, host, page count. Behind a /bron/doc/ citation."""
+    return _source(documents.document_meta, doc_id)
+
+
+@app.get("/public/documents/{doc_id}/pdf")
+def public_pdf(doc_id: str):
+    """Our cached copy, inline: the original site may send it as a download, which loses #page=N."""
+    path = _source(documents.document_pdf, doc_id)
+    name = _source(documents.document_meta, doc_id)["file_name"]
+    return FileResponse(path, media_type="application/pdf", filename=name, content_disposition_type="inline")
+
+
+@app.get("/public/documents/{doc_id}/pages/{page}.png")
+def public_page_png(doc_id: str, page: int, quote: list[str] = Query([])):
+    """A public PDF's page as a PNG with the quotes highlighted; X-Mark and X-Found as for DigiMV pages."""
+    png, mark, found = _source(digimv.render_page, _source(documents.document_pdf, doc_id), page, quote)
+    return Response(png, media_type="image/png", headers={
+        "X-Mark": ",".join(f"{v:.4f}" for v in mark or ()), "X-Found": found, "Cache-Control": "max-age=3600"})
+
+
 @app.get("/public/links")
 def public_links(url: str, q: str | None = None, limit: int = 100):
     """The links on a public web page, files first."""

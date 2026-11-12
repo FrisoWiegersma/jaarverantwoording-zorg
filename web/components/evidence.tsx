@@ -9,7 +9,8 @@ import type { Citation } from "@/lib/citations";
 import { parseNumber } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 
-export type DocMeta = { org: string; type: string };
+/** A document's name for the evidence heading. Public documents (kind doc) also carry the original URL and its site. */
+export type DocMeta = { org: string; type: string; url?: string };
 
 type Mark = [number, number, number, number];
 export type Shot = { kind: "page"; src: string; mark: Mark | null; found: "all" | "partial" | "none" };
@@ -23,13 +24,17 @@ export type Iv3Cell = {
   } | null;
 };
 type Loaded = Shot | Filed | PrivatePage | Iv3Cell | "error";
-type PageCitation = Extract<Citation, { kind: "page" }>;
+type PageCitation = Extract<Citation, { kind: "page" | "doc" }>;
 type FigureCitation = Extract<Citation, { kind: "figure" }>;
 type Iv3Citation = Extract<Citation, { kind: "iv3" }>;
 
 type PrivateCitation = Extract<Citation, { kind: "project" }>;
 const pagePath = (c: PageCitation | PrivateCitation) => c.kind === "project"
-  ? `/digimv/projects/${c.projectId}/documents/${c.documentId}` : `/digimv/documents/${c.year}/${c.docId}`;
+  ? `/digimv/projects/${c.projectId}/documents/${c.documentId}`
+  : c.kind === "doc" ? `/digimv/public/documents/${c.docId}` : `/digimv/documents/${c.year}/${c.docId}`;
+
+/** Where the name of a cited document is kept in the chat's document map. */
+export const docKey = (c: PageCitation) => (c.kind === "doc" ? `doc/${c.docId}` : `${c.year}/${c.docId}`);
 
 async function fetchShot(c: PageCitation | PrivateCitation): Promise<Shot> {
   const query = c.quote ? `?quote=${encodeURIComponent(c.quote)}` : "";
@@ -75,7 +80,7 @@ function load(c: Citation): Promise<Loaded> {
   if (c.kind === "project") return fetchPrivate(c).catch(() => "error" as const);
   let p = loaded.get(c.key);
   if (!p) {
-    p = (c.kind === "page" ? fetchShot(c) : c.kind === "iv3" ? fetchIv3(c) : fetchFiled(c)).catch((): Loaded => {
+    p = (c.kind === "page" || c.kind === "doc" ? fetchShot(c) : c.kind === "iv3" ? fetchIv3(c) : fetchFiled(c)).catch((): Loaded => {
       loaded.delete(c.key); // a later look may succeed
       return "error";
     });
@@ -149,7 +154,18 @@ function PageEvidence({ c, shot, doc }: { c: PageCitation; shot: Shot | "error" 
   const [shown, setShown] = useState<string | null>(null);
   return (
     <>
-      <Heading sub={`${doc?.type ?? "Document"} ${c.year}, pagina ${c.page}`} title={doc?.org ?? `Document ${c.year}/${c.docId}`} />
+      {c.kind === "doc" ? (
+        <div>
+          <Heading sub={`${doc?.type ?? "Openbaar document"}, pagina ${c.page}`} title={doc?.org ?? "Openbaar document"} />
+          {doc?.url && (
+            <a className="text-[0.9rem] text-muted-foreground underline underline-offset-2 [overflow-wrap:anywhere] hover:text-foreground" href={doc.url} rel="noopener noreferrer" target="_blank">
+              Origineel op {doc.type}
+            </a>
+          )}
+        </div>
+      ) : (
+        <Heading sub={`${doc?.type ?? "Document"} ${c.year}, pagina ${c.page}`} title={doc?.org ?? `Document ${c.year}/${c.docId}`} />
+      )}
 
       {c.quote && (
         <MarkerText key={c.key} show>
@@ -374,8 +390,8 @@ export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocM
     <div className="flex flex-col gap-5">
       {c.kind === "project" ? (
         <PrivateSource c={c} value={value as PrivatePage | "error" | null} />
-      ) : c.kind === "page" ? (
-        <PageEvidence c={c} doc={docs[`${c.year}/${c.docId}`]} shot={value as Shot | "error" | null} />
+      ) : c.kind === "page" || c.kind === "doc" ? (
+        <PageEvidence c={c} doc={docs[docKey(c)]} shot={value as Shot | "error" | null} />
       ) : c.kind === "iv3" ? (
         <Iv3Evidence c={c} value={value as Iv3Cell | "error" | null} />
       ) : (

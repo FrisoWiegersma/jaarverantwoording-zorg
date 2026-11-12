@@ -135,6 +135,22 @@ assert calls == [url], "a second read comes from the cache"
 s = d.search_text("tarief", url=url, db=db)
 assert [(h["page"], h["cite"]) for h in s["results"]] == [(1, url)] and "«tarief»" in s["results"][0]["snippet"], s
 assert d._cite({"kind": "pdf", "file_url": "https://x.example/a.pdf"}, 4) == "https://x.example/a.pdf#page=4"
+# A PDF page is cited by our own copy, which opens in the evidence panel; other kinds keep the site's link.
+assert r["pages"][0]["href"] is None and s["results"][0]["href"] is None
+assert d._href(r["id"], {"kind": "pdf"}, 4) == f"/bron/doc/{r['id']}/4"
+m = d.document_meta(r["id"])
+assert (m["title"], m["host"], m["url"], m["page_count"]) == ("Inkoopbeleid wijkverpleging", "insurer.example", url, 1), m
+for bad in ["../../etc/passwd", "0" * 20, r["id"].upper()]:  # a path, an id not in the cache, not our id shape
+    try:
+        d.document_meta(bad)
+        raise AssertionError(bad)
+    except KeyError:
+        pass
+try:
+    d.document_pdf(r["id"])
+    raise AssertionError("an HTML document has no PDF")
+except KeyError:
+    pass
 
 
 # ---------------------------------------------------------------- links on a page

@@ -2,13 +2,15 @@
 //   a PDF page:                [p. 12](/bron/2023/84870/12 "Eigen vermogen 108.256")
 //   a DigiMV questionnaire:    [DigiMV](/bron/vragenlijst/2023/82905347/qEigenVermogen_0 "Eigen vermogen 108256")
 //   a CBS Iv3 cell:            [CBS Iv3](/bron/iv3/45071NED/GM0546/2025X005/6.712/L3.4.1 "Begeleiding (WMO) 16646")
+//   a public PDF's page:       [p. 8](/bron/doc/00f146ee3399cf9b69cb/8 "een budgetafspraak van maximaal € 150.000")
 // react-markdown renders them as <a href title>; this file turns the same text into a list to step through.
 
 export type Source =
   | { kind: "page"; year: number; docId: number; page: number }
   | { kind: "project"; projectId: string; documentId: string; page: number }
   | { kind: "figure"; year: number; orgId: string; field: string }
-  | { kind: "iv3"; table: string; code: string; report: string; taakveld: string; categorie: string };
+  | { kind: "iv3"; table: string; code: string; report: string; taakveld: string; categorie: string }
+  | { kind: "doc"; docId: string; page: number };
 
 export type Citation = Source & { key: string; href: string; quote: string };
 
@@ -22,6 +24,8 @@ export function citationKey(href: string, quote: string | undefined) {
 export function parseHref(href: string): Source | null {
   const privateSource = href.match(/^\/bron\/project\/([a-f0-9]{32})\/([a-f0-9]{32})\/([1-9]\d*)$/);
   if (privateSource) return { kind: "project", projectId: privateSource[1], documentId: privateSource[2], page: +privateSource[3] };
+  const publicDoc = href.match(/^\/bron\/doc\/([0-9a-f]{20})\/([1-9]\d*)$/);
+  if (publicDoc) return { kind: "doc", docId: publicDoc[1], page: +publicDoc[2] };
   let m = href.match(/^\/bron\/(\d{4})\/(\d+)\/(\d+)$/);
   if (m) return { kind: "page", year: +m[1], docId: +m[2], page: +m[3] };
   try {

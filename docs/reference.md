@@ -94,7 +94,10 @@ Through the frontend, prefix the following routes with `/digimv`. Inside Compose
 | `GET /public/publications?q=...` | Gazettes and parliamentary papers with their PDF; optional `creator`, `gazette`, `since` |
 | `GET /public/regulations?q=...` | Local and regional regulations (CVDR) with `in_force`; optional `creator` |
 | `GET /public/tenders?q=...` | EU tenders and awards of Dutch buyers (TED); optional `buyer`, `cpv` (default 85000000), `since` |
-| `GET /public/read?url=...&pages=1-5` | Any public PDF, Word, HTML or XML document, each page with its `cite` URL |
+| `GET /public/read?url=...&pages=1-5` | Any public PDF, Word, HTML or XML document, each page with its `cite` URL (and `href`, a `/bron/doc/` link, for PDF pages) |
+| `GET /public/documents/{id}` | Title, site, original URL and page count of a public document read before, behind a `/bron/doc/` citation |
+| `GET /public/documents/{id}/pdf` | Our cached copy of that PDF, shown inline |
+| `GET /public/documents/{id}/pages/{page}.png?quote=...` | One page as an image, with the quote marked (`X-Mark`, `X-Found`) |
 | `GET /public/links?url=...` | The links on a public page, files first; optional `q` |
 | `GET /public/search?q=...` | Word search in public documents read before; optional `url` for one document |
 | `GET /datasets/search?q=...` | Datasets in data.overheid.nl |
@@ -137,7 +140,7 @@ claude mcp add digimv -- uv run --env-file "$PWD/.env" --directory "$PWD" mcp_se
 - CBS Iv3 amounts are x € 1.000, as the body reported them. Charges (`Lasten`) and income (`Baten`) are separate categories and are never added together. The 2nd publication (`plaatsing`) is used when it exists. A cell without a value is not 0: CBS's table has every combination of area and category, and many don't apply. `delivered: false` means the whole report is empty. `totals_computed` sums a policy area's charges and income separately; `null` means no cell had a value. On balance-sheet posts, the categories are mutations and `Standen` are the opening and closing positions. Water boards report no split by function. Dimension keys are padded inconsistently, so they are always read from the table, never built by hand; a query above 10,000 rows is refused, so reports are fetched in chunks that are reconciled against their counts.
 - Rulings: search is the website's own JSON (undocumented); text comes from the official open-data API. A mention does not make an organisation a party. Natural persons are pseudonymised, and not every ruling is published.
 - Iv3 citations look like `/bron/iv3/{table}/{code}/{report}/{taakveld}/{categorie}`. Register entries and rulings are cited with their source URL.
-- Public documents are cited with the file URL plus `#page=N` (PDF) and CBS values with the exact query URL in `source`; rows of a data file with the file URL and `row`, the row number a spreadsheet shows. `present_answer` accepts only `/bron/` links, so the chat gives such answers as text.
+- A page of a public PDF is cited as `/bron/doc/{id}/{page}`, where `id` is our cache key from `read_document`; the evidence panel shows our cached copy, since some sites (Menzis) only offer the file as a download. Other public documents are cited with their URL, and CBS values with the exact query URL in `source`; rows of a data file with the file URL and `row`, the row number a spreadsheet shows. `present_answer` accepts only `/bron/` links, so the chat gives answers with those as text.
 - Search semantics differ per portal. Woo matches word forms, not phrases. Gazettes need every word, and `"quoted words"` as that phrase. CVDR needs every word and has no phrase search. CBS table search is substring on id, title and summary.
 - Reading a URL: only public addresses, checked again after every redirect; a site's `robots.txt` is honoured, including `Crawl-delay` (RFC 9309: 4xx means no rules, 5xx means try later). KOOP's own file hosts (open.overheid.nl, repository.overheid.nl) are exempt: their APIs hand out those URLs.
 - CBS: a value CBS left out is `{"value": null, "symbol": "x"}`, explained in `symbols`; a selection of 10,000 rows or more is refused.

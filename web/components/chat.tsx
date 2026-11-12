@@ -183,7 +183,16 @@ function stepsOf(m: UIMessage, live: boolean): AgentStep[] {
   });
 }
 
-/** Organisation name and document type per year/doc_id, from what the tools already returned. */
+/** The site a public document came from, as people say it: menzis.nl. */
+const siteOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "Openbaar document";
+  }
+};
+
+/** Organisation name and document type per year/doc_id (title and site per doc/id), from what the tools already returned. */
 function docsOf(messages: UIMessage[]) {
   const docs: Record<string, DocMeta> = {};
   for (const p of messages.flatMap((m) => m.parts)) {
@@ -195,6 +204,8 @@ function docsOf(messages: UIMessage[]) {
       }
     } else if (getToolName(p) === "get_document") {
       docs[`${out.year}/${out.doc_id}`] = { org: String(out.org_name), type: String(out.type) };
+    } else if (getToolName(p) === "read_document") {
+      docs[`doc/${out.id}`] = { org: String(out.title), type: siteOf(String(out.file_url)), url: String(out.url) };
     }
   }
   return docs;

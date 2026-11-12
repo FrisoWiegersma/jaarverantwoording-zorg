@@ -9,7 +9,7 @@
 
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { PrivateSource, type PrivatePage, type DocMeta, type Filed, formatFiled, formatIv3, type Iv3Cell, pageWindow, type Shot, useCheck, useLoaded } from "@/components/evidence";
+import { PrivateSource, type PrivatePage, type DocMeta, docKey, type Filed, formatFiled, formatIv3, type Iv3Cell, pageWindow, type Shot, useCheck, useLoaded } from "@/components/evidence";
 import type { Citation } from "@/lib/citations";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -145,7 +145,7 @@ export function CitationPreviewProvider({ docs, children }: { docs: Record<strin
                       key={preview.c.key}
                       transition={{ duration: 0.16, ease: EASE_OUT }}
                     >
-                      <PreviewBody c={preview.c} doc={preview.c.kind === "page" ? docs[`${preview.c.year}/${preview.c.docId}`] : undefined} />
+                      <PreviewBody c={preview.c} doc={preview.c.kind === "page" || preview.c.kind === "doc" ? docs[docKey(preview.c)] : undefined} />
                     </motion.div>
                   </AnimatePresence>
                 </div>
@@ -161,12 +161,14 @@ export function CitationPreviewProvider({ docs, children }: { docs: Record<strin
 function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
   const value = useLoaded(c);
   const check = useCheck(c);
-  const shot = c.kind === "page" && value && value !== "error" ? (value as Shot) : null;
+  const paged = c.kind === "page" || c.kind === "doc";
+  const shot = paged && value && value !== "error" ? (value as Shot) : null;
   const filed = c.kind === "figure" && value && value !== "error" ? (value as Filed) : null;
   const cell = c.kind === "iv3" && value && value !== "error" ? (value as Iv3Cell).cell : null;
   if (c.kind === "project") return <PrivateSource c={c} value={value as PrivatePage | "error" | null} compact />;
-  const title = c.kind === "page" ? doc?.org : c.kind === "iv3" ? cell?.naam ?? c.code : filed?.org;
-  const sub = c.kind === "page" ? `${doc?.type ?? "Document"} ${c.year} · pagina ${c.page}`
+  const title = paged ? doc?.org ?? (c.kind === "doc" ? "Openbaar document" : undefined) : c.kind === "iv3" ? cell?.naam ?? c.code : filed?.org;
+  const sub = c.kind === "doc" ? `${doc?.type ?? "Openbaar document"} · pagina ${c.page}`
+    : c.kind === "page" ? `${doc?.type ?? "Document"} ${c.year} · pagina ${c.page}`
     : c.kind === "iv3" ? `CBS Iv3${cell ? ` · ${cell.verslagsoort} ${cell.year}` : ""}` : `DigiMV-vragenlijst ${c.year}`;
   return (
     <div className="flex flex-col gap-2 text-sm">
@@ -175,7 +177,7 @@ function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
         <p className="truncate text-muted-foreground">{sub}</p>
       </div>
 
-      {c.kind === "page" && value !== "error" && (
+      {paged && value !== "error" && (
         <div className="relative h-28 overflow-hidden rounded-lg bg-white ring-1 ring-black/10">
           {shot ? (
             <div className="relative" style={shot.mark ? pageWindow(shot.mark, CROP) : undefined}>
@@ -221,7 +223,7 @@ function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
 
       {check && (
         <p className="font-semibold text-amber-800 leading-snug dark:text-amber-300">
-          {c.kind === "page"
+          {paged
             ? "Controleer: niet alles staat letterlijk op deze pagina."
             : c.kind === "iv3"
               ? cell ? `Controleer: gerapporteerd is ${formatIv3(cell)}.` : "Controleer: deze cel staat niet in de CBS-tabel."
@@ -232,7 +234,7 @@ function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
       )}
 
       <p className="text-[0.8rem] text-muted-foreground">
-        {value === "error" ? "Kon de bron niet laden. Klik om het opnieuw te proberen." : c.kind === "page" ? "Klik voor de hele pagina." : c.kind === "iv3" ? "Klik voor de cel in de CBS-gegevens." : "Klik voor het veld in de vragenlijst."}
+        {value === "error" ? "Kon de bron niet laden. Klik om het opnieuw te proberen." : paged ? "Klik voor de hele pagina." : c.kind === "iv3" ? "Klik voor de cel in de CBS-gegevens." : "Klik voor het veld in de vragenlijst."}
       </p>
     </div>
   );

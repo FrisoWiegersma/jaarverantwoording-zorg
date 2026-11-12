@@ -267,6 +267,50 @@ def _cite(d, n):
     return f"{d['file_url']}#page={n}" if d["kind"] == "pdf" else d["file_url"]
 
 
+def _href(did, d, n):
+    """The in-app citation of a PDF page: the evidence panel shows our cached copy with the quote marked. The
+    original URL can't be the citation: many sites send PDFs as a download (Menzis does) and forbid framing."""
+    return f"/bron/doc/{did}/{n}" if d["kind"] == "pdf" else None
+
+
+def _title(did, d):
+    """A human title: the PDF's own title when it is a real one, else its first heading, else the file name."""
+    if d["kind"] == "pdf" and (PUB / f"{did}.pdf").exists():
+        import pymupdf
+        with pymupdf.open(PUB / f"{did}.pdf") as pdf:
+            t = (pdf.metadata or {}).get("title", "").strip()
+        if len(t.split()) >= 2 and not re.match(r"(?i)microsoft|untitled|\w+\.(docx?|pdf)$", t):
+            return t[:200]
+    first = next((p["markdown"] or p.get("text") or "" for p in d["pages"] if p["markdown"] or p.get("text")), "")
+    name = urllib.parse.unquote(urllib.parse.urlsplit(d["file_url"]).path.rstrip("/").rsplit("/", 1)[-1])
+    return digimv.page_heading(first) or re.sub(r"\.(pdf|docx?|html?|xml)$", "", name, flags=re.I) or d["file_url"]
+
+
+def _cached(did):
+    if not re.fullmatch(r"[0-9a-f]{20}", did or ""):  # also keeps a path out of the file name
+        raise KeyError(f"no public document {did!r}")
+    cache = PUB / f"{did}.pages.json"
+    if not cache.exists():
+        raise KeyError(f"public document {did} is not in the cache here; read its URL again")
+    return json.loads(cache.read_text())
+
+
+def document_meta(did):
+    """What a /bron/doc/ citation shows: the document's title, where it came from and when, and its size."""
+    d = _cached(did)
+    return {"id": did, "title": d.get("title") or _title(did, d), "url": d["url"], "file_url": d["file_url"],
+            "host": urllib.parse.urlsplit(d["file_url"]).hostname.removeprefix("www."), "kind": d["kind"], "page_count": len(d["pages"]),
+            "fetched_at": d["fetched_at"],
+            "file_name": urllib.parse.unquote(urllib.parse.urlsplit(d["file_url"]).path.rsplit("/", 1)[-1]) or f"{did}.pdf"}
+
+
+def document_pdf(did):
+    """Path of a cached public PDF, for the evidence panel's page image and the inline PDF."""
+    if _cached(did)["kind"] != "pdf":
+        raise KeyError(f"public document {did} is not a PDF")
+    return PUB / f"{did}.pdf"
+
+
 def _index(db, did, d, texts):
     with db:
         db.execute("DELETE FROM pub_pages_fts WHERE doc=?", (did,))
@@ -301,6 +345,7 @@ def read(url, pages="1-5", refresh=False, db=None):
                 d["pages"] = digimv.extract_pages(pdf_file, prompt=SCAN_PROMPT)
             else:
                 d["pages"] = _text_pages(kind, body)
+            d["title"] = _title(did, d)
         todo = []
         if d["kind"] == "pdf":
             todo = [n for n in digimv.parse_pages(pages, len(d["pages"])) if d["pages"][n - 1]["markdown"] is None]
@@ -318,10 +363,11 @@ def read(url, pages="1-5", refresh=False, db=None):
             with db:
                 db.executemany("UPDATE pub_pages_fts SET md=? WHERE doc=? AND page=?", [(texts[n - 1], did, n) for n in todo])
     sel = digimv.parse_pages(pages, len(texts))
-    return {"url": url, "file_url": d["file_url"], "kind": d["kind"], "fetched_at": d["fetched_at"],
+    return {"id": did, "title": d.get("title") or _title(did, d), "url": url, "file_url": d["file_url"],
+            "kind": d["kind"], "fetched_at": d["fetched_at"],
             "page_count": len(texts), "unit": "page" if d["kind"] == "pdf" else f"part of ~{PART} characters",
-            "pages": [{"page": n, "source": d["pages"][n - 1]["source"], "cite": _cite(d, n), "markdown": texts[n - 1]}
-                      for n in sel],
+            "pages": [{"page": n, "source": d["pages"][n - 1]["source"], "href": _href(did, d, n), "cite": _cite(d, n),
+                       "markdown": texts[n - 1]} for n in sel],
             "scope": SCOPE["read"]}
 
 
@@ -394,7 +440,7 @@ def search_text(q, url=None, limit=20, db=None):
         return {"query": q, "results": []}
     if url:
         read(url, pages="0", db=db)  # page 0 selects nothing: makes it searchable without converting pages
-    sql = """SELECT d.url, d.file_url, d.kind, p.page, p.md, snippet(pub_pages_fts, 0, '«', '»', ' … ', 24) AS snippet
+    sql = """SELECT d.id, d.url, d.file_url, d.kind, p.page, p.md, snippet(pub_pages_fts, 0, '«', '»', ' … ', 24) AS snippet
              FROM pub_pages_fts p JOIN pub_docs d ON d.id = p.doc WHERE pub_pages_fts MATCH ?"""
     args = [match]
     if url:
@@ -403,7 +449,7 @@ def search_text(q, url=None, limit=20, db=None):
     out = []
     for r in db.execute(sql + " ORDER BY rank LIMIT ?", (*args, limit)):
         r = dict(r)
-        out.append({"url": r["url"], "page": r["page"], "cite": _cite(r, r["page"]),
+        out.append({"url": r["url"], "page": r["page"], "href": _href(r["id"], r, r["page"]), "cite": _cite(r, r["page"]),
                     "heading": digimv.page_heading(r.pop("md")), "snippet": r["snippet"]})
     return {"query": q, "results": out,
             "scope": "Only documents read before are searched; pass url to search one document." if not url else SCOPE["read"]}
