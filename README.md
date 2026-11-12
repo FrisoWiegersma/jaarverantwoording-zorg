@@ -18,6 +18,7 @@ It reads the public [DigiMV archive](https://digimv13.desan.nl/archive/search), 
 - **Compare** two to four organisations on shared chart scales, with the filed values in a table beneath.
 - **Export** an answer's table to Excel, with numeric cells and links to the sources, or copy it into a spreadsheet.
 - **Look past the annual report.** The chat also reads the care-provider register (permits, AGB codes, branches), what municipalities, youth-care regions, provinces and water boards spend per policy area (CBS Iv3), and court rulings. An Iv3 amount links to its cell.
+- **Find the buried PDF.** It searches Woo releases, gazettes and parliamentary papers, local regulations and EU tenders, follows links on any public site (insurers' purchasing policies, IZA regional plans, council portals), reads the PDF and quotes the page. Open data too: data.overheid.nl, CSV/Excel files and every CBS StatLine table.
 - **Work in projects.** Signed-in consultants can upload PDFs and notes, keep context and conversations together, and inspect evidence from public and private sources. Private material is sent to Gemini only after enabling that project’s permission; see [project setup and privacy](docs/projects.md).
 - **Pick up later.** Conversations are saved, an answer keeps running if the connection drops, and the bell tells you when it is done.
 

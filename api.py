@@ -14,7 +14,9 @@ from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
+import datasets
 import digimv
+import documents
 import projects
 import sources
 
@@ -230,6 +232,97 @@ def rulings_search(q: str, limit: int = 10, exact: bool = True):
 def ruling(ecli: str, part: int = 1):
     """A ruling's metadata, summary and text from the official open data, one part at a time."""
     return _source(sources.get_ruling, ecli, part)
+
+
+# ---------------------------------------------------------------- public documents and open data
+# Under /public, not /docs: that is FastAPI's own API documentation.
+
+@app.get("/public/woo")
+def public_woo(q: str, organisatie: str | None = None, documentsoort: str | None = None, since: str | None = None,
+               until: str | None = None, limit: int = 20, start: int = 0):
+    """Woo documents on open.overheid.nl, with the organisation and document-type facets to narrow on."""
+    return _source(documents.search_woo, q, organisatie, documentsoort, since, until, limit, start)
+
+
+@app.get("/public/publications")
+def public_publications(q: str, creator: str | None = None, gazette: str | None = None, since: str | None = None,
+                        limit: int = 20, start: int = 1):
+    """Official publications (gazettes, parliamentary papers) by full text, each with its PDF."""
+    return _source(documents.search_publications, q, creator, gazette, since, limit, start)
+
+
+@app.get("/public/regulations")
+def public_regulations(q: str, creator: str | None = None, limit: int = 20, start: int = 1):
+    """Local and regional regulations (CVDR), one record per version, with in_force."""
+    return _source(documents.search_regulations, q, creator, limit, start)
+
+
+@app.get("/public/tenders")
+def public_tenders(q: str | None = None, buyer: str | None = None, cpv: str = "85000000", since: str | None = None,
+                   limit: int = 20, page: int = 1):
+    """EU tender and award notices (TED) of Dutch buyers, newest first."""
+    return _source(documents.search_tenders, q, buyer, cpv, "NLD", since, limit, page)
+
+
+@app.get("/public/read")
+def public_read(url: str, pages: str = "1-5", refresh: bool = False):
+    """Any public document by URL (PDF, Word, HTML, XML), page by page, each page with its citation."""
+    return _source(documents.read, url, pages, refresh)
+
+
+@app.get("/public/links")
+def public_links(url: str, q: str | None = None, limit: int = 100):
+    """The links on a public web page, files first."""
+    return _source(documents.links, url, q, limit)
+
+
+@app.get("/public/search")
+def public_search(q: str, url: str | None = None, limit: int = 20):
+    """Word search in public documents read before, or in one document."""
+    return _source(documents.search_text, q, url, limit)
+
+
+@app.get("/datasets/search")
+def datasets_search(q: str, limit: int = 20, start: int = 0):
+    """Datasets in the national catalogue data.overheid.nl."""
+    return _source(datasets.search_datasets, q, limit, start)
+
+
+@app.get("/datasets/table")
+def datasets_table(url: str, q: str | None = None, limit: int = 50, offset: int = 0, sheet: str | None = None,
+                   header_row: int | None = None, refresh: bool = False):
+    """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim."""
+    return _source(datasets.read_table, url, q, limit, offset, sheet, header_row, refresh)
+
+
+@app.get("/datasets/{dataset_id}")
+def dataset(dataset_id: str):
+    """One catalogue dataset with every resource."""
+    return _source(datasets.get_dataset, dataset_id)
+
+
+@app.get("/cbs/search")
+def cbs_search(q: str, limit: int = 20):
+    """CBS StatLine tables (opendata and dataderden) by words in id, title or summary."""
+    return _source(datasets.search_cbs, q, limit)
+
+
+@app.get("/cbs/{table_id}/values")
+def cbs_values(table_id: str, filters: str | None = None, topics: str | None = None, limit: int = 200):
+    """Values from a CBS table. filters is JSON, e.g. {"RegioS":["GM0546"],"Perioden":["2024JJ00"]}; topics=a,b."""
+    try:
+        flt = json.loads(filters) if filters else None
+    except ValueError:
+        raise HTTPException(400, 'filters must be JSON, e.g. {"RegioS":["GM0546"]}')
+    if flt is not None and not isinstance(flt, dict):
+        raise HTTPException(400, 'filters must be a JSON object, e.g. {"RegioS":["GM0546"]}')
+    return _source(datasets.get_cbs, table_id, flt, topics.split(",") if topics else None, limit)
+
+
+@app.get("/cbs/{table_id}")
+def cbs_table(table_id: str, dimension: str | None = None, q: str | None = None):
+    """What a CBS table holds; with dimension, that dimension's codes matching q."""
+    return _source(datasets.describe_cbs_table, table_id, dimension, q)
 
 
 # ---------------------------------------------------------------- saved conversations

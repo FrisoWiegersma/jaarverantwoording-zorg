@@ -123,6 +123,46 @@ function stepsOf(m: UIMessage, live: boolean): AgentStep[] {
         label = r ? `Uitspraak ${r.instantie}, ${r.uitspraakdatum} gelezen (deel ${r.part} van ${r.parts})` : `Uitspraak ${input.ecli} lezen`;
         break;
       }
+      case "search_woo":
+      case "search_publications":
+      case "search_regulations":
+      case "search_tenders":
+      case "search_datasets":
+      case "search_cbs": {
+        const where = ({ search_woo: "Woo-documenten", search_publications: "officiële bekendmakingen", search_regulations: "lokale regelgeving",
+          search_tenders: "Europese aanbestedingen", search_datasets: "data.overheid.nl", search_cbs: "CBS-tabellen" } as Record<string, string>)[getToolName(p)];
+        const r = out as Out | null;
+        label = r ? `${r.total} resultaten in ${where}${input.query ? ` voor ${quoted(input.query)}` : ""}` : `Zoeken in ${where}${input.query ? `: ${quoted(input.query)}` : ""}`;
+        break;
+      }
+      case "read_document": {
+        const r = out as Out | null;
+        label = r ? `Document gelezen, ${r.unit === "page" ? "pagina" : "deel"} ${input.pages ?? "1-5"} van ${r.page_count}` : `Document openen: ${input.url}`;
+        detail = ["De eerste keer wordt een document opgehaald en omgezet. Dat kan even duren."];
+        break;
+      }
+      case "list_links": {
+        const r = out as Out | null;
+        label = r ? `${r.matched} links op ${quoted(r.title || input.url)}` : `Links bekijken op ${input.url}`;
+        break;
+      }
+      case "search_public_documents":
+        label = out ? `In documenten gezocht naar ${quoted(input.query)}` : `In documenten zoeken naar ${quoted(input.query)}`;
+        break;
+      case "get_dataset":
+        label = out ? `Dataset ${quoted((out as Out).title)}` : "Dataset bekijken";
+        break;
+      case "read_table": {
+        const r = out as Out | null;
+        label = r ? `${r.rows_matched} van ${r.rows_total} rijen${input.query ? ` met ${quoted(input.query)}` : ""}` : "Databestand lezen";
+        break;
+      }
+      case "describe_cbs_table":
+      case "get_cbs": {
+        const r = out as Out | null;
+        label = r ? `CBS ${input.table_id}: ${r.title}` : `CBS-tabel ${input.table_id} ${getToolName(p) === "get_cbs" ? "opvragen" : "bekijken"}`;
+        break;
+      }
       case "list_project_documents":
         label = out ? `${list.length} projectbronnen beschikbaar` : "Projectbronnen bekijken";
         break;

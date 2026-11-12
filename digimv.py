@@ -297,14 +297,14 @@ def _is_scan(page):
     return visible < 50 or (visible < 200 and cover >= 0.5)
 
 
-def _gemini(pdf_bytes, before_request=None):
+def _gemini(pdf_bytes, before_request=None, prompt=None):
     """Transcribe a one-page PDF scan with Gemini. Returns (markdown, exact model version)."""
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("GEMINI_API_KEY is not set (needed for scanned pages)")
     body = {"contents": [{"parts": [
                 {"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(pdf_bytes).decode()}},
-                {"text": SCAN_PROMPT}]}],
+                {"text": prompt or SCAN_PROMPT}]}],
             "generationConfig": {"temperature": 0}}
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     for attempt in range(4):
@@ -329,7 +329,7 @@ def _gemini(pdf_bytes, before_request=None):
     return md.strip(), res.get("modelVersion", GEMINI_MODEL)
 
 
-def extract_pages(path):
+def extract_pages(path, prompt=None):
     """PDF -> [{"markdown", "source"[, "text"]}] per page, on first open.
 
     Scanned pages go to Gemini one page per request, all in parallel: a page takes ~3 s with flash-lite, so a
@@ -351,7 +351,7 @@ def extract_pages(path):
         sub.insert_pdf(doc, from_page=i, to_page=i)
         blobs.append(sub.tobytes())
     with ThreadPoolExecutor(16) as ex:  # ponytail: fixed fan-out; paid-tier flash-lite allows thousands RPM
-        for i, (md, model) in zip(scans, ex.map(_gemini, blobs)):
+        for i, (md, model) in zip(scans, ex.map(lambda b: _gemini(b, prompt=prompt), blobs)):
             out[i] = {"markdown": md, "source": model}
 
     missing = [i + 1 for i, pg in enumerate(out) if pg is None]

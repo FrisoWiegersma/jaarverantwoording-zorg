@@ -1,10 +1,13 @@
 """MCP server over the DigiMV index and knowledge base, the care-provider register (LRZa), CBS Iv3 government
-accounts and court rulings. Run: uv run --env-file .env mcp_server.py (stdio)."""
+accounts, court rulings, public documents (Woo, gazettes, CVDR, TED, any public URL) and open data (data.overheid.nl,
+CBS StatLine). Run: uv run --env-file .env mcp_server.py (stdio)."""
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
+import datasets
 import digimv
+import documents
 import sources
 
 
@@ -29,6 +32,13 @@ mcp = MCPServer(
         "get_government_finances, x € 1.000); and published court rulings (search_rulings, get_ruling). A DigiMV "
         "org_id of 8 digits is the KvK number the register uses. Every result says its source and scope: cite it, "
         "and report what a source does not hold instead of filling it in.\n"
+        "Public documents that are hard to find: search_woo (Woo releases), search_publications (gazettes, "
+        "parliamentary papers), search_regulations (local rules in force), search_tenders (EU tenders); then "
+        "read_document(url) reads any public PDF/Word/HTML page by page and search_public_documents finds the page. "
+        "For documents only linked from a site (insurers' purchasing policies, IZA regional plans, council "
+        "documents) use list_links on the page and follow it. Open data: search_datasets/get_dataset "
+        "(data.overheid.nl), read_table for a CSV/XLSX/JSON file, search_cbs/describe_cbs_table/get_cbs for CBS "
+        "StatLine. Quote what a document says and cite its page (`cite`); a search hit is not yet evidence.\n"
         "Dutch healthcare annual reports (DigiMV jaarverantwoording, 2019-2025). Workflow: search_organizations "
         "to find the org (org_id) and its documents. For figures (omzet, resultaat, eigen vermogen, activa, fte, "
         "WNT, ...) call get_figures(org_id, year, query) first: the values the organisation filed itself, exact, "
@@ -187,6 +197,125 @@ def get_ruling(ecli: str, part: int = 1) -> dict:
     number, area of law, summary (inhoudsindicatie) and the text, one part of ~8,000 characters at a time (`parts`
     says how many). Natural persons are pseudonymised. Cite the deeplink in `source`."""
     return _call(sources.get_ruling, ecli, part)
+
+
+# ---------------------------------------------------------------- public documents
+
+@mcp.tool()
+def search_woo(query: str, organisatie: str | None = None, documentsoort: str | None = None, since: str | None = None,
+               until: str | None = None, limit: int = 20, start: int = 0) -> dict:
+    """Documents government bodies released under the Woo (open.overheid.nl): decision notes, reports, letters,
+    advice, Woo decisions with their released files. The search matches word forms, not phrases. The result lists
+    `organisations` and `document_types` with counts: pass one back as organisatie / documentsoort to narrow
+    (e.g. 'ministerie van Volksgezondheid, Welzijn en Sport', 'Nederlandse Zorgautoriteit'). since/until: YYYY-MM-DD.
+    Read a hit's url with read_document."""
+    return _call(documents.search_woo, query, organisatie, documentsoort, since, until, limit, start)
+
+
+@mcp.tool()
+def search_publications(query: str, creator: str | None = None, gazette: str | None = None, since: str | None = None,
+                        limit: int = 20, start: int = 1) -> dict:
+    """Official publications by full text: Gemeenteblad (gmb), Provinciaal blad (prb), Waterschapsblad (wsb), Blad
+    gemeenschappelijke regeling (bgr), Staatscourant (stcrt, incl. NZa and ministry rules), Staatsblad (stb),
+    Kamerstukken (kst, incl. letters to parliament and their attachments), Kamervragen (ah) and Handelingen (h).
+    "quoted words" match as a phrase. creator: the publishing body ('Leiden'). Results come by relevance; each has
+    its PDF url for read_document."""
+    return _call(documents.search_publications, query, creator, gazette, since, limit, start)
+
+
+@mcp.tool()
+def search_regulations(query: str, creator: str | None = None, limit: int = 20, start: int = 1) -> dict:
+    """Regulations of municipalities, provinces, water boards and joint arrangements (CVDR): verordeningen,
+    beleidsregels, subsidy rules. One record per version with in_force_from/until and in_force (today); read the
+    in-force version's url with read_document for the text."""
+    return _call(documents.search_regulations, query, creator, limit, start)
+
+
+@mcp.tool()
+def search_tenders(query: str | None = None, buyer: str | None = None, cpv: str = "85000000", since: str | None = None,
+                   limit: int = 20, page: int = 1) -> dict:
+    """EU tender and award notices (TED) of Dutch buyers, newest first. cpv 85000000 (default) is health and social
+    work with all its subcodes; query matches words in the notice, buyer the buyer's name. Only contracts above the
+    EU threshold are here. Each notice's PDF url can be read with read_document."""
+    return _call(documents.search_tenders, query, buyer, cpv, "NLD", since, limit, page)
+
+
+@mcp.tool()
+def read_document(url: str, pages: str = "1-5") -> dict:
+    """Read any public document by URL: PDF page by page (text layer, or OCR for scans), Word, HTML or XML in
+    parts of ~6,000 characters. pages: "1-5", "12", "all". The result has page_count, so ask for more as needed.
+    Cite each page's `cite` (the file URL with #page=N). A web page's links are not in its text: use list_links.
+    The first read of a scanned PDF OCRs it (seconds per page); later reads are cached."""
+    return _call(documents.read, url, pages)
+
+
+@mcp.tool()
+def list_links(url: str, query: str | None = None, limit: int = 100) -> dict:
+    """The links on a public web page, files (pdf, docx, xlsx, csv) first: how to get from a known page to the
+    document on it. query keeps links whose text or URL has every word. Start pages that work: IZA regional plans
+    https://www.zorgakkoorden.nl/programmas/integraal-zorgakkoord/iza-onderdelen/regionale-samenwerking/regiobeelden-en-plannen/
+    ; purchasing policies: https://www.cz.nl/zorgaanbieder/zorginkoopbeleid, https://www.menzis.nl/zorgaanbieders/zorginkoop,
+    https://www.zilverenkruis.nl/zorgaanbieders, https://www.dsw.nl/zorgverleners,
+    https://www.salland.nl/corporate/zorgaanbieders/zorginkoopbeleid (follow a care type to its PDFs);
+    council documents: https://{municipality}.bestuurlijkeinformatie.nl (iBabs). A site that asks automated
+    clients to stay away (robots.txt) is not read."""
+    return _call(documents.links, url, query, limit)
+
+
+@mcp.tool()
+def search_public_documents(query: str, url: str | None = None, limit: int = 20) -> dict:
+    """Word-prefix search in public documents read before with read_document, with page snippets; with url, in
+    that one document (read first if needed), e.g. to find the page with 'tarief' in a 90-page policy."""
+    return _call(documents.search_text, query, url, limit)
+
+
+# ---------------------------------------------------------------- open data
+
+@mcp.tool()
+def search_datasets(query: str, limit: int = 20, start: int = 0) -> dict:
+    """Datasets in the national catalogue data.overheid.nl (government bodies, CBS, DNB, ...) by words. Each hit has
+    its first resources; get_dataset lists them all. A resource URL is often a web page, not the file itself."""
+    return _call(datasets.search_datasets, query, limit, start)
+
+
+@mcp.tool()
+def get_dataset(dataset_id: str) -> dict:
+    """One data.overheid.nl dataset with its full description and every resource (name, format, url)."""
+    return _call(datasets.get_dataset, dataset_id)
+
+
+@mcp.tool()
+def read_table(url: str, query: str | None = None, limit: int = 50, offset: int = 0, sheet: str | None = None,
+               header_row: int | None = None) -> dict:
+    """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim, each with its row number. query keeps rows
+    containing every word (an AGB code, a name, a municipality). The header is detected (title rows above it are
+    in title_rows); header_row overrides it. sheet picks an Excel sheet (all are in `sheets`). rows_total and
+    rows_matched say how much there is: page with offset before saying something is not in the file."""
+    return _call(datasets.read_table, url, query, limit, offset, sheet, header_row)
+
+
+@mcp.tool()
+def search_cbs(query: str, limit: int = 20) -> dict:
+    """CBS StatLine tables, including the tables CBS publishes for others (dataderden: Wmo, youth care, Iv3), by
+    words in id, title or summary; newest first. Then describe_cbs_table and get_cbs."""
+    return _call(datasets.search_cbs, query, limit)
+
+
+@mcp.tool()
+def describe_cbs_table(table_id: str, dimension: str | None = None, query: str | None = None) -> dict:
+    """What a CBS table holds: topics (with unit) and dimensions with their first codes. With dimension (e.g.
+    'RegioS', 'Perioden'), that dimension's codes matching query: how to find a municipality's or period's code."""
+    return _call(datasets.describe_cbs_table, table_id, dimension, query)
+
+
+@mcp.tool()
+def get_cbs(table_id: str, filters: dict[str, list[str]] | None = None, topics: list[str] | None = None,
+            limit: int = 200) -> dict:
+    """Values from a CBS table. filters: {dimension: [codes or exact titles]}, e.g. {"RegioS": ["GM0546"],
+    "Perioden": ["2024JJ00"]}; a dimension left out means all its codes. topics: topic keys (all when empty).
+    Refused at 10,000 rows or more: filter more. A value CBS left out comes as {value: null, symbol} (see
+    `symbols`): never read it as 0. Cite `source`, the exact query."""
+    return _call(datasets.get_cbs, table_id, filters, topics, limit)
 
 
 if __name__ == "__main__":

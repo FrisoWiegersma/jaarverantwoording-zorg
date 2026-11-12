@@ -1,0 +1,293 @@
+"""Offline check of public-document finding and reading (documents.py) and open data (datasets.py).
+Run: python test_documents.py
+
+Fixtures have the shapes the live services returned on 2026-11-12; `python documents.py check` and
+`python datasets.py check` test the live services.
+"""
+
+import io
+import os
+import socket
+import tempfile
+import time
+import urllib.error
+import zipfile
+
+os.environ["DATA_DIR"] = tempfile.mkdtemp()  # before digimv is imported: caches go to a scratch directory
+
+import datasets  # noqa: E402
+import digimv  # noqa: E402
+import documents as d  # noqa: E402
+import sources  # noqa: E402
+
+
+def raises(exc, fn, *a, **kw):
+    try:
+        fn(*a, **kw)
+    except exc as e:
+        return str(e)
+    raise AssertionError(f"{fn.__name__} did not raise {exc.__name__}")
+
+
+def zipped(files):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name, text in files.items():
+            z.writestr(name, text)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------- private addresses are never fetched
+
+real_getaddrinfo = socket.getaddrinfo
+hosts = {"public.example": "93.184.216.34", "lan.example": "192.168.1.10", "api": "172.18.0.2",
+         "meta.example": "169.254.169.254", "tail.example": "100.114.142.121", "v6.example": "::1"}
+socket.getaddrinfo = lambda host, port, *a, **k: [(None, None, None, "", (hosts.get(host, "127.0.0.1"), port))]
+d._check("https://public.example/x.pdf")
+for h in ("lan.example", "api", "meta.example", "tail.example", "v6.example", "localhost"):
+    assert "not a public address" in raises(ValueError, d._check, f"http://{h}/"), h
+for bad in ("file:///etc/passwd", "ftp://public.example/x", "https://user:pw@public.example/", "https:///x"):
+    raises(ValueError, d._check, bad)
+socket.getaddrinfo = real_getaddrinfo
+
+
+# ---------------------------------------------------------------- robots.txt
+
+class Answer:
+    def __init__(self, body=b"", code=200):
+        self.body, self.code = body, code
+
+    def __enter__(self):
+        if self.code != 200:
+            raise urllib.error.HTTPError("u", self.code, "x", {}, None)
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, n=-1):
+        return self.body
+
+
+answers = {}
+d._plain = type("Fake", (), {"open": lambda self, req, timeout=None: answers[req.full_url]})()
+answers["https://bom.example/robots.txt"] = Answer("﻿User-agent: *\nCrawl-delay: 1\nDisallow: /private\n".encode())
+answers["https://gone.example/robots.txt"] = Answer(code=404)
+answers["https://down.example/robots.txt"] = Answer(code=503)
+d._allowed("https://bom.example/open/page")
+assert "robots.txt" in raises(ValueError, d._allowed, "https://bom.example/private/x")  # the BOM must not hide the rules
+t = time.monotonic()
+d._allowed("https://bom.example/a")
+assert time.monotonic() - t >= 0.9, "Crawl-delay is honoured between requests to one site"
+d._allowed("https://gone.example/anything")  # RFC 9309: no robots.txt (4xx) means no rules
+assert "503" in raises(RuntimeError, d._allowed, "https://down.example/x")  # 5xx: stay away for now
+assert "https://down.example" not in d._robots, "a failed robots.txt is not cached, so the next call tries again"
+d._allowed("https://open.overheid.nl/documenten/oep-1")  # KOOP's API file host: exempt, never fetched
+
+
+# ---------------------------------------------------------------- recognising and reading files
+
+assert d.kind_of(b"%PDF-1.7 ...") == "pdf"
+assert d.kind_of(zipped({"word/document.xml": "<w:document/>"})) == "docx"
+assert "read_table" in raises(ValueError, d.kind_of, zipped({"xl/workbook.xml": "<workbook/>"}))
+assert d.kind_of(b"  <!DOCTYPE html><html>", "application/octet-stream") == "html"
+assert d.kind_of(b"<?xml version='1.0'?><regeling/>") == "xml"
+assert d.kind_of(b"plain", "text/plain") == "text"
+raises(ValueError, d.kind_of, b"\x00\x01", "image/png")
+assert d._gazette_pdf("https://zoek.officielebekendmakingen.nl/gmb-2026-312503.html") == \
+    "https://zoek.officielebekendmakingen.nl/gmb-2026-312503.pdf"
+assert d._gazette_pdf("https://example.org/gmb-2026-1.html") is None
+
+page = d.markup_text("<html><head><style>p{}</style></head><body><nav>menu</nav><h2>Tarieven</h2>"
+                     "<p>Het tarief is <b>€&nbsp;72,40</b> per uur.</p><table><tr><td>A</td><td>1</td></tr></table></body></html>")
+assert page == "## Tarieven\nHet tarief is € 72,40 per uur.\nA\t1", page
+cvdr = ("<?xml version='1.0'?><cvdr><meta><title>Verordening jeugdhulp</title></meta><body><regeling-tekst>"
+        "<artikel><kop><label>Artikel</label><nr>1</nr><titel>Begrippen</titel></kop><al>In deze verordening:</al>"
+        "<lijst><li nr='a.'><al>jeugdhulp: hulp</al></li><li nr=\"b.\"><al>Wmo</al></li></lijst></artikel></regeling-tekst></body></cvdr>")
+text = d.markup_text(cvdr, xml=True)
+assert text == "## Artikel 1 Begrippen\nIn deze verordening:\na. jeugdhulp: hulp\nb. Wmo", text  # no metadata, words apart
+assert d.parts("") == [] and d.parts("a\nb\nc\n", size=3) == ["a", "b", "c"]
+assert d.parts("x" * 5 + "\n" + "y" * 5, size=100) == ["xxxxx\nyyyyy"]
+docx = zipped({"word/document.xml": "<w:document><w:body><w:p><w:r><w:t>Zorginkoopbeleid</w:t></w:r><w:tab/>"
+                                    "<w:r><w:t>2027</w:t></w:r></w:p><w:p><w:r><w:t>Tweede alinea</w:t></w:r></w:p></w:body></w:document>"})
+assert d._text_pages("docx", docx) == [{"markdown": "Zorginkoopbeleid\t2027\nTweede alinea", "source": "docx"}]
+
+
+# ---------------------------------------------------------------- read + search: cached, indexed, citable
+
+calls = []
+
+
+def fake_fetch(url, timeout=120):
+    calls.append(url)
+    return (b"<html><body><h1>Inkoopbeleid wijkverpleging</h1><p>Het tarief per uur bedraagt 72,40.</p></body></html>",
+            "text/html", url)
+
+
+d.fetch = fake_fetch
+db = d.connect(os.path.join(os.environ["DATA_DIR"], "t.db"))
+url = "https://insurer.example/beleid"
+r = d.read(url, pages="all", db=db)
+assert r["kind"] == "html" and r["page_count"] == 1 and r["pages"][0]["cite"] == url, r
+assert r["pages"][0]["markdown"] == "## Inkoopbeleid wijkverpleging\nHet tarief per uur bedraagt 72,40."
+d.read(url, db=db)
+assert calls == [url], "a second read comes from the cache"
+s = d.search_text("tarief", url=url, db=db)
+assert [(h["page"], h["cite"]) for h in s["results"]] == [(1, url)] and "«tarief»" in s["results"][0]["snippet"], s
+assert d._cite({"kind": "pdf", "file_url": "https://x.example/a.pdf"}, 4) == "https://x.example/a.pdf#page=4"
+
+
+# ---------------------------------------------------------------- links on a page
+
+title, found = d.page_links(
+    b"<html><head><title> Zorginkoop\n Menzis </title></head><body>"
+    b"<a href='/downloads/Beleid%202027.PDF#p2'>Zorginkoopbeleid <b>2027</b></a>"
+    b"<a href=\"sub/page\">Wijkverpleging</a><a href='mailto:x@y.nl'>mail</a><a href='javascript:void(0)'>js</a>"
+    b"<a href='/downloads/Beleid%202027.PDF'>again</a><a href='https://other.example/data.xlsx' title='Prognose'></a>"
+    b"</body></html>", "https://www.insurer.example/zorgaanbieders/")
+assert title == "Zorginkoop Menzis", title
+assert found == [
+    {"text": "Zorginkoopbeleid 2027", "url": "https://www.insurer.example/downloads/Beleid%202027.PDF", "type": "pdf"},
+    {"text": "Wijkverpleging", "url": "https://www.insurer.example/zorgaanbieders/sub/page", "type": "page"},
+    {"text": "Prognose", "url": "https://other.example/data.xlsx", "type": "xlsx"},
+], found  # absolute, each once, fragments and mailto/javascript dropped, extension case ignored
+d.fetch = lambda url, timeout=120: (b"<html><a href='/a'>Visie</a><a href='/b.pdf'>Beleid GGZ 2027</a>"
+                                    b"<a href='/c.pdf'>Beleid wijk 2026</a></html>", "text/html", url)
+r = d.links("https://insurer.example/", query="beleid")
+assert [x["url"] for x in r["links"]] == ["https://insurer.example/b.pdf", "https://insurer.example/c.pdf"], r
+assert d.links("https://insurer.example/")["links"][0]["type"] == "pdf", "files come first"
+
+
+# ---------------------------------------------------------------- Woo search
+
+seen = []
+woo = {"totaal": 1, "resultaten": [{
+    "document": {"id": "oep-0a1b_2", "titel": "Beslisnota jeugdzorg", "publisher": "ministerie van VWS",
+                 "openbaarmakingsdatum": "2026-03-01", "weblocatie": None},
+    "highlightedText": "de <b>jeugdzorg</b> &amp; Wmo", "bestandsType": "pdf", "aantalPaginas": 4}],
+    "filters": {"organisatie": [{"naam": "b", "aantal": 1}, {"naam": "a", "aantal": 9}], "documentsoort": []}}
+d._get_json = lambda url, body=None: seen.append(url) or woo
+r = d.search_woo("jeugdzorg", organisatie="ministerie van Volksgezondheid, Welzijn en Sport", since="2026-01-31", limit=7)
+assert "organisatie=ministerie+van+Volksgezondheid%252C+Welzijn" in seen[0], seen  # a comma in a name: encoded twice
+assert "aantalResultaten=10" in seen[0] and "publicatiedatumVan=31-01-2026" in seen[0], seen
+h = r["results"][0]
+assert h["url"] == "https://open.overheid.nl/documenten/oep-0a1b", h  # no pid: the id without its version
+assert h["snippet"] == "de «jeugdzorg» & Wmo" and r["organisations"] == ["a (9)", "b (1)"] and not r["truncated"], r
+raises(ValueError, d.search_woo, "x", since="1-1-2026")
+
+
+# ---------------------------------------------------------------- gazettes and CVDR (SRU)
+
+SRU = """<?xml version="1.0"?><sru:searchRetrieveResponse xmlns:sru="http://docs.oasis-open.org/ns/search-ws/sruResponse"
+ xmlns:dcterms="http://purl.org/dc/terms/" xmlns:gzd="http://standaarden.overheid.nl/sru"><sru:numberOfRecords>3</sru:numberOfRecords>
+<sru:records>{}</sru:records></sru:searchRetrieveResponse>"""
+rec = lambda body: f"<sru:record><sru:recordData><gzd:gzd>{body}</gzd:gzd></sru:recordData></sru:record>"
+pub = rec("<dcterms:identifier>gmb-2026-1</dcterms:identifier><dcterms:title>Beleidsregels jeugdhulp</dcterms:title>"
+          "<dcterms:creator>Leiden</dcterms:creator><dcterms:date>2026-02-01</dcterms:date>"
+          "<publicatienaam>Gemeenteblad</publicatienaam><preferredUrl>https://zoek.officielebekendmakingen.nl/gmb-2026-1.html</preferredUrl>"
+          "<itemUrl manifestation='xml'>https://repository.overheid.nl/x.xml</itemUrl>"
+          "<itemUrl manifestation='pdf'>https://zoek.officielebekendmakingen.nl/gmb-2026-1.pdf</itemUrl>")
+urls = []
+digimv._http = lambda url, **k: urls.append(url) or SRU.format(pub).encode()
+r = d.search_publications('"jeugdhulp"', creator="Leiden", gazette="gmb", since="2026-01-01", limit=1)
+assert r["results"][0]["url"].endswith("gmb-2026-1.pdf") and r["results"][0]["gazette"] == "Gemeenteblad", r
+assert r["total"] == 3 and r["truncated"], r
+assert "w.publicatienaam%3D%22Gemeenteblad%22" in urls[0] and "cql.textAndIndexes%3D%22jeugdhulp%22" in urls[0], urls
+assert d._text_cql('tarief "zorg in natura" Leiden') == ['cql.textAndIndexes="zorg in natura"', 'cql.textAndIndexes all "tarief Leiden"']
+assert d._text_cql('jeugdhulp "open') == ['cql.textAndIndexes all "jeugdhulp"'] and d._text_cql('a\\b') == ['cql.textAndIndexes all "a b"']
+raises(ValueError, d._text_cql, '"" ')
+raises(ValueError, d.search_publications, "x", gazette="nope")
+cv = lambda i, frm, until: rec(f"<dcterms:identifier>CVDR7001_{i}</dcterms:identifier><dcterms:title>Verordening</dcterms:title>"
+                               f"<inwerkingtredingDatum>{frm}</inwerkingtredingDatum>"
+                               + (f"<uitwerkingtredingDatum>{until}</uitwerkingtredingDatum>" if until else "")
+                               + f"<publicatieurl_xml>https://repository.overheid.nl/cvdr/{i}.xml</publicatieurl_xml>")
+digimv._http = lambda url, **k: SRU.format(cv(1, "2020-01-01", "2026-01-01") + cv(2, "2026-01-01", None) + cv(3, "2027-01-01", None)).encode()
+r = d.search_regulations("jeugdhulp", today="2026-11-12")
+assert [h["in_force"] for h in r["results"]] == [False, True, False], r  # expired, current, not yet in force
+assert r["results"][1]["web_page"] == "https://lokaleregelgeving.overheid.nl/CVDR7001/2"
+digimv._http = lambda url, **k: SRU.format("").replace("</sru:records>", "</sru:records><diagnostics><message>bad query</message></diagnostics>").encode()
+assert raises(ValueError, d.search_regulations, "x") == "bad query"
+
+
+# ---------------------------------------------------------------- data files
+
+xlsx = zipped({
+    "xl/workbook.xml": '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.'
+                       'openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Subsidies" r:id="rId1"/>'
+                       '<sheet name="Toelichting" r:id="rId2"/></sheets></workbook>',
+    "xl/_rels/workbook.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                                  '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="/xl/worksheets/sheet2.xml"/></Relationships>',
+    "xl/sharedStrings.xml": '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Subsidieregister 2025</t></si>'
+                            '<si><t>Ontvanger</t></si><si><t>Bedrag</t></si><si><r><t>St. </t></r><r><t>Overweeghuis</t></r></si></sst>',
+    "xl/worksheets/sheet1.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+                                '<row r="1"><c r="A1" t="s"><v>0</v></c></row>'
+                                '<row r="3"><c r="A3" t="s"><v>1</v></c><c r="B3" t="s"><v>2</v></c><c r="C3" t="s"><v>1</v></c></row>'
+                                '<row r="4"><c r="A4" t="s"><v>3</v></c><c r="B4"><v>95000</v></c><c r="D4"><v>0.1</v></c></row>'
+                                '<row r="5"><c r="B5" t="inlineStr"><is><t>n.v.t.</t></is></c><c r="C5" t="b"><v>1</v></c></row></sheetData></worksheet>',
+    "xl/worksheets/sheet2.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+                                '<row r="1"><c r="A1" t="str"><v>uitleg</v></c></row></sheetData></worksheet>'})
+name, names, rows = datasets.xlsx_rows(xlsx)
+assert (name, names) == ("Subsidies", ["Subsidies", "Toelichting"])
+assert rows == [["Subsidieregister 2025"], [], ["Ontvanger", "Bedrag", "Ontvanger"], ["St. Overweeghuis", 95000, None, 0.1],
+                [None, "n.v.t.", True]], rows  # a gap keeps its column, rich text is joined, numbers are numbers
+assert datasets.xlsx_rows(xlsx, "Toelichting")[2] == [["uitleg"]]  # a target with an absolute path
+raises(KeyError, datasets.xlsx_rows, xlsx, "Nope")
+assert datasets._number("16646") == 16646 and datasets._number("1E-3") == 0.001 and datasets._number("2.0") == 2.0
+assert datasets._header_row(rows) == 3
+assert datasets._columns(["Ontvanger", "", "Ontvanger", "row", None]) == ["Ontvanger", "column 2", "Ontvanger'", "row'", "column 5"]
+assert datasets.csv_rows("naam;bedrag\nZorg één;1.234\n".encode("cp1252")) == [["naam", "bedrag"], ["Zorg één", "1.234"]]
+assert datasets.csv_rows(b"\xef\xbb\xbfa,b\n1,2\n") == [["a", "b"], ["1", "2"]]  # BOM gone
+assert datasets.csv_rows(b"a,b\n\x81,2\n")[1] == ["\x81", "2"]  # bytes no code page knows still read
+assert datasets.json_rows(b'{"value": [{"a": 1}, {"b": 2}]}') == [["a", "b"], [1, None], [None, 2]]
+raises(ValueError, datasets.json_rows, b'{"a": 1}')
+
+datasets._file = lambda url, refresh=False: (xlsx, "application/octet-stream", url, "2026-11-12T10:00:00+00:00")
+t = datasets.read_table("https://gemeente.example/subsidies.xlsx", query="overweeghuis")
+assert (t["header_row"], t["title_rows"], t["rows_total"], t["rows_matched"]) == (3, [["Subsidieregister 2025"]], 2, 1), t
+assert t["rows"] == [{"row": 4, "Ontvanger": "St. Overweeghuis", "Bedrag": 95000, "Ontvanger'": None, "column 4": 0.1}], t
+assert [x["row"] for x in datasets.read_table("https://gemeente.example/subsidies.xlsx")["rows"]] == [4, 5]  # as Excel shows
+assert datasets.read_table("https://gemeente.example/subsidies.xlsx", header_row=1)["columns"][:2] == ["Subsidieregister 2025", "column 2"]
+datasets._file = lambda url, refresh=False: (b'[{"a": 1}, {"a": 2}]', "application/json", url, "")
+assert [x["row"] for x in datasets.read_table("https://x.example/a.json")["rows"]] == [1, 2]  # JSON: the record number
+datasets._file = lambda url, refresh=False: (b"<!doctype html><html>", "text/html", url, "")
+assert "read_document" in raises(ValueError, datasets.read_table, "https://x.example/")
+datasets._file = lambda url, refresh=False: (b"\xd0\xcf\x11\xe0rest", "application/vnd.ms-excel", url, "")
+assert ".xls" in raises(ValueError, datasets.read_table, "https://x.example/a.xls")
+
+
+# ---------------------------------------------------------------- CBS: padded keys, the row cap, symbols
+
+table = {"id": "40100NED", "host": "https://dataderden.cbs.nl", "modified": "2026-10-01"}
+dims = {"title": "Wmo-cliënten", "description": "", "period": "2024-2025", "modified": "2026-10-01", "topics": [
+            {"key": "Clienten_1", "title": "Cliënten", "unit": "aantal", "group": "", "decimals": 0},
+            {"key": "Aandeel_2", "title": "Aandeel", "unit": "%", "group": "", "decimals": 1}],
+        "dims": [{"key": "RegioS", "title": "Regio's", "type": "GeoDimension",
+                  "codes": [{"key": "GM0546    ", "title": "Leiden"}, {"key": "GM0518    ", "title": "'s-Gravenhage"}]
+                           + [{"key": f"GM9{i:03}    ", "title": f"G{i}"} for i in range(400)]},
+                 {"key": "Perioden", "title": "Perioden", "type": "TimeDimension",
+                  "codes": [{"key": "2024JJ00", "title": "2024"}, {"key": "2025JJ00", "title": "2025*"}]},
+                 {"key": "Voorziening", "title": "Voorziening", "type": "Dimension",
+                  "codes": [{"key": f"V{i:02}", "title": f"v{i}"} for i in range(13)]}]}
+datasets.cbs_catalog = lambda refresh=False, db=None: None
+datasets._cbs_table = lambda db, table_id: table
+datasets._cbs_dims = lambda db, t: dims
+asked = []
+sources._all = lambda url: asked.append(url) or [
+    {"RegioS": "GM0546    ", "Perioden": "2024JJ00", "Voorziening": "V00", "Clienten_1": "8575", "Aandeel_2": "  6.4"},
+    {"RegioS": "GM0546    ", "Perioden": "2025JJ00", "Voorziening": "V00", "Clienten_1": "x", "Aandeel_2": "."}]
+r = datasets.get_cbs("40100NED", {"RegioS": ["leiden"], "perioden": "2024JJ00"}, ["Clienten_1", "aandeel_2"])
+assert "RegioS%20eq%20%27GM0546%20%20%20%20%27" in asked[0], asked  # the padded key as CBS has it, matched by title
+assert r["rows"][0] == {"RegioS": "GM0546 = Leiden", "Perioden": "2024JJ00 = 2024", "Voorziening": "V00 = v0",
+                        "Clienten_1": 8575, "Aandeel_2": 6.4}, r["rows"][0]
+assert r["rows"][1]["Clienten_1"] == {"value": None, "symbol": "x"} and set(r["symbols"]) == {".", "x"}, r
+assert r["source"] == asked[0] and r["topics"]["Clienten_1"] == "Cliënten (aantal)"
+assert "10,000" in raises(ValueError, datasets.get_cbs, "40100NED")  # 402 regions x 2 periods x 13 = 10,452 rows
+asked.clear()
+datasets.get_cbs("40100NED", {"RegioS": ["GM0546"]})  # 26 rows: fine
+assert "%27GM0546%20%20%20%20%27" in asked[0]
+assert "describe_cbs_table" in raises(KeyError, datasets.get_cbs, "40100NED", {"RegioS": ["Leide"]})  # no fuzzy guess
+raises(KeyError, datasets.get_cbs, "40100NED", {"Gemeente": ["GM0546"]})
+raises(KeyError, datasets.get_cbs, "40100NED", {"RegioS": ["GM0546"]}, ["Nope"])
+assert datasets._cbs_value(" 12 ") == (12, None) and datasets._cbs_value("-") == (None, "-") and datasets._cbs_value(None) == (None, None)
+
+print("documents ok")

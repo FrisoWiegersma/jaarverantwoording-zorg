@@ -50,6 +50,19 @@ uv run python sources.py iv3 gemeenten 2025 GM0546 6.7
 uv run python sources.py rulings "Stichting Basalt"
 uv run python sources.py ruling ECLI:NL:RBAMS:2019:441 --part 2
 uv run python sources.py check      # live probe of every source
+
+uv run python documents.py woo "jeugdzorg" --org "Nederlandse Zorgautoriteit"
+uv run python documents.py gazettes 'tarief "zorg in natura"' --creator Leiden --gazette gmb
+uv run python documents.py regulations jeugdhulp --creator Leiden
+uv run python documents.py tenders jeugdhulp --since 2026-01-01
+uv run --env-file .env python documents.py read https://zoek.officielebekendmakingen.nl/gmb-2026-312503.pdf --pages 1-3
+uv run python documents.py search tarief --url <url read before>
+uv run python documents.py check
+
+uv run python datasets.py datasets wachtlijsten
+uv run python datasets.py table https://example.org/subsidies.xlsx
+uv run python datasets.py cbs "Wmo cliënten"
+uv run python datasets.py check
 ```
 
 `sync` prints a reconciliation table for each year. `fetch` downloads and converts documents on demand. `text` searches extracted pages; it does not search PDFs that have not yet been opened. `verify` checks cached files against the index for size, publication, and extraction-version mismatches.
@@ -77,6 +90,19 @@ Through the frontend, prefix the following routes with `/digimv`. Inside Compose
 | `GET /iv3/value/{table}/{code}/{report}/{taakveld}/{categorie}` | One Iv3 cell, behind a `/bron/iv3/` citation |
 | `GET /rulings/search?q=...` | Court rulings mentioning an exact phrase |
 | `GET /rulings/{ecli}?part=1` | A ruling's metadata, summary and text in parts of about 8,000 characters |
+| `GET /public/woo?q=...` | Woo documents (open.overheid.nl); optional `organisatie`, `documentsoort`, `since`, `until` (YYYY-MM-DD) |
+| `GET /public/publications?q=...` | Gazettes and parliamentary papers with their PDF; optional `creator`, `gazette`, `since` |
+| `GET /public/regulations?q=...` | Local and regional regulations (CVDR) with `in_force`; optional `creator` |
+| `GET /public/tenders?q=...` | EU tenders and awards of Dutch buyers (TED); optional `buyer`, `cpv` (default 85000000), `since` |
+| `GET /public/read?url=...&pages=1-5` | Any public PDF, Word, HTML or XML document, each page with its `cite` URL |
+| `GET /public/links?url=...` | The links on a public page, files first; optional `q` |
+| `GET /public/search?q=...` | Word search in public documents read before; optional `url` for one document |
+| `GET /datasets/search?q=...` | Datasets in data.overheid.nl |
+| `GET /datasets/{id}` | One dataset with every resource |
+| `GET /datasets/table?url=...` | Rows of a CSV, XLSX or JSON file; optional `q`, `offset`, `sheet`, `header_row` |
+| `GET /cbs/search?q=...` | CBS StatLine tables (opendata and dataderden) |
+| `GET /cbs/{table}` | A table's topics and dimensions; `dimension` and `q` list one dimension's codes |
+| `GET /cbs/{table}/values?filters={...}` | Values; `filters` is JSON (`{"RegioS":["GM0546"]}`), `topics=a,b` |
 
 Errors from the other sources: 400 for bad input, 404 when the source does not hold it, 502 when the source failed.
 
@@ -84,7 +110,7 @@ The frontend also exposes `POST /api/chat`, `POST /api/xlsx`, and standalone evi
 
 ## MCP
 
-The stdio server exposes `search_organizations`, `get_figures`, `get_key_figures`, `get_document`, `search_documents`, `get_register_entry`, `search_register`, `find_government_body`, `get_government_finances`, `search_rulings` and `get_ruling`, backed by the same retrieval functions as the HTTP API. The chat has the same tools.
+The stdio server exposes `search_organizations`, `get_figures`, `get_key_figures`, `get_document`, `search_documents`, `get_register_entry`, `search_register`, `find_government_body`, `get_government_finances`, `search_rulings`, `get_ruling`, `search_woo`, `search_publications`, `search_regulations`, `search_tenders`, `read_document`, `list_links`, `search_public_documents`, `search_datasets`, `get_dataset`, `read_table`, `search_cbs`, `describe_cbs_table` and `get_cbs`, backed by the same retrieval functions as the HTTP API. The chat has the same tools.
 
 Run it directly:
 
@@ -111,6 +137,10 @@ claude mcp add digimv -- uv run --env-file "$PWD/.env" --directory "$PWD" mcp_se
 - CBS Iv3 amounts are x € 1.000, as the body reported them. Charges (`Lasten`) and income (`Baten`) are separate categories and are never added together. The 2nd publication (`plaatsing`) is used when it exists. A cell without a value is not 0: CBS's table has every combination of area and category, and many don't apply. `delivered: false` means the whole report is empty. `totals_computed` sums a policy area's charges and income separately; `null` means no cell had a value. On balance-sheet posts, the categories are mutations and `Standen` are the opening and closing positions. Water boards report no split by function. Dimension keys are padded inconsistently, so they are always read from the table, never built by hand; a query above 10,000 rows is refused, so reports are fetched in chunks that are reconciled against their counts.
 - Rulings: search is the website's own JSON (undocumented); text comes from the official open-data API. A mention does not make an organisation a party. Natural persons are pseudonymised, and not every ruling is published.
 - Iv3 citations look like `/bron/iv3/{table}/{code}/{report}/{taakveld}/{categorie}`. Register entries and rulings are cited with their source URL.
+- Public documents are cited with the file URL plus `#page=N` (PDF) and CBS values with the exact query URL in `source`; rows of a data file with the file URL and `row`, the row number a spreadsheet shows. `present_answer` accepts only `/bron/` links, so the chat gives such answers as text.
+- Search semantics differ per portal. Woo matches word forms, not phrases. Gazettes need every word, and `"quoted words"` as that phrase. CVDR needs every word and has no phrase search. CBS table search is substring on id, title and summary.
+- Reading a URL: only public addresses, checked again after every redirect; a site's `robots.txt` is honoured, including `Crawl-delay` (RFC 9309: 4xx means no rules, 5xx means try later). KOOP's own file hosts (open.overheid.nl, repository.overheid.nl) are exempt: their APIs hand out those URLs.
+- CBS: a value CBS left out is `{"value": null, "symbol": "x"}`, explained in `symbols`; a selection of 10,000 rows or more is refused.
 
 Under `DATA_DIR` (locally `./data`, in Docker `/app/data`):
 
@@ -119,6 +149,8 @@ digimv.db                          SQLite index, full-text tables, and the cache
 pdf/{year}/{id}.pdf                 Original PDFs
 md/{org_id}/{year}/{id}.md          Markdown with page markers
 md/{org_id}/{year}/{id}.pages.json   Per-page Markdown and extraction source
+pub/{id}.pdf, pub/{id}.pages.json   Public documents read by URL (id = hash of the URL)
+pub/tables/{id}                      Data files read with read_table, refreshed after a day
 ```
 
 ## Checks
@@ -126,7 +158,10 @@ md/{org_id}/{year}/{id}.pages.json   Per-page Markdown and extraction source
 ```sh
 uv run python test_digimv.py
 uv run python test_sources.py
-uv run python sources.py check   # live; not in CI
+uv run python test_documents.py
+uv run python sources.py check     # live; not in CI
+uv run python documents.py check   # live
+uv run python datasets.py check    # live
 cd web
 npm ci
 npm run lint

@@ -49,6 +49,10 @@ Each source is fetched on first use and cached in `digimv.db`:
 - **Iv3:** per body and report, until CBS changes the table.
 - **Rulings:** for 30 days.
 
+`documents.py` finds public documents through each portal's own API (Woo, gazettes and parliamentary papers, CVDR, TED) and reads any public URL the way DigiMV reports are read: PDFs page by page through the same text-layer/OCR pipeline, Word, HTML and XML as text. Pages are cached per URL and indexed for search, and each page is cited by its URL with `#page=N`. `list_links` lists a page's links, so a document that is only linked from a site (insurers' purchasing policies, IZA regional plans, council documents) can be reached step by step. Because the model chooses these URLs, every fetch must resolve to a public address, also after redirects, and must be allowed by the site's `robots.txt`.
+
+`datasets.py` covers open data: the data.overheid.nl catalogue, CSV/XLSX/JSON files read as rows with their spreadsheet row numbers, and every CBS StatLine table (opendata and dataderden) with the same verbatim-key and 10,000-row rules as Iv3.
+
 Network errors are never cached. Iv3 reads every dimension verbatim, because CBS pads keys inconsistently. It also fetches each report in chunks by policy area, because a query above 10,000 rows is refused rather than paged, and each chunk's count must match.
 
 ## Evidence and export
