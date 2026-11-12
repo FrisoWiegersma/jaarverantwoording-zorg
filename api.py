@@ -5,6 +5,7 @@ import json
 import signal
 import sqlite3
 import threading
+import traceback
 from typing import Annotated
 from contextlib import asynccontextmanager, closing
 from datetime import datetime, timedelta, timezone
@@ -21,15 +22,25 @@ import projects
 faulthandler.register(signal.SIGUSR1, all_threads=True)
 
 
+def _refresh(stop):
+    """Corrections and new filings get published all the time: re-sync the index once it is a day old, checked
+    hourly for as long as the API runs (not only at startup). The old index stays readable meanwhile."""
+    while not stop.is_set():
+        last = digimv.last_sync()
+        if not last or datetime.fromisoformat(last) < datetime.now(timezone.utc) - timedelta(hours=24):
+            try:
+                digimv.sync()
+            except Exception:  # an upstream failure must not end the loop; retried within the hour
+                traceback.print_exc()
+        stop.wait(3600)
+
+
 @asynccontextmanager
 async def lifespan(app):
     # A copied index can open on older SQLite even when its trigram tokenizer cannot run.
     digimv.search("zorg", limit=1)
-    last = digimv.last_sync()
-    if not last or datetime.fromisoformat(last) < datetime.now(timezone.utc) - timedelta(hours=24):
-        # corrections get re-published; refresh the index in the background, the old one stays readable meanwhile
-        threading.Thread(target=digimv.sync, daemon=True).start()
     stop = projects.start_worker()
+    threading.Thread(target=_refresh, args=(stop,), daemon=True).start()
     yield
     stop.set()
 

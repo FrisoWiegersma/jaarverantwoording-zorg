@@ -33,7 +33,7 @@ flowchart TD
 
 SQLite uses WAL mode so cached reads can continue during an index refresh. Organisation and questionnaire searches use an accent-insensitive trigram index; extracted pages use word-prefix search. The Docker image includes a SQLite runtime supporting those tokenizers, runs the offline self-check at build time, and probes a real search at API startup.
 
-Metadata refreshes in the background when older than 24 hours. The document cache records publication information and extractor version, so updated filings or extraction changes can trigger a new conversion. An empty upstream year does not overwrite a populated index year.
+Metadata refreshes in the background once it is older than 24 hours, checked hourly while the API runs. The document cache records publication information and extractor version, so updated filings or extraction changes can trigger a new conversion. An empty upstream year does not overwrite a populated index year.
 
 PDF pages with an image and little visible text go through OCR. Invisible scanner text and short auditor stamps should not cause a scanned page to be treated as ordinary text. Each extracted page records its source; OCR output remains an interpretation of the image.
 
