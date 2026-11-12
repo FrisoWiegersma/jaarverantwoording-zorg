@@ -4,6 +4,12 @@ export const SOURCES: { name: string; what: string }[] = [
   { name: "Zorgaanbiedersregister (LRZa)", what: "Toelatingsvergunning, Wtza-melding, vestigingen en AGB-codes" },
   { name: "CBS Iv3", what: "Lasten en baten van gemeenten, regio's en provincies per taakveld, 2010 tot nu" },
   { name: "CBS StatLine", what: "Alle CBS-tabellen, zoals Wmo-cliënten en jeugdhulp per gemeente" },
+  { name: "RIVM StatLine en VZinfo", what: "Volksgezondheid en zorg, zoals kosten van ziekten" },
+  { name: "Zorginzicht", what: "Kwaliteitsindicatoren per zorgaanbieder en locatie, op KvK-nummer" },
+  { name: "NZa Open DIS", what: "DBC-zorgproducten, patiëntaantallen en gemiddelde verkoopprijzen" },
+  { name: "Vektis", what: "Zorgkosten per gemeente en postcode, Zorgthermometer en factsheets" },
+  { name: "Zorgcijfersdatabank", what: "Kosten van de Zvw en de Wlz per zorgsoort, en GIP-data" },
+  { name: "Prognosemodel Zorg en Welzijn", what: "Arbeidsmarktprognoses voor zorg en welzijn (met API-sleutel)" },
   { name: "Rechtspraak", what: "Gepubliceerde uitspraken, op naam te doorzoeken" },
   { name: "Woo-index", what: "Woo-besluiten, nota's en rapporten van de overheid" },
   { name: "Officiële bekendmakingen", what: "Gemeenteblad, Staatscourant en Kamerstukken" },
@@ -23,6 +29,7 @@ export const QUESTIONS: { group: string; questions: string[] }[] = [
       "Hoeveel fte heeft elk UMC in 2025?",
       "Heeft Stichting Basalt een toelatingsvergunning, en welke vestigingen en AGB-codes staan in het register?",
       "Zijn er rechtszaken waarin Stichting Basalt wordt genoemd, en waar gingen ze over?",
+      "Welke kwaliteitsindicatoren leverde Stichting Basalt over 2024 aan bij Zorginzicht?",
     ],
   },
   {
@@ -33,6 +40,7 @@ export const QUESTIONS: { group: string; questions: string[] }[] = [
       "Hoeveel jeugdhulp liep in 2025 via de regio Holland Rijnland, en hoeveel boekte Leiden zelf?",
       "Welke Wmo-verordening en beleidsregels heeft Leiden nu in werking, en wat staat er over het pgb-tarief?",
       "Welke jeugdzorgopdrachten zijn sinds 2024 Europees aanbesteed in Zuid-Holland, en wie won ze?",
+      "Hoeveel Zvw-zorgkosten per verzekerde had Leiden in 2024 volgens Vektis, en hoeveel daarvan was wijkverpleging?",
     ],
   },
   {
@@ -43,6 +51,7 @@ export const QUESTIONS: { group: string; questions: string[] }[] = [
       "Wat schreef de minister in Kamerbrieven over reële tarieven in de jeugdzorg?",
       "Welke Woo-besluiten publiceerde de NZa over wijkverpleging?",
       "Welke organisaties kregen in 2025 de grootste subsidies van de gemeente Utrecht?",
+      "Hoeveel kostte de Wlz-gehandicaptenzorg in 2025 volgens de Zorgcijfersdatabank?",
     ],
   },
 ];

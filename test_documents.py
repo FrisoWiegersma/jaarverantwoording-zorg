@@ -7,6 +7,7 @@ Fixtures have the shapes the live services returned on 2026-11-12; `python docum
 
 import io
 import os
+import pathlib
 import socket
 import tempfile
 import time
@@ -19,6 +20,9 @@ import datasets  # noqa: E402
 import digimv  # noqa: E402
 import documents as d  # noqa: E402
 import sources  # noqa: E402
+
+# unittest discover imports test_digimv first, which fixes digimv.DATA to the real data/ before the line above
+assert str(digimv.DATA) == os.environ["DATA_DIR"], "run on its own: python test_documents.py"
 
 
 def raises(exc, fn, *a, **kw):
@@ -101,6 +105,17 @@ assert d._gazette_pdf("https://example.org/gmb-2026-1.html") is None
 page = d.markup_text("<html><head><style>p{}</style></head><body><nav>menu</nav><h2>Tarieven</h2>"
                      "<p>Het tarief is <b>€&nbsp;72,40</b> per uur.</p><table><tr><td>A</td><td>1</td></tr></table></body></html>")
 assert page == "## Tarieven\nHet tarief is € 72,40 per uur.\nA\t1", page
+# Zorgcijfersdatabank writes each cell on its own source line: a row must still come out as one line
+zcd = """<table class="table hd"><thead><tr>
+  <th class="l kop">Kosten</th>
+  <th class="c kop">2024 *</th>
+  <th class="c kop">2025 *</th>
+</tr></thead><tbody><tr>
+  <td class="l data">A Verzorgingsmiddelen</td>
+  <td class="r data">€ 511.862.965</td>
+  <td class="r data">.</td>
+</tr></tbody></table>"""
+assert d.markup_text(zcd) == "Kosten\t2024 *\t2025 *\nA Verzorgingsmiddelen\t€ 511.862.965\t.", d.markup_text(zcd)
 cvdr = ("<?xml version='1.0'?><cvdr><meta><title>Verordening jeugdhulp</title></meta><body><regeling-tekst>"
         "<artikel><kop><label>Artikel</label><nr>1</nr><titel>Begrippen</titel></kop><al>In deze verordening:</al>"
         "<lijst><li nr='a.'><al>jeugdhulp: hulp</al></li><li nr=\"b.\"><al>Wmo</al></li></lijst></artikel></regeling-tekst></body></cvdr>")
@@ -172,6 +187,21 @@ d.fetch = lambda url, timeout=120: (b"<html><a href='/a'>Visie</a><a href='/b.pd
 r = d.links("https://insurer.example/", query="beleid")
 assert [x["url"] for x in r["links"]] == ["https://insurer.example/b.pdf", "https://insurer.example/c.pdf"], r
 assert d.links("https://insurer.example/")["links"][0]["type"] == "pdf", "files come first"
+assert d._safe_url("https://www.vektis.nl/a b/Zorgthermometer 2026.pdf?v=1") == "https://www.vektis.nl/a%20b/Zorgthermometer%202026.pdf?v=1"
+assert d._safe_url("https://x.example/Beleid%202027.pdf") == "https://x.example/Beleid%202027.pdf"  # already encoded: unchanged
+assert d._safe_url("http://www.opendisdata.nl/download/csv/01_DBC.csv") == "https://opendisdata.nza.nl/download/csv/01_DBC.csv"  # moved host, and always https: its http redirect drops the path
+_, links = d.page_links(
+    b"<a href='/services/file/get?key=abc'>Openbaar databestand Wijkverpleging verslagjaar 2024 Excel file 1.1 MB</a>"
+    b"<a href='/services/file/get?key=def'>Rapport 2022 PDF file 157.7 KB</a>"
+    b"<a href='/up/Zorgthermometer 2026.pdf'>Zorgthermometer</a>"
+    b"<a href='/over'>Over de PDF</a>",
+    "https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging")
+assert [(x["type"], x["url"]) for x in links] == [
+    ("xlsx", "https://www.zorginzicht.nl/services/file/get?key=abc"),
+    ("pdf", "https://www.zorginzicht.nl/services/file/get?key=def"),
+    ("pdf", "https://www.zorginzicht.nl/up/Zorgthermometer%202026.pdf"),
+    ("page", "https://www.zorginzicht.nl/over"),
+]
 
 
 # ---------------------------------------------------------------- Woo search
@@ -257,18 +287,55 @@ assert datasets.csv_rows(b"a,b\n\x81,2\n")[1] == ["\x81", "2"]  # bytes no code 
 assert datasets.json_rows(b'{"value": [{"a": 1}, {"b": 2}]}') == [["a", "b"], [1, None], [None, 2]]
 raises(ValueError, datasets.json_rows, b'{"a": 1}')
 
-datasets._file = lambda url, refresh=False: (xlsx, "application/octet-stream", url, "2026-11-12T10:00:00+00:00")
+def serve(body, ctype="application/octet-stream"):
+    """read_table reads its file from disk: write the fixture there and hand out its path."""
+    path = pathlib.Path(tempfile.mkstemp(dir=os.environ["DATA_DIR"])[1])
+    path.write_bytes(body)
+    datasets._file = lambda url, refresh=False: (path, ctype, url, "2026-11-12T10:00:00+00:00")
+
+
+serve(xlsx)
 t = datasets.read_table("https://gemeente.example/subsidies.xlsx", query="overweeghuis")
 assert (t["header_row"], t["title_rows"], t["rows_total"], t["rows_matched"]) == (3, [["Subsidieregister 2025"]], 2, 1), t
 assert t["rows"] == [{"row": 4, "Ontvanger": "St. Overweeghuis", "Bedrag": 95000, "Ontvanger'": None, "column 4": 0.1}], t
 assert [x["row"] for x in datasets.read_table("https://gemeente.example/subsidies.xlsx")["rows"]] == [4, 5]  # as Excel shows
 assert datasets.read_table("https://gemeente.example/subsidies.xlsx", header_row=1)["columns"][:2] == ["Subsidieregister 2025", "column 2"]
-datasets._file = lambda url, refresh=False: (b'[{"a": 1}, {"a": 2}]', "application/json", url, "")
+serve(b'[{"a": 1}, {"a": 2}]', "application/json")
 assert [x["row"] for x in datasets.read_table("https://x.example/a.json")["rows"]] == [1, 2]  # JSON: the record number
-datasets._file = lambda url, refresh=False: (b"<!doctype html><html>", "text/html", url, "")
+serve(b"<!doctype html><html>", "text/html")
 assert "read_document" in raises(ValueError, datasets.read_table, "https://x.example/")
-datasets._file = lambda url, refresh=False: (b"\xd0\xcf\x11\xe0rest", "application/vnd.ms-excel", url, "")
+serve(b"\xd0\xcf\x11\xe0rest", "application/vnd.ms-excel")
 assert ".xls" in raises(ValueError, datasets.read_table, "https://x.example/a.xls")
+serve(b"7z\xbc\xaf\x27\x1c rest")
+assert "7-Zip" in raises(ValueError, datasets.read_table, "https://x.example/a.7z")
+
+# A CSV is streamed: same rows and numbers as reading it whole, a non-utf-8 byte at the very end still read as cp1252
+big = ("Overzicht DBC\n\nJAAR;DIAGNOSE_CD;AANTAL\n" + "".join(f"{2024 if i % 3 == 0 else 2023};{i % 3000:04};{i}\n" for i in range(30000))
+       + "2024;1101;Zorg één\n").encode("cp1252")
+serve(big, "text/csv")
+t = datasets.read_table("https://x.example/dbc.csv", filters={"jaar": "2024", "DIAGNOSE_CD": ["1101", "9999"]}, limit=2)
+whole = datasets.csv_rows(big)
+want = [n for n, r in enumerate(whole, 1) if r[:2] == ["2024", "1101"]]
+assert (t["header_row"], t["title_rows"], t["rows_total"]) == (3, [["Overzicht DBC"]], 30001), t
+assert [x["row"] for x in t["rows"]] == want[:2] and t["rows_matched"] == len(want) and t["truncated"], (t, want)
+assert t["rows"][0]["DIAGNOSE_CD"] == "1101", "a code keeps its leading zeros and is never a number"
+t = datasets.read_table("https://x.example/dbc.csv", filters={"DIAGNOSE_CD": ["1101"]}, query="één")
+assert [x["row"] for x in t["rows"]] == [len(whole)] and t["rows"][0]["AANTAL"] == "Zorg één", t  # the cp1252 tail
+assert datasets.read_table("https://x.example/dbc.csv", query="1101")["rows_matched"] > len(want), \
+    "query hits amounts too: that is why filters exist"
+assert "AANTAL" in raises(KeyError, datasets.read_table, "https://x.example/dbc.csv", filters={"Nope": ["1"]})
+serve(b"a,b\n" + b"1,2\n" * 40 + b"3,4,5\n", "text/csv")  # the wide row comes after the 30 rows read up front
+t = datasets.read_table("https://x.example/w.csv", filters={"a": ["3"]})
+assert t["columns"] == ["a", "b", "column 3"] and t["rows"][0]["column 3"] == "5", "a cell past the header keeps a column"
+
+# A ZIP: its only data file is read; with more than one, member picks
+serve(zipped({"lees mij.txt.pdf": "x", "data/kwaliteit.csv": "KvkNummer;Waarde\n41179297;12\n61354740;7\n"}))
+t = datasets.read_table("https://x.example/n.zip", filters={"KvkNummer": ["61354740"]})
+assert (t["format"], t["members"], [r["Waarde"] for r in t["rows"]]) == ("csv", ["data/kwaliteit.csv"], ["7"]), t
+serve(zipped({"a.csv": "x\n1\n", "b.json": '[{"x": 2}]'}))
+assert "member" in raises(ValueError, datasets.read_table, "https://x.example/two.zip")
+assert datasets.read_table("https://x.example/two.zip", member="b.json")["rows"] == [{"row": 1, "x": 2}]
+raises(KeyError, datasets.read_table, "https://x.example/two.zip", member="c.csv")
 
 
 # ---------------------------------------------------------------- CBS: padded keys, the row cap, symbols
@@ -305,5 +372,50 @@ assert "describe_cbs_table" in raises(KeyError, datasets.get_cbs, "40100NED", {"
 raises(KeyError, datasets.get_cbs, "40100NED", {"Gemeente": ["GM0546"]})
 raises(KeyError, datasets.get_cbs, "40100NED", {"RegioS": ["GM0546"]}, ["Nope"])
 assert datasets._cbs_value(" 12 ") == (12, None) and datasets._cbs_value("-") == (None, "-") and datasets._cbs_value(None) == (None, None)
+
+
+# ---------------------------------------------------------------- Swing: a key per site, sent only to that site
+
+os.environ.pop("PMZW_API_KEY", None)
+assert "PMZW_API_KEY" in raises(RuntimeError, datasets.search_swing, "prognosemodelzw", "tekort")  # no key: not connected
+raises(KeyError, datasets.search_swing, "nope", "tekort")
+os.environ["PMZW_API_KEY"] = "k"
+B = "https://prognosemodelzw.nl/ods/odata"
+ind = lambda code, name: {"Code": code, "Name": name, "Description": "", "Unit": "aantal", "Source": "abf",
+                          "StartPeriodCode": "2024", "EndPeriodCode": "2034"}
+cube = lambda p: {"Indicator": "pmzw_tekort", "Period": p, "GeoLevel": "regio", "DimensionLevels": "", "DimensionLevelNames": ""}
+swing = {
+    f"{B}/Indicators": {"value": [ind("pmzw_tekort", "Tekort aan werknemers")], "@odata.nextLink": f"{B}/Indicators?$skip=1"},
+    f"{B}/Indicators?$skip=1": {"value": [ind("pmzw_wn", "Werknemers in zorg en welzijn")]},
+    f"{B}/Indicators/pmzw_tekort/DataCubes": {"value": [cube("year_2025"), cube("year_2026")]},
+    f"{B}/DataCubes(Dimensionlevels='',GeoLevel='regio',Indicator='pmzw_tekort',Period='year_2025')/Data": {"value": [
+        {"GeoItem": "regio_1", "Period": "year_2025", "Value": 1200, "ValueType": "Regular", "DimensionLevelMembers": ""},
+        {"GeoItem": "regio_2", "Period": "year_2025", "Value": None, "ValueType": "Missing", "DimensionLevelMembers": ""}]},
+    f"{B}/GeoLevels/regio/GeoLevelMembers": {"value": [{"Code": "regio_1", "Name": "Holland Rijnland"},
+                                                        {"Code": "regio_2", "Name": "Rijnmond"}]},
+    f"{B}/Leak": {"value": [], "@odata.nextLink": "https://other.example/steal"},
+}
+sent = []
+sources._json = lambda url, body=None, timeout=60, headers=None: sent.append((url, headers)) or swing[url]
+r = datasets.search_swing("prognosemodelzw", "zorg welzijn")
+assert [h["code"] for h in r["results"]] == ["pmzw_wn"] and r["total"] == 1, r  # found on the next page
+assert all(h == {"apikey": "k"} for _, h in sent), sent
+r = datasets.get_swing("prognosemodelzw", "pmzw_tekort")
+assert r["combinations"] == [{"geo_level": "regio", "dimension_levels": "", "dimensions": "", "periods": ["year_2025", "year_2026"]}], r
+r = datasets.get_swing("prognosemodelzw", "pmzw_tekort", "regio", "year_2025")
+assert r["rows"] == [{"area": "regio_1 = Holland Rijnland", "period": "year_2025", "value": 1200, "value_type": "Regular"},
+                     {"area": "regio_2 = Rijnmond", "period": "year_2025", "value": None, "value_type": "Missing"}], r
+assert r["source_url"].endswith("Period='year_2025')/Data") and r["unit"] == "aantal"
+geo = lambda q: [x["area"] for x in datasets.get_swing("prognosemodelzw", "pmzw_tekort", "regio", "year_2025", q)["rows"]]
+assert geo("rijn") == ["regio_1 = Holland Rijnland", "regio_2 = Rijnmond"] and geo("mond") == [] and geo("2") == ["regio_2 = Rijnmond"], \
+    "a word matches the start of a word, as 'assen' must find Assen and not Wassenaar"
+assert "get_swing without" in raises(KeyError, datasets.get_swing, "prognosemodelzw", "pmzw_tekort", "regio", "year_1999")
+raises(KeyError, datasets.get_swing, "prognosemodelzw", "nope")
+sent.clear()
+raises(RuntimeError, datasets._swing_all, B, "k", "Leak")
+assert [u for u, _ in sent] == [f"{B}/Leak"], "the key never goes to another host"
+os.environ.pop("PMZW_API_KEY")
+raises(RuntimeError, datasets.search_swing, "prognosemodelzw", "zorg")  # key removed: off, though the cache is filled
+raises(RuntimeError, datasets.get_swing, "prognosemodelzw", "pmzw_tekort")
 
 print("documents ok")

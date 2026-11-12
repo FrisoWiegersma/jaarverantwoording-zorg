@@ -4,7 +4,12 @@ Checked against the live services on 2026-11-12:
   Catalogue  CKAN https://data.overheid.nl/data/api/3/action/package_search|package_show: ~18,000 datasets from 25
              catalogues (CBS, CBS DataDerden, DONL with ministries' and agencies' own data, DNB, municipalities).
              Descriptions can be years older or newer than the data, and a resource URL is often a web page.
-  Files      CSV, Excel (.xlsx) and JSON read here as rows; old .xls (binary) is not readable without a library.
+  Files      CSV, Excel (.xlsx) and JSON read here as rows, also inside a ZIP; old .xls (binary) and 7-Zip are not
+             readable without a library. A CSV is streamed from disk (up to 1 GB: NZa's Open DIS files are 37 and
+             757 MB), Excel and JSON are read in memory (up to 80 MB).
+  Swing      ABF's Open Data Service (OData v4, header apikey) behind Prognosemodel Zorg en Welzijn and
+             Waarstaatjegemeente: Indicators, Indicators/{code}/DataCubes, DataCubes(...)/Data, GeoLevels/{level}/
+             GeoLevelMembers. A free key per organisation; checked against Swing's public demo on 2026-11-12.
   CBS        https://opendata.cbs.nl (5,986 tables) and https://dataderden.cbs.nl (831, data CBS hosts for others:
              Iv3, youth care and Wmo per municipality, health monitors), both OData v3. Dimension keys are padded
              inconsistently, so they are always read from the table; UntypedDataSet keeps CBS's symbols ('.', 'x',
@@ -12,7 +17,9 @@ Checked against the live services on 2026-11-12:
 
 import csv
 import io
+import itertools
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -29,9 +36,11 @@ CATALOGUE_SCOPE = ("data.overheid.nl describes datasets held elsewhere. Its date
                    "data's: check the period inside the file before calling anything current. A resource URL is "
                    "often a web page that links to the file rather than the file itself.")
 TABLE_TTL = timedelta(days=1)  # a data file is fetched again after a day
+TABLE_MAX = 1 << 30  # a CSV is streamed from disk, so it can be large: NZa's Open DIS activity file is 757 MB
 TABLE_SCOPE = ("Rows as they are in the file, values verbatim. Excel dates show as day numbers (45658 = 1 Jan 2025). "
                "row = the row's number in the file as a spreadsheet program shows it (JSON: the record's number), "
-               "to cite with the file URL.")
+               "to cite with the file URL. query matches a word in any cell, so a code can also hit an amount; "
+               "filters on a named column is exact.")
 
 CBS_HOSTS = ("https://opendata.cbs.nl", "https://dataderden.cbs.nl")
 CBS_CAP = 10_000
@@ -155,19 +164,45 @@ def xlsx_rows(body, sheet=None):
     return pick[0], names, rows
 
 
+ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")  # latin-1 decodes any byte: the last resort
+
+
+def _dialect(sample):
+    try:
+        return csv.Sniffer().sniff(sample, delimiters=",;\t|")
+    except csv.Error:
+        return csv.excel
+
+
 def csv_rows(body):
     text = None
-    for enc in ("utf-8-sig", "cp1252", "latin-1"):  # latin-1 decodes any byte: the last resort
+    for enc in ENCODINGS:
         try:
             text = body.decode(enc)
             break
         except UnicodeDecodeError:
             continue
-    try:
-        dialect = csv.Sniffer().sniff(text[:8192], delimiters=",;\t|")
-    except csv.Error:
-        dialect = csv.excel
-    return list(csv.reader(io.StringIO(text), dialect))
+    return list(csv.reader(io.StringIO(text), _dialect(text[:8192])))
+
+
+def _csv_reader(f):
+    """Rows of a CSV read line by line from the text file f, so a file of hundreds of MB never sits in memory.
+    The delimiter is sniffed from whole lines at the start (a cut-off line could fool it)."""
+    head, size = [], 0
+    while size < 8192 and (line := f.readline()):
+        head.append(line)
+        size += len(line)
+    return csv.reader(itertools.chain(head, f), _dialect("".join(head)))
+
+
+def _scan_csv(open_bin, scan):
+    """A CSV scanned as utf-8, else read again as cp1252, else latin-1: a byte that isn't utf-8 can be anywhere."""
+    for enc in ENCODINGS:
+        with io.TextIOWrapper(open_bin(), encoding=enc, newline="") as f:
+            try:
+                return scan(_csv_reader(f))
+            except UnicodeDecodeError:
+                continue
 
 
 def json_rows(body):
@@ -198,57 +233,130 @@ def _columns(header):
 
 
 def _file(url, refresh=False):
-    """A data file by URL, cached for TABLE_TTL. Returns (body, content type, final URL, fetched at)."""
-    cache = documents.PUB / "tables" / documents.doc_id(url)
+    """A data file by URL, downloaded to the cache (never held in memory) and kept for TABLE_TTL.
+    Returns (path, content type, final URL, fetched at)."""
+    did = documents.doc_id(url)
+    cache = documents.PUB / "tables" / did
     meta = cache.with_suffix(".json")
-    if not refresh and meta.exists() and not sources._older(json.loads(meta.read_text())["fetched_at"], TABLE_TTL):
-        m = json.loads(meta.read_text())
-        return cache.read_bytes(), m["content_type"], m["file_url"], m["fetched_at"]
-    body, ctype, final = documents.fetch(url)
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    stamp = sources._iso(sources._now())
-    for path, data in ((cache, body), (meta, json.dumps({"content_type": ctype, "file_url": final, "fetched_at": stamp}).encode())):
-        tmp = path.with_name(path.name + ".part")
-        tmp.write_bytes(data)
-        tmp.replace(path)
-    return body, ctype, final, stamp
+    with documents._lock(did):  # two chats asking for the same 700 MB file download it once
+        if not refresh and meta.exists() and cache.exists() \
+                and not sources._older(json.loads(meta.read_text())["fetched_at"], TABLE_TTL):
+            m = json.loads(meta.read_text())
+            return cache, m["content_type"], m["file_url"], m["fetched_at"]
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        tmp = cache.with_name(cache.name + ".part")
+        try:
+            with open(tmp, "wb") as out:
+                ctype, final = documents._stream(url, out, TABLE_MAX)
+        except BaseException:
+            tmp.unlink(missing_ok=True)  # a cut-off download of up to 1 GB is never left behind
+            raise
+        tmp.replace(cache)
+        stamp = sources._iso(sources._now())
+        tmp = meta.with_name(meta.name + ".part")
+        tmp.write_text(json.dumps({"content_type": ctype, "file_url": final, "fetched_at": stamp}))
+        tmp.replace(meta)
+        return cache, ctype, final, stamp
 
 
-def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None, refresh=False):
-    """Rows of a CSV, Excel (.xlsx) or JSON file. query keeps rows containing every word (accents ignored), e.g.
-    an AGB code, a municipality or 'begeleiding'. header_row (1-based) overrides the detected header."""
-    body, ctype, final, fetched = _file(url.strip(), refresh)
-    sheets = None
-    if body[:4] == b"\xd0\xcf\x11\xe0":
+def _in_memory(size, what):
+    if size > documents.MAX_BYTES:
+        raise ValueError(f"this {what} is larger than {documents.MAX_BYTES // 2**20} MB, too large to read here; "
+                         "look for a CSV version of it")
+
+
+def _scan(rows, header_row, filters, words, offset, limit, shift):
+    """One pass over rows (a list or a stream): header, the counts, and only the requested page kept."""
+    rows = iter(rows)
+    first = list(itertools.islice(rows, max(30, header_row or 0)))
+    h = header_row or _header_row(first)
+    if not 1 <= h <= len(first):
+        raise ValueError(f"header_row must be between 1 and {len(first)}")
+    header = first[h - 1]
+    width = max(map(len, first[h - 1:]))
+    cols = _columns(header + [None] * (width - len(header)))
+    want = {}
+    for k, v in (filters or {}).items():
+        i = next((i for i, c in enumerate(cols) if c == k), None)
+        i = i if i is not None else next((i for i, c in enumerate(cols) if c.casefold() == str(k).strip().casefold()), None)
+        if i is None:
+            raise KeyError(f"no column {k!r}; the columns are {cols}")
+        want[i] = {str(x).strip().casefold() for x in (v if isinstance(v, list) else [v])}
+    total = matched = 0
+    page = []
+    # n is the row's number in the file as a spreadsheet shows it (JSON: the record's number), so a citation finds it
+    for n, r in itertools.chain(enumerate(first[h:], h + 1), enumerate(rows, len(first) + 1)):
+        if not any(v not in (None, "") for v in r):
+            continue
+        total += 1
+        width = max(width, len(r))
+        if not all(i < len(r) and str(r[i]).strip().casefold() in vals for i, vals in want.items()):
+            continue
+        if words and not all(w in sources._fold(" ".join("" if v is None else str(v) for v in r)) for w in words):
+            continue
+        matched += 1
+        if offset < matched <= offset + limit:
+            page.append((n - shift, r))
+    # a value right of the last header cell still gets a column, never dropped
+    cols = _columns(header + [None] * (width - len(header)))
+    return {"header_row": h, "title_rows": [t for r in first[:h - 1] if (t := [v for v in r if v not in (None, "")])][:5],
+            "columns": cols, "rows_total": total, "rows_matched": matched, "returned": len(page),
+            "truncated": matched > offset + len(page),
+            "rows": [{"row": n, **{c: (r[i] if i < len(r) else None) for i, c in enumerate(cols)}} for n, r in page]}
+
+
+def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None, refresh=False, filters=None, member=None):
+    """Rows of a CSV, Excel (.xlsx) or JSON file, also inside a ZIP. query keeps rows containing every word (accents
+    ignored), e.g. an AGB code, a municipality or 'begeleiding'. filters {column: [values]} keeps rows whose cell in
+    that column is one of the values (exact, case ignored): how to match a code without hitting amounts. header_row
+    (1-based) overrides the detected header. member picks a file inside a ZIP."""
+    path, ctype, final, fetched = _file(url.strip(), refresh)
+    with open(path, "rb") as f:
+        head = f.read(2048)
+    sheets = members = None
+    words = [sources._fold(w) for w in (query or "").split()]
+    scan = lambda rows, shift=0: _scan(rows, header_row, filters, words, offset, min(limit, 200), shift)
+    if head[:4] == b"\xd0\xcf\x11\xe0":
         raise ValueError("an old binary Excel file (.xls), which cannot be read here; look for a .xlsx or .csv version")
-    if body[:2] == b"PK" and "xl/workbook.xml" in zipfile.ZipFile(io.BytesIO(body)).namelist():
-        fmt, (sheet, sheets, rows) = "xlsx", xlsx_rows(body, sheet)
-    elif "json" in ctype or body.lstrip()[:1] in (b"[", b"{"):
-        fmt, rows = "json", json_rows(body)
-    elif body[:5] == b"%PDF-":
+    if head[:6] == b"7z\xbc\xaf\x27\x1c":
+        raise ValueError("a 7-Zip archive, which cannot be read here; look for a .zip, .xlsx or .csv version")
+    if head[:2] == b"PK":
+        with zipfile.ZipFile(path) as z:
+            names = z.namelist()
+            if "xl/workbook.xml" in names:
+                _in_memory(path.stat().st_size, "Excel file")
+                fmt, (sheet, sheets, rows) = "xlsx", xlsx_rows(path.read_bytes(), sheet)
+                out = scan(rows)
+            elif "word/document.xml" in names:
+                raise ValueError("a Word document, not a data file: read it with read_document")
+            else:
+                members = [n for n in names if n.lower().endswith((".csv", ".txt", ".tsv", ".xlsx", ".json"))]
+                if member is None and len(members) != 1:
+                    raise ValueError(f"a ZIP with {len(members)} data files: pick one with member; they are {members[:50]}")
+                m = member = member if member is not None else members[0]
+                if m not in names:
+                    raise KeyError(f"no file {m!r} in this ZIP; the data files are {members[:50]}")
+                if m.lower().endswith((".xlsx", ".json")):
+                    _in_memory(z.getinfo(m).file_size, "file")
+                    body = z.read(m)
+                    if m.lower().endswith(".xlsx"):
+                        fmt, (sheet, sheets, rows) = "xlsx", xlsx_rows(body, sheet)
+                        out = scan(rows)
+                    else:
+                        fmt, out = "json", scan(json_rows(body), 1)
+                else:
+                    fmt, out = "csv", _scan_csv(lambda: z.open(m), scan)
+    elif "json" in ctype or head.lstrip()[:1] in (b"[", b"{"):
+        _in_memory(path.stat().st_size, "JSON file")
+        fmt, out = "json", scan(json_rows(path.read_bytes()), 1)
+    elif head[:5] == b"%PDF-":
         raise ValueError("a PDF, not a data file: read it with read_document")
-    elif "html" in ctype or body.lstrip()[:15].lower().startswith((b"<!doctype", b"<html")):
+    elif "html" in ctype or head.lstrip()[:15].lower().startswith((b"<!doctype", b"<html")):
         raise ValueError("this URL is a web page, not a data file: read it with read_document to find the file link")
     else:
-        fmt, rows = "csv", csv_rows(body)
-    h = header_row or _header_row(rows)
-    if not 1 <= h <= len(rows):
-        raise ValueError(f"header_row must be between 1 and {len(rows)}")
-    # a value right of the last header cell still gets a column, never dropped
-    width = max(map(len, rows[h - 1:]))
-    cols = _columns(rows[h - 1] + [None] * (width - len(rows[h - 1])))
-    # n is the row's number in the file as a spreadsheet shows it (JSON: the record's number), so a citation finds it
-    data = [(n - (fmt == "json"), r) for n, r in enumerate(rows[h:], h + 1) if any(v not in (None, "") for v in r)]
-    words = [sources._fold(w) for w in (query or "").split()]
-    matched = [(n, r) for n, r in data
-               if all(w in sources._fold(" ".join("" if v is None else str(v) for v in r)) for w in words)]
-    page = matched[offset:offset + min(limit, 200)]
-    return {"url": url, "file_url": final, "format": fmt, "sheet": sheet, "sheets": sheets, "fetched_at": fetched,
-            "header_row": h, "title_rows": [t for r in rows[:h - 1] if (t := [v for v in r if v not in (None, "")])][:5],
-            "columns": cols, "rows_total": len(data), "rows_matched": len(matched), "returned": len(page),
-            "truncated": len(matched) > offset + len(page),
-            "rows": [{"row": n, **{c: (r[i] if i < len(r) else None) for i, c in enumerate(cols)}} for n, r in page],
-            "scope": TABLE_SCOPE}
+        fmt, out = "csv", _scan_csv(lambda: open(path, "rb"), scan)
+    return {"url": url, "file_url": final, "format": fmt, "sheet": sheet, "sheets": sheets, "member": member,
+            "members": members, "fetched_at": fetched, **out, "scope": TABLE_SCOPE}
 
 
 # ---------------------------------------------------------------- CBS StatLine (opendata + dataderden)
@@ -426,6 +534,137 @@ def get_cbs(table_id, filters=None, topics=None, limit=200, db=None):
             "source": url, "scope": CBS_SCOPE}
 
 
+# ---------------------------------------------------------------- Swing Open Data Service (ABF)
+
+# Swing sites with an OData v4 Open Data Service. Each needs a free key per organisation, sent as the header
+# `apikey`; a site without a key in the environment is reported as not connected, never guessed around.
+SWING = {
+    "prognosemodelzw": ("https://prognosemodelzw.nl/ods/odata", "PMZW_API_KEY", "https://prognosemodelzw.nl/contact"),
+    "waarstaatjegemeente": ("https://www.waarstaatjegemeente.nl/ods/odata", "WSJG_API_KEY",
+                            "https://www.waarstaatjegemeente.nl/contact"),
+}
+SWING_CAP = 500
+SWING_SCOPE = ("Values as the Swing site publishes them, per indicator, area level and period. value null is a value "
+               "the site doesn't have, never 0; value_type other than Regular is the site's own mark. Check the "
+               "indicator's unit and source; forecast periods are forecasts.")
+SWING_SCHEMA = """
+CREATE TABLE IF NOT EXISTS swing_indicators(site TEXT, code TEXT, name TEXT, description TEXT, unit TEXT, source TEXT,
+  start TEXT, end TEXT, modified TEXT, PRIMARY KEY(site, code));
+"""
+
+
+def _swing(site):
+    if site not in SWING:
+        raise KeyError(f"no Swing site {site!r}; the sites are {sorted(SWING)}")
+    base, env, contact = SWING[site]
+    key = os.environ.get(env, "").strip()
+    if not key:
+        raise RuntimeError(f"{site} is not connected: it needs an API key (free, per organisation), requested at "
+                           f"{contact}, set as {env}")
+    return base, key
+
+
+def _swing_all(base, key, path):
+    """Every record of a Swing collection, following @odata.nextLink. The key is only ever sent to the site itself."""
+    url, out = f"{base}/{path}", []
+    host = urllib.parse.urlsplit(base).hostname
+    while url:
+        if urllib.parse.urlsplit(url).hostname != host:
+            raise RuntimeError(f"Swing sent a next page on another host: {url}")
+        try:
+            d = sources._json(url, headers={"apikey": key}, timeout=120)
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise RuntimeError(f"{host} refused the API key (HTTP {e.code})") from e
+            if e.code == 404:
+                raise KeyError(f"{host} has no {path}") from e
+            raise
+        out += d.get("value", [])
+        url = d.get("@odata.nextLink")
+    return out
+
+
+def _swing_q(v):
+    return urllib.parse.quote(str(v).replace("'", "''"), safe="")
+
+
+def _swing_indicators(site, refresh=False, db=None):
+    base, key = _swing(site)  # first: without a key the site is off, even with a filled cache
+    db = db or connect()
+    db.executescript(SWING_SCHEMA)
+    r = db.execute("SELECT fetched_at FROM sources_log WHERE name=?", (f"swing:{site}",)).fetchone()
+    if refresh or not r or sources._older(r[0], timedelta(days=1)):
+        try:
+            rows = [(site, i["Code"], (i.get("Name") or "").strip(), (i.get("Description") or "")[:3000], i.get("Unit"),
+                     i.get("Source"), i.get("StartPeriodCode"), i.get("EndPeriodCode"), i.get("DataModificationDate"))
+                    for i in _swing_all(base, key, "Indicators")]
+            with db:
+                db.execute("DELETE FROM swing_indicators WHERE site=?", (site,))
+                db.executemany("INSERT INTO swing_indicators VALUES (?,?,?,?,?,?,?,?,?)", rows)
+                db.execute("INSERT OR REPLACE INTO sources_log VALUES (?, ?)", (f"swing:{site}", sources._iso(sources._now())))
+        except (OSError, KeyError, ValueError):
+            if not db.execute("SELECT 1 FROM swing_indicators WHERE site=? LIMIT 1", (site,)).fetchone():
+                raise
+    return db
+
+
+def search_swing(site, q, limit=20, db=None):
+    """A Swing site's indicators whose code, name or description contains every word (accents ignored)."""
+    db = _swing_indicators(site, db=db)
+    words = [sources._fold(w) for w in q.split()]
+    hits = [dict(r) for r in db.execute("SELECT * FROM swing_indicators WHERE site=? ORDER BY name", (site,))
+            if all(w in sources._fold(f"{r['code']} {r['name']} {r['description']}") for w in words)]
+    out = [{"code": h["code"], "name": h["name"], "unit": h["unit"], "source": h["source"],
+            "periods": f"{h['start']}–{h['end']}", "description": h["description"][:300]} for h in hits[:limit]]
+    return {"site": site, "query": q, "total": len(hits), "returned": len(out), "truncated": len(hits) > len(out),
+            "results": out, "scope": "Indicator names and descriptions; get_swing lists what each one has."}
+
+
+def get_swing(site, indicator, geo_level=None, period=None, geo_query=None, dimension_levels="", limit=SWING_CAP, db=None):
+    """Without geo_level and period: which area levels, periods and breakdowns the indicator has. With them: its
+    values per area, each area named; geo_query keeps areas whose name or code has every word."""
+    db = _swing_indicators(site, db=db)
+    base, key = _swing(site)
+    meta = db.execute("SELECT * FROM swing_indicators WHERE site=? AND code=?", (site, indicator)).fetchone()
+    if not meta:
+        raise KeyError(f"no indicator {indicator!r} on {site}; find one with search_swing")
+    info = {"site": site, "indicator": indicator, "name": meta["name"], "unit": meta["unit"], "source": meta["source"],
+            "description": meta["description"][:1000]}
+    cubes = _swing_all(base, key, f"Indicators/{_swing_q(indicator)}/DataCubes")
+    if not geo_level or not period:
+        combos = {}
+        for c in cubes:
+            k = (c["GeoLevel"], c.get("DimensionLevels") or "", c.get("DimensionLevelNames") or "")
+            combos.setdefault(k, []).append(c["Period"])
+        return {**info, "combinations": [{"geo_level": g, "dimension_levels": dl, "dimensions": dn, "periods": p}
+                                         for (g, dl, dn), p in sorted(combos.items())], "scope": SWING_SCOPE}
+    if not any(c["GeoLevel"] == geo_level and c["Period"] == period and (c.get("DimensionLevels") or "") == dimension_levels
+               for c in cubes):
+        raise KeyError(f"{indicator} has no data for geo_level={geo_level!r}, period={period!r}, "
+                       f"dimension_levels={dimension_levels!r}; call get_swing without them to see what it has")
+    path = (f"DataCubes(Dimensionlevels='{_swing_q(dimension_levels)}',GeoLevel='{_swing_q(geo_level)}',"
+            f"Indicator='{_swing_q(indicator)}',Period='{_swing_q(period)}')/Data")
+    data = _swing_all(base, key, path)
+    areas = {m["Code"]: m.get("Name") for m in _swing_all(base, key, f"GeoLevels/{_swing_q(geo_level)}/GeoLevelMembers")}
+    dims = {}
+    for lvl in filter(None, dimension_levels.split(",")):
+        dims.update({m["Code"]: m.get("Name") for m in _swing_all(base, key, f"DimensionLevels/{_swing_q(lvl)}/DimensionLevelMembers")})
+    # a word matches the start of a word in the code or name: 'assen' is Assen, not Wassenaar
+    words = [re.compile(rf"(?<![a-z0-9]){re.escape(sources._fold(w))}") for w in (geo_query or "").split()]
+    rows = []
+    for v in data:
+        area = f"{v['GeoItem']} = {areas.get(v['GeoItem'], '?')}"
+        if not all(w.search(sources._fold(area)) for w in words):
+            continue
+        row = {"area": area, "period": v["Period"], "value": v.get("Value"), "value_type": v.get("ValueType")}
+        if v.get("DimensionLevelMembers"):
+            row["breakdown"] = ", ".join(f"{m} = {dims.get(m, '?')}" for m in v["DimensionLevelMembers"].split(","))
+        rows.append(row)
+    return {**info, "geo_level": geo_level, "period": period, "rows_total": len(rows), "returned": min(len(rows), limit),
+            "truncated": len(rows) > limit, "rows": rows[:limit], "source_url": f"{base}/{path}",
+            "site_url": base.rsplit("/ods/", 1)[0], "scope": SWING_SCOPE}
+
+
 # ---------------------------------------------------------------- CLI
 
 def check():
@@ -435,6 +674,13 @@ def check():
         "cbs search": lambda: any(h["id"] == "85968ENG" for h in search_cbs("government finance statistics key figures")["results"]),
         "cbs values": lambda: get_cbs("85968ENG", {"Periods": ["2025JJ00"]}, ["GovernmentRevenue_1"])["rows"][0]["GovernmentRevenue_1"] > 0,
         "cbs dataderden": lambda: describe_cbs_table(search_cbs("Wmo-cliënten maatwerkvoorziening")["results"][0]["id"])["dimensions"],
+        "rivm statline": lambda: any(h["id"] == "50137NED" for h in search_cbs("kosten van ziekten")["results"]),
+        "open dis": lambda: read_table("https://opendisdata.nza.nl/download/csv/06_REF_SPC.csv", filters={"SPECIALISME_CD": ["0303"]})["rows_matched"] > 0,
+        "open dis moved host": lambda: read_table("http://www.opendisdata.nl/download/csv/06_REF_SPC.csv", limit=1)["rows_total"] > 0,
+        "zorginzicht kvk": lambda: read_table(next(x["url"] for x in documents.links(
+            "https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging", "Wijkverpleging verslagjaar 2024 Excel")["links"]),
+            filters={"KvkNummer": ["61354740"]})["rows_matched"] > 0,
+        **{f"swing {s}": (lambda s=s: search_swing(s, "zorg")["total"] > 0) for s in SWING if os.environ.get(SWING[s][1])},
     }
     ok = True
     for name, probe in probes.items():
@@ -454,6 +700,10 @@ def main(argv=None):
     sub.add_parser("datasets").add_argument("q")
     sub.add_parser("dataset").add_argument("id")
     s = sub.add_parser("table"); s.add_argument("url"); s.add_argument("--query"); s.add_argument("--sheet")
+    s.add_argument("--filters", default="{}", help='JSON, e.g. {"KvkNummer": ["61354740"]}'); s.add_argument("--member")
+    s = sub.add_parser("swing"); s.add_argument("site", choices=sorted(SWING)); s.add_argument("q")
+    s = sub.add_parser("swing-get"); s.add_argument("site", choices=sorted(SWING)); s.add_argument("indicator")
+    s.add_argument("--geo-level"); s.add_argument("--period"); s.add_argument("--geo-query"); s.add_argument("--dimension-levels", default="")
     sub.add_parser("cbs").add_argument("q")
     s = sub.add_parser("cbs-table"); s.add_argument("id"); s.add_argument("--dimension"); s.add_argument("--query")
     s = sub.add_parser("cbs-get"); s.add_argument("id"); s.add_argument("--filters", default="{}", help='JSON, e.g. {"Perioden": ["2024JJ00"]}')
@@ -463,7 +713,10 @@ def main(argv=None):
     if a.cmd == "check":
         sys.exit(0 if check() else 1)
     r = {"datasets": lambda: search_datasets(a.q), "dataset": lambda: get_dataset(a.id),
-         "table": lambda: read_table(a.url, a.query, sheet=a.sheet), "cbs": lambda: search_cbs(a.q),
+         "table": lambda: read_table(a.url, a.query, sheet=a.sheet, filters=json.loads(a.filters), member=a.member),
+         "swing": lambda: search_swing(a.site, a.q),
+         "swing-get": lambda: get_swing(a.site, a.indicator, a.geo_level, a.period, a.geo_query, a.dimension_levels),
+         "cbs": lambda: search_cbs(a.q),
          "cbs-table": lambda: describe_cbs_table(a.id, a.dimension, a.query),
          "cbs-get": lambda: get_cbs(a.id, json.loads(a.filters), a.topics)}[a.cmd]()
     print(json.dumps(r, ensure_ascii=False, indent=1))

@@ -330,9 +330,16 @@ def datasets_search(q: str, limit: int = 20, start: int = 0):
 
 @app.get("/datasets/table")
 def datasets_table(url: str, q: str | None = None, limit: int = 50, offset: int = 0, sheet: str | None = None,
-                   header_row: int | None = None, refresh: bool = False):
+                   header_row: int | None = None, refresh: bool = False, filters: str | None = None,
+                   member: str | None = None):
     """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim."""
-    return _source(datasets.read_table, url, q, limit, offset, sheet, header_row, refresh)
+    try:
+        flt = json.loads(filters) if filters else None
+    except ValueError:
+        raise HTTPException(400, 'filters must be JSON, e.g. {"KvkNummer":["61354740"]}')
+    if flt is not None and not isinstance(flt, dict):
+        raise HTTPException(400, 'filters must be a JSON object, e.g. {"KvkNummer":["61354740"]}')
+    return _source(datasets.read_table, url, q, limit, offset, sheet, header_row, refresh, filters=flt, member=member)
 
 
 @app.get("/datasets/{dataset_id}")
@@ -363,6 +370,19 @@ def cbs_values(table_id: str, filters: str | None = None, topics: str | None = N
 def cbs_table(table_id: str, dimension: str | None = None, q: str | None = None):
     """What a CBS table holds; with dimension, that dimension's codes matching q."""
     return _source(datasets.describe_cbs_table, table_id, dimension, q)
+
+
+@app.get("/swing/{site}/search")
+def swing_search(site: str, q: str, limit: int = 20):
+    """Indicators on a Swing site (prognosemodelzw, waarstaatjegemeente) by words in code, name or description."""
+    return _source(datasets.search_swing, site, q, limit)
+
+
+@app.get("/swing/{site}/{indicator}")
+def swing_values(site: str, indicator: str, geo_level: str | None = None, period: str | None = None,
+                 q: str | None = None, dimension_levels: str = "", limit: int = 500):
+    """Values for an indicator on a Swing site per area and period; or area levels and periods when omitted."""
+    return _source(datasets.get_swing, site, indicator, geo_level, period, q, dimension_levels, limit)
 
 
 # ---------------------------------------------------------------- saved conversations

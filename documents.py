@@ -39,7 +39,9 @@ import digimv
 import sources
 
 PUB = digimv.DATA / "pub"
-PUB_V = 3  # bump when reading changes: cached documents from older versions are read again
+PUB_V = 3  # bump when reading PDFs changes: cached PDFs from older versions are read (and OCR'd) again
+TEXT_V = 4  # the same for HTML, XML and Word; 4: HTML table rows on one line
+_v = lambda kind: PUB_V if kind == "pdf" else TEXT_V
 MAX_BYTES = 80 * 1024 * 1024
 PART = 6000  # characters per part of a text document (Word, HTML, XML)
 SCAN_PROMPT = digimv.SCAN_PROMPT.replace("a Dutch healthcare organisation's annual report (jaarverantwoording)",
@@ -157,23 +159,48 @@ def _allowed(url):
         time.sleep(slot - now)
 
 
-def fetch(url, timeout=120):
-    """(body, content type, final URL) of a public URL, at most MAX_BYTES."""
+# ponytail: hosts whose old name no longer resolves while catalogues still link it; add one when a source moves.
+# Always https: the new Open DIS host redirects http to its home page, dropping the path.
+MOVED = {"opendisdata.nl": "opendisdata.nza.nl", "www.opendisdata.nl": "opendisdata.nza.nl"}
+
+
+def _safe_url(url):
+    """Percent-encode what a page or the model left raw (spaces, accents): urllib refuses those. '%' is kept, so an
+    encoded URL stays as it is; a moved host is replaced by its new name."""
+    u = urllib.parse.urlsplit(urllib.parse.quote(url.strip(), safe=":/?#[]@!$&'()*+,;=%~"))
+    if u.hostname in MOVED:
+        u = u._replace(scheme="https", netloc=MOVED[u.hostname])
+    return urllib.parse.urlunsplit(u)
+
+
+def _stream(url, out, limit=MAX_BYTES, timeout=120):
+    """Write a public URL's body to the file object `out`, at most `limit` bytes. Returns (content type, final URL)."""
     # ponytail: urllib resolves the host again after _check (DNS-rebinding window); pin the checked address if the
     # API is ever reachable by untrusted users instead of only through Cloudflare Access
+    url = _safe_url(url)
     _check(url)
     _allowed(url)
     req = urllib.request.Request(url, headers={"User-Agent": digimv.UA, "Accept": "*/*"})
     try:
         with _opener.open(req, timeout=timeout) as r:
-            body = r.read(MAX_BYTES + 1)
-            if len(body) > MAX_BYTES:
-                raise ValueError(f"{url} is larger than {MAX_BYTES // 2**20} MB")
-            return body, r.headers.get_content_type(), r.geturl()
+            n = 0
+            while chunk := r.read(1 << 20):
+                n += len(chunk)
+                if n > limit:
+                    raise ValueError(f"{url} is larger than {limit // 2**20} MB")
+                out.write(chunk)
+            return r.headers.get_content_type(), r.geturl()
     except urllib.error.HTTPError as e:
         if 400 <= e.code < 500:  # a wrong or moved link, not a broken service
             raise ValueError(f"{url} answers HTTP {e.code} ({e.reason})") from e
         raise
+
+
+def fetch(url, timeout=120):
+    """(body, content type, final URL) of a public URL, at most MAX_BYTES."""
+    buf = io.BytesIO()
+    ctype, final = _stream(url, buf, MAX_BYTES, timeout)
+    return buf.getvalue(), ctype, final
 
 
 # ---------------------------------------------------------------- reading
@@ -216,6 +243,10 @@ def markup_text(s, xml=False):
     """HTML or XML (CVDR, gazettes, Word's document.xml) -> plain text, a line per block, headings as '## '.
     In XML every element is a word of its own (<label>Artikel</label><nr>1</nr> is 'Artikel 1'); in HTML inline
     tags sit inside words, so they vanish without a space."""
+    if not xml:
+        # HTML whitespace means nothing, so a table written over many source lines stays one line per row, its
+        # cells apart by tabs (Zorgcijfersdatabank). ponytail: <pre> is flattened too; keep it if a source needs it
+        s = re.sub(r"\s+", " ", s)
     if xml:
         if "<body" in s:  # CVDR and gazette XML: the metadata comes first, the text in <body>
             s = s[s.index("<body"):]
@@ -316,7 +347,7 @@ def _index(db, did, d, texts):
         db.execute("DELETE FROM pub_pages_fts WHERE doc=?", (did,))
         db.executemany("INSERT INTO pub_pages_fts VALUES (?,?,?)", [(t, did, i) for i, t in enumerate(texts, 1)])
         db.execute("INSERT OR REPLACE INTO pub_docs VALUES (?,?,?,?,?,?,?,?,?)",
-                   (did, d["url"], d["file_url"], d["kind"], d["size"], d["sha256"], d["fetched_at"], len(texts), PUB_V))
+                   (did, d["url"], d["file_url"], d["kind"], d["size"], d["sha256"], d["fetched_at"], len(texts), _v(d["kind"])))
 
 
 def read(url, pages="1-5", refresh=False, db=None):
@@ -328,14 +359,14 @@ def read(url, pages="1-5", refresh=False, db=None):
     cache = PUB / f"{did}.pages.json"
     with _lock(did):
         d = json.loads(cache.read_text()) if cache.exists() else None
-        new = refresh or not d or d.get("v") != PUB_V
+        new = refresh or not d or d.get("v") != _v(d.get("kind"))
         if new:
             body, ctype, final = fetch(url)
             if (pdf := _gazette_pdf(final)) and kind_of(body, ctype) == "html":
                 body, ctype, final = fetch(pdf)
             kind = kind_of(body, ctype)
             PUB.mkdir(parents=True, exist_ok=True)
-            d = {"url": url, "file_url": final, "kind": kind, "size": len(body), "v": PUB_V,
+            d = {"url": url, "file_url": final, "kind": kind, "size": len(body), "v": _v(kind),
                  "sha256": hashlib.sha256(body).hexdigest(), "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
             if kind == "pdf":
                 pdf_file = PUB / f"{did}.pdf"
@@ -357,7 +388,7 @@ def read(url, pages="1-5", refresh=False, db=None):
             tmp.replace(cache)
         texts = [p["markdown"] if p["markdown"] is not None else p.get("text", "") for p in d["pages"]]
         indexed = db.execute("SELECT sha256, v FROM pub_docs WHERE id=?", (did,)).fetchone()
-        if new or not indexed or tuple(indexed) != (d["sha256"], PUB_V):
+        if new or not indexed or tuple(indexed) != (d["sha256"], _v(d["kind"])):
             _index(db, did, d, texts)
         elif todo:
             with db:
@@ -408,11 +439,20 @@ def page_links(body, base):
     out, seen = [], set()
     for href, text in p.links:
         url = urllib.parse.urldefrag(urllib.parse.urljoin(base, href.strip()))[0]
-        if not url.startswith(("http://", "https://")) or url in seen:
+        if not url.startswith(("http://", "https://")):
+            continue
+        url = _safe_url(url)
+        if url in seen:
             continue
         seen.add(url)
         ext = urllib.parse.urlsplit(url).path.rsplit(".", 1)[-1].lower()
-        out.append({"text": text, "url": url, "type": ext if ext in FILE_TYPES else "page"})
+        if ext in FILE_TYPES:
+            kind = ext
+        else:
+            # portals like zorginzicht.nl serve files at query endpoints without an extension, typing them in the link text
+            m = re.search(r"(?i)\b(PDF|Excel|CSV|ZIP|Word)[ -](file|bestand)\b", text)
+            kind = {"pdf": "pdf", "excel": "xlsx", "csv": "csv", "zip": "zip", "word": "docx"}.get(m.group(1).lower(), "page") if m else "page"
+        out.append({"text": text, "url": url, "type": kind})
     return " ".join(p.title.split()), out
 
 
@@ -661,6 +701,16 @@ def check():
         "links": lambda: sum(x["type"] == "pdf" for x in links(IZA_PLANS, limit=500)["links"]) > 50,
         "read pdf": lambda: read(search_publications("jeugdhulp", creator="Leiden", gazette="gmb")["results"][0]["url"],
                                  pages="1")["pages"][0]["markdown"] != "",
+        # a link with spaces (Vektis) must still be readable
+        "pdf link with spaces": lambda: read(next(x["url"] for x in links(
+            "https://www.vektis.nl/zorgprisma/zorgkosten-en-aantallen/publicatie-zorgthermometer", "pdf")["links"]),
+            pages="1")["page_count"] > 1,
+        # an HTML table keeps its rows: a row label and its amounts on one line
+        "html table rows": lambda: any(ln.startswith("Gehandicaptenzorg\t€ ") for p in read(
+            "https://www.zorgcijfersdatabank.nl/databank?infotype=wlz&label=00-totaal&tabel=B_basis&geg=ko&item=",
+            pages="all", refresh=True)["pages"] for ln in p["markdown"].splitlines()),
+        "file type from link text": lambda: any(x["type"] == "xlsx" for x in links(
+            "https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging")["links"]),
     }
     ok = True
     for name, probe in probes.items():

@@ -65,8 +65,8 @@ def _older(stamp, age):
     return datetime.fromisoformat(stamp) < _now() - age
 
 
-def _json(url, body=None, timeout=60):
-    headers = {"Accept": "application/json"}
+def _json(url, body=None, timeout=60, headers=None):
+    headers = {"Accept": "application/json", **(headers or {})}
     data = None
     if body is not None:
         data = json.dumps(body).encode()

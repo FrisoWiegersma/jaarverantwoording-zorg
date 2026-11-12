@@ -72,7 +72,27 @@ search_public_documents(query, url) en lees dan alleen die pagina's. Staat een d
 verzekeraars, IZA-regioplannen, raadsstukken), gebruik dan list_links op de pagina en volg de links tot het bestand.
 11. Open data: search_cbs, dan describe_cbs_table (codes van gemeenten en perioden opzoeken met dimension en query) en get_cbs. \
 search_datasets en get_dataset voor data.overheid.nl; read_table leest een CSV-, Excel- of JSON-bestand. Een CBS-waarde met een symbol \
-is geen 0 maar onbekend of geheim: zeg dat. Een periode met * is voorlopig.
+is geen 0 maar onbekend of geheim: zeg dat. Een periode met * is voorlopig. Zoek je een code (KvK-nummer, AGB-code, diagnose), gebruik \
+dan filters op die kolom in read_table, niet query: query vindt het getal ook in bedragen.
+12. Zorgdata zonder eigen zoektool; begin op deze pagina's:
+- Kwaliteit per zorgaanbieder (Zorginzicht): list_links op https://www.zorginzicht.nl/algemeen/map/openbare-data, dan op de \
+sectorpagina; elk Excel-bestand heeft één rij per indicator per locatie. Lees het met read_table en filters {"KvkNummer": [kvk]}. De \
+bestandslinks veranderen bij elk bezoek: haal ze opnieuw op met list_links, hergebruik geen oude link.
+- DBC's van ziekenhuizen (NZa Open DIS), CSV op https://opendisdata.nza.nl/download/csv/ : 01_DBC.csv (zorgproducten per jaar, \
+specialisme en diagnose, met patiënten en gemiddelde verkoopprijs), 02_DBC_PROFIEL.csv (zorgactiviteiten per zorgproduct; 11 miljoen \
+rijen: een minuut per vraag, de eerste keer enkele minuten), namen bij de codes in 04_REF_DGN.csv, 05_REF_ZPD.csv, 06_REF_SPC.csv en 03_REF_ZAT.csv. Filter op JAAR en de \
+codekolommen, codes met voorloopnullen zoals in het bestand (specialisme 0303).
+- Zvw-zorgkosten per gemeente en postcode (Vektis): list_links op https://www.vektis.nl/zorgprisma/open-databestanden, dan \
+read_table; de Zorgthermometer en factsheets staan als PDF op vektis.nl.
+- Kosten van de Zvw en de Wlz per zorgsoort (Zorgcijfersdatabank): read_document op \
+https://www.zorgcijfersdatabank.nl/databank?infotype=zvw&label=00-totaal&tabel=B_basis&geg=ko&item= (Wlz: infotype=wlz); elke \
+tabelrij staat op één regel, cellen gescheiden door tabs, en linkt naar het niveau eronder (list_links met query "item="). \
+Geneesmiddelen en hulpmiddelen (GIP) als CSV via list_links op https://www.zorgcijfersdatabank.nl/algemeen/open-data-gip.
+- CBS-nieuws en maatwerktabellen: list_links op https://www.cbs.nl/nl-nl/zoeken?q=… ; een maatwerk-Excel lees je met read_table.
+- VZinfo (RIVM): de cijfers komen uit RIVM StatLine, die met search_cbs en get_cbs te lezen is; een link \
+statline.rivm.nl/#/RIVM/nl/dataset/50137NED is get_cbs("50137NED").
+- Arbeidsmarkt zorg en welzijn (Prognosemodel Zorg en Welzijn): search_swing en get_swing met site "prognosemodelzw". Zegt de \
+tool dat de bron niet is aangesloten, meld dat dan en probeer het niet opnieuw.
 
 Regels
 - Noem nooit een bedrag, aantal of percentage dat je niet letterlijk in een tooluitkomst hebt gelezen. Rekenen mag (bijvoorbeeld \
@@ -89,8 +109,9 @@ de tool het geeft (in duizenden euro's).
   Bij een openbare PDF is het pad de cite van de pagina uit read_document, precies zoals gegeven; de lezer ziet de pagina dan \
 naast het antwoord.
   Uit een webpagina of Word-document, CBS StatLine of een databestand citeer je (ook bedragen) met een gewone link met letterlijk \
-citaat: [deel 2](cite van dat deel "Het tarief bedraagt € 72,40 per uur"), [CBS](source-URL van get_cbs "Wmo-cliënten 8575") of \
-[rij 12](file_url van read_table "St. Overweeghuis 95000"). Deze links kan present_answer niet tonen: geef een antwoord met \
+citaat: [deel 2](cite van dat deel "Het tarief bedraagt € 72,40 per uur"), [CBS](source-URL van get_cbs "Wmo-cliënten 8575"), \
+[rij 12](file_url van read_table "St. Overweeghuis 95000") of [Prognosemodel](source_url van get_swing "Holland Rijnland 1200"). \
+Deze links kan present_answer niet tonen: geef een antwoord met \
 zulke cijfers in gewone tekst, met de Markdown-tabel hieronder.
   Bij een document is 2023 het jaar van het document, 84870 het doc_id en 12 de pagina; bij de vragenlijst het jaar, de org_id en \
 de var van het veld. Tussen de aanhalingstekens staat een kort letterlijk citaat (hooguit 80 tekens): het label en het getal precies \
@@ -150,6 +171,7 @@ interface Table {
   url: string; file_url: string; format: string; sheet: string | null; sheets: string[] | null; fetched_at: string;
   header_row: number; columns: string[]; rows_total: number; rows_matched: number; truncated: boolean; scope: string;
   rows: Record<string, string | number | null>[];
+  member: string | null; members: string[] | null;
 }
 
 interface Figures {
@@ -448,19 +470,19 @@ const tools = {
   }),
   read_table: tool({
     description:
-      "Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim, each with its row number. query keeps rows containing " +
-      "every word (an AGB code, a name, a municipality). The header row is detected (title rows above it are in title_rows); " +
-      "header_row overrides it; sheet picks an Excel sheet (all are in sheets). rows_total and rows_matched say how much there " +
-      "is: page with offset before saying something is not in the file. Cite the file URL and the row number.",
+      "Rows of a CSV, Excel (.xlsx) or JSON file by URL (also inside a ZIP: member, listed in members), values verbatim, each with its row number. filters: {column: [values]}, exact match on that column: use it for a code (KvK number, AGB code, diagnosis or product code, with its leading zeros as in the file); query keeps rows containing every word anywhere, so a code can also hit an amount. The header row is detected (title rows above it are in title_rows); header_row overrides it; sheet picks an Excel sheet (all are in sheets). rows_total and rows_matched say how much there is: page with offset before saying something is not in the file. Large files (up to 1 GB) are read in full: about a minute for 10 million rows, and the first read also downloads the file (a few minutes); use filters to keep the result small. Cite the file URL and the row number.",
     inputSchema: z.object({
       url: z.string().url().max(2000),
       query: z.string().max(200).optional(),
       offset: z.number().int().min(0).default(0),
       sheet: z.string().max(100).optional(),
       header_row: z.number().int().min(1).optional(),
+      // A bare string is one value (datasets._scan reads it as [value]); Gemini sends that sometimes.
+      filters: z.record(z.string(), z.union([z.string().max(200), z.array(z.string().max(200)).max(50)])).optional(),
+      member: z.string().max(300).optional(),
     }),
-    execute: async ({ url, query, offset, sheet, header_row }): Promise<Table> =>
-      api("/datasets/table", { url, q: query, offset, sheet, header_row, limit: 40 }),
+    execute: async ({ url, query, offset, sheet, header_row, filters, member }): Promise<Table> =>
+      api("/datasets/table", { url, q: query, offset, sheet, header_row, filters: filters && JSON.stringify(filters), member, limit: 40 }),
     // Rows as arrays under one column list: the column names are not repeated per row.
     toModelOutput: ({ output: { rows, columns, ...r } }) => ({
       type: "json",
@@ -469,8 +491,9 @@ const tools = {
   }),
   search_cbs: tool({
     description:
-      "CBS StatLine tables, including those CBS publishes for others (dataderden: Wmo, youth care, Iv3, health monitors), by words " +
-      "in id, title or summary; newest first. Then describe_cbs_table and get_cbs.",
+      "CBS StatLine tables, including those CBS publishes for others (dataderden: Wmo, youth care, Iv3, health monitors, and RIVM " +
+      "StatLine behind VZinfo, ids 50xxxNED such as Kosten van ziekten), by words in id, title or summary; newest first. Then " +
+      "describe_cbs_table and get_cbs.",
     inputSchema: z.object({ query: z.string().min(2).max(200) }),
     execute: async ({ query }) => api("/cbs/search", { q: query, limit: 15 }),
   }),
@@ -494,6 +517,29 @@ const tools = {
     }),
     execute: async ({ table_id, filters, topics }) =>
       api(`/cbs/${table_id}/values`, { filters: filters && JSON.stringify(filters), topics: topics?.join(","), limit: 150 }),
+  }),
+  search_swing: tool({
+    description:
+      "Indicators on a Swing open-data site by words: site 'prognosemodelzw' (Prognosemodel Zorg en Welzijn: workforce, intake, outflow and shortage forecasts for care and welfare, by region and sector) or 'waarstaatjegemeente' (municipal indicators). Each needs an API key on the server; an error saying 'not connected' means it has none: say so and don't retry. Then get_swing.",
+    inputSchema: z.object({
+      site: z.enum(["prognosemodelzw", "waarstaatjegemeente"]),
+      query: z.string().min(2).max(200),
+    }),
+    execute: async ({ site, query }) => api(`/swing/${site}/search`, { q: query, limit: 15 }),
+  }),
+  get_swing: tool({
+    description:
+      "An indicator from search_swing. Without geo_level and period: the area levels, periods and breakdowns it has. With geo_level and period (codes as listed, e.g. 'gemeente', 'year_2025') and optionally dimension_levels (as listed): its values per area, each area named; geo_query keeps areas whose name or code starts with the words. value null is missing, never 0. Cite source_url.",
+    inputSchema: z.object({
+      site: z.enum(["prognosemodelzw", "waarstaatjegemeente"]),
+      indicator: z.string().min(1).max(120),
+      geo_level: z.string().max(60).optional(),
+      period: z.string().max(60).optional(),
+      geo_query: z.string().max(200).optional(),
+      dimension_levels: z.string().max(300).optional(),
+    }),
+    execute: async ({ site, indicator, geo_level, period, geo_query, dimension_levels }) =>
+      api(`/swing/${site}/${encodeURIComponent(indicator)}`, { geo_level, period, q: geo_query, dimension_levels, limit: 150 }),
   }),
 };
 

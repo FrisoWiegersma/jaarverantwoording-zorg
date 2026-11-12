@@ -53,6 +53,8 @@ Each source is fetched on first use and cached in `digimv.db`:
 
 `datasets.py` covers open data: the data.overheid.nl catalogue, CSV/XLSX/JSON files read as rows with their spreadsheet row numbers, and every CBS StatLine table (opendata and dataderden) with the same verbatim-key and 10,000-row rules as Iv3.
 
+CSV files are streamed from a disk cache (up to 1 GB, a day), so only the header, the counts and the requested page are held in memory; filters match a named column exactly; a ZIP member can be read; Excel and JSON are read in memory up to 80 MB. A Swing client accesses ABF's Open Data Service behind Prognosemodel Zorg en Welzijn and Waarstaatjegemeente, with a key per site from the environment, the key only sent to that site, and missing values kept as null.
+
 Network errors are never cached. Iv3 reads every dimension verbatim, because CBS pads keys inconsistently. It also fetches each report in chunks by policy area, because a query above 10,000 rows is refused rather than paged, and each chunk's count must match.
 
 ## Evidence and export

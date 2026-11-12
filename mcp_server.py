@@ -11,10 +11,10 @@ import documents
 import sources
 
 
-def _call(fn, *args):
+def _call(fn, *args, **kwargs):
     """Every failure reaches the agent as its message; the SDK hides other exceptions."""
     try:
-        return fn(*args)
+        return fn(*args, **kwargs)
     except KeyError as e:
         raise ToolError(str(e.args[0]) if e.args else "not found") from e
     except (ValueError, RuntimeError, OSError) as e:
@@ -38,7 +38,8 @@ mcp = MCPServer(
         "For documents only linked from a site (insurers' purchasing policies, IZA regional plans, council "
         "documents) use list_links on the page and follow it. Open data: search_datasets/get_dataset "
         "(data.overheid.nl), read_table for a CSV/XLSX/JSON file, search_cbs/describe_cbs_table/get_cbs for CBS "
-        "StatLine. Quote what a document says and cite its page (`cite`); a search hit is not yet evidence.\n"
+        "StatLine, search_swing/get_swing for Swing (prognosemodelzw, waarstaatjegemeente). "
+        "Quote what a document says and cite its page (`cite`); a search hit is not yet evidence.\n"
         "Dutch healthcare annual reports (DigiMV jaarverantwoording, 2019-2025). Workflow: search_organizations "
         "to find the org (org_id) and its documents. For figures (omzet, resultaat, eigen vermogen, activa, fte, "
         "WNT, ...) call get_figures(org_id, year, query) first: the values the organisation filed itself, exact, "
@@ -286,12 +287,15 @@ def get_dataset(dataset_id: str) -> dict:
 
 @mcp.tool()
 def read_table(url: str, query: str | None = None, limit: int = 50, offset: int = 0, sheet: str | None = None,
-               header_row: int | None = None) -> dict:
-    """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim, each with its row number. query keeps rows
+               header_row: int | None = None, filters: dict[str, list[str]] | None = None,
+               member: str | None = None) -> dict:
+    """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim, each with its row number. filters:
+    {column: [values]}, exact match on that column (use it for codes such as a KvK number, AGB code or diagnosis code:
+    query also matches amounts). member picks a file inside a ZIP (listed in `members`). query keeps rows
     containing every word (an AGB code, a name, a municipality). The header is detected (title rows above it are
     in title_rows); header_row overrides it. sheet picks an Excel sheet (all are in `sheets`). rows_total and
     rows_matched say how much there is: page with offset before saying something is not in the file."""
-    return _call(datasets.read_table, url, query, limit, offset, sheet, header_row)
+    return _call(datasets.read_table, url, query, limit, offset, sheet, header_row, filters=filters, member=member)
 
 
 @mcp.tool()
@@ -316,6 +320,22 @@ def get_cbs(table_id: str, filters: dict[str, list[str]] | None = None, topics: 
     Refused at 10,000 rows or more: filter more. A value CBS left out comes as {value: null, symbol} (see
     `symbols`): never read it as 0. Cite `source`, the exact query."""
     return _call(datasets.get_cbs, table_id, filters, topics, limit)
+
+
+@mcp.tool()
+def search_swing(site: str, query: str, limit: int = 20) -> dict:
+    """Indicators on a Swing site with an API key (prognosemodelzw: labour-market forecasts for health and welfare;
+    waarstaatjegemeente: municipal indicators) by words. Then get_swing."""
+    return _call(datasets.search_swing, site, query, limit)
+
+
+@mcp.tool()
+def get_swing(site: str, indicator: str, geo_level: str | None = None, period: str | None = None,
+              geo_query: str | None = None, dimension_levels: str = "") -> dict:
+    """Without geo_level and period: which area levels, periods and breakdowns an indicator has. With them: its
+    values per area, each area named; geo_query keeps areas by name or code. A null value is missing, never 0.
+    Cite source_url."""
+    return _call(datasets.get_swing, site, indicator, geo_level, period, geo_query, dimension_levels)
 
 
 if __name__ == "__main__":
