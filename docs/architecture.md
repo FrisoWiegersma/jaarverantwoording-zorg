@@ -37,6 +37,20 @@ Metadata refreshes in the background once it is older than 24 hours, checked hou
 
 PDF pages with an image and little visible text go through OCR. Invisible scanner text and short auditor stamps should not cause a scanned page to be treated as ordinary text. Each extracted page records its source; OCR output remains an interpretation of the image.
 
+## Other sources
+
+`sources.py` adds the care-provider register (LRZa), the accounts governments report to CBS (Iv3) and court rulings, with the same rules as DigiMV:
+- values are kept as the source gives them, with that source;
+- what a source lacks is reported as missing, never filled in;
+- each function serves the CLI, API, MCP and chat alike.
+
+Each source is fetched on first use and cached in `digimv.db`:
+- **LRZa:** for 7 days.
+- **Iv3:** per body and report, until CBS changes the table.
+- **Rulings:** for 30 days.
+
+Network errors are never cached. Iv3 reads every dimension verbatim, because CBS pads keys inconsistently. It also fetches each report in chunks by policy area, because a query above 10,000 rows is refused rather than paged, and each chunk's count must match.
+
 ## Evidence and export
 
 A PDF citation identifies a year, document, page, and quote. The API renders the page with matching text highlighted and reports `all`, `partial`, or `none`. A questionnaire citation identifies the organisation, year, and filed variable; the panel shows the label path and original value.

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 import digimv
 import projects
+import sources
 
 # A frozen API logs nothing (uvicorn skips requests whose caller gave up), so on a freeze run
 # `docker compose kill -s SIGUSR1 api` and `docker compose logs api` shows where every thread is stuck.
@@ -164,6 +165,71 @@ def key_figures(org_id: str, year: int):
         raise HTTPException(400, str(e))
     except (RuntimeError, OSError) as e:
         raise HTTPException(502, str(e))
+
+
+def _source(fn, *args, **kwargs):
+    """The same status codes for every source: bad input 400, not found 404, upstream down or changed 502."""
+    try:
+        return fn(*args, **kwargs)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except KeyError as e:
+        raise HTTPException(404, str(e.args[0]) if e.args else "not found")
+    except (RuntimeError, OSError) as e:
+        raise HTTPException(502, str(e))
+
+
+@app.get("/orgs/{org_id}/key-figures")
+def key_figures_series(org_id: str, years: str | None = None):
+    """Key figures for several years at once: years=2021,2022,2023, or every indexed year from 2020."""
+    try:
+        wanted = [int(y) for y in years.split(",")] if years else None
+    except ValueError:
+        raise HTTPException(400, "years must look like 2021,2022")
+    return _source(digimv.key_figures_series, org_id, wanted)
+
+
+@app.get("/register/search")
+def register_search(naam: str | None = None, postcode: str | None = None, kvk: str | None = None):
+    """Live LRZa search; at most 50 hits plus the total, `truncated` when there are more."""
+    return _source(sources.search_register, naam, postcode, kvk)
+
+
+@app.get("/register/{kvk}")
+def register(kvk: str):
+    """An organisation's entry in the Landelijk Register Zorgaanbieders (AGB, Wtza, permit, branches)."""
+    return _source(sources.register, kvk)
+
+
+@app.get("/iv3/bodies")
+def iv3_bodies(q: str, kind: str | None = None, year: int | None = None):
+    """Municipalities, joint arrangements, provinces and water boards by name or code."""
+    return _source(sources.find_body, q, kind, year)
+
+
+@app.get("/iv3/value/{table}/{code}/{report}/{taakveld}/{categorie}")
+def iv3_value(table: str, code: str, report: str, taakveld: str, categorie: str):
+    """One Iv3 cell: the evidence behind a /bron/iv3/ citation."""
+    return _source(sources.iv3_value, table, code, report, taakveld, categorie)
+
+
+@app.get("/iv3/{kind}/{year}/{code}")
+def iv3(kind: str, year: int, code: str, taakveld: str | None = None, verslagsoort: str = "Jaarrekening",
+        include_zero: bool = False):
+    """A body's Iv3 cells (x € 1.000) per policy area and category, with each cell's /bron/iv3/ citation."""
+    return _source(sources.iv3, kind, year, code, taakveld, verslagsoort, include_zero)
+
+
+@app.get("/rulings/search")
+def rulings_search(q: str, limit: int = 10, exact: bool = True):
+    """Published court rulings that mention a phrase (rechtspraak.nl's own search)."""
+    return _source(sources.search_rulings, q, limit, exact)
+
+
+@app.get("/rulings/{ecli}")
+def ruling(ecli: str, part: int = 1):
+    """A ruling's metadata, summary and text from the official open data, one part at a time."""
+    return _source(sources.get_ruling, ecli, part)
 
 
 # ---------------------------------------------------------------- saved conversations

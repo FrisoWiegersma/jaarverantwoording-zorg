@@ -713,6 +713,20 @@ def key_figures(org_id, year, db=None):
         {"figures": pick_key_figures(f["figures"], f["consolidated"])}
 
 
+def key_figures_series(org_id, years=None, db=None):
+    """key_figures for several years at once (default: every year the organisation is indexed, 2020 on), fetched in
+    parallel: a first questionnaire read takes ~3 s, so six years cost one wait instead of six."""
+    db = db or connect()
+    if not years:
+        years = [y for y, in db.execute("SELECT DISTINCT year FROM orgs WHERE org_id=? AND year>=? ORDER BY year",
+                                        (org_id, FIGURES_FROM))]
+    years = sorted({int(y) for y in years})
+    if not years:
+        raise KeyError(f"organisation {org_id} has no indexed year from {FIGURES_FROM} on")
+    with ThreadPoolExecutor(min(len(years), 8)) as ex:  # own connection per thread: sqlite3 won't share one
+        return list(ex.map(lambda y: key_figures(org_id, y), years))
+
+
 # ---------------------------------------------------------------- integrity
 
 def verify(db=None):

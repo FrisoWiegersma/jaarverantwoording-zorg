@@ -7,7 +7,7 @@ import { Answer, CitationChip } from "@/components/answer";
 import CompareChart from "@/components/compare-chart";
 import MetricCard, { RollingNumber } from "@/components/kokonutui/metric-card";
 import SmoothTab, { type SwipeTabItem } from "@/components/kokonutui/smooth-tab";
-import { citationKey } from "@/lib/citations";
+import { citationKey, citationLabel, parseHref } from "@/lib/citations";
 import { parseNumber } from "@/lib/excel";
 import { chartGroups, compareSeries, figureTable, richAnswerSchema, trendSeries, type Figure, type presentAnswer } from "@/lib/rich-answer";
 
@@ -16,7 +16,7 @@ const EvidenceContext = createContext<{ question: string; activeKey: string | nu
 function Source({ figure: f }: { figure: Figure }) {
   const { activeKey, onCite } = useContext(EvidenceContext);
   const key = citationKey(f.href, f.quote);
-  return <CitationChip active={key === activeKey} href={f.href} label={f.href.includes("/project/") ? "Projectbron" : f.href.includes("/vragenlijst/") ? "DigiMV" : `p. ${f.href.split("/").at(-1)}`} onClick={() => onCite(key)} quote={f.quote} />;
+  return <CitationChip active={key === activeKey} href={f.href} label={citationLabel(parseHref(f.href)!)} onClick={() => onCite(key)} quote={f.quote} />;
 }
 
 /** The amount as filed, rolled up from zeros once when the card appears, like an odometer. Lands on the exact text. */

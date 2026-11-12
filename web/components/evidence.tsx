@@ -15,9 +15,17 @@ type Mark = [number, number, number, number];
 export type Shot = { kind: "page"; src: string; mark: Mark | null; found: "all" | "partial" | "none" };
 export type Filed = { kind: "figure"; org: string; field: { label: string; value: string; unit: string } | null };
 export type PrivatePage = { kind: "project"; filename: string; text: string; source: string; documentKind: string; shot: Shot | null };
-type Loaded = Shot | Filed | PrivatePage | "error";
+export type Iv3Cell = {
+  kind: "iv3";
+  cell: {
+    naam: string; year: number; verslagsoort: string; taakveld: string; taakveld_naam: string; categorie: string;
+    categorie_naam: string; soort: string | null; waarde: number | null; eenheid: string; plaatsing: string | null;
+  } | null;
+};
+type Loaded = Shot | Filed | PrivatePage | Iv3Cell | "error";
 type PageCitation = Extract<Citation, { kind: "page" }>;
 type FigureCitation = Extract<Citation, { kind: "figure" }>;
+type Iv3Citation = Extract<Citation, { kind: "iv3" }>;
 
 type PrivateCitation = Extract<Citation, { kind: "project" }>;
 const pagePath = (c: PageCitation | PrivateCitation) => c.kind === "project"
@@ -43,6 +51,15 @@ async function fetchFiled(c: FigureCitation): Promise<Filed> {
   return { kind: "figure", org: d.name, field: d.figures.find((f) => f.var === c.field) ?? null };
 }
 
+/** One cell of a body's Iv3 report as CBS publishes it; a cell that is not in the table loads as null. */
+async function fetchIv3(c: Iv3Citation): Promise<Iv3Cell> {
+  const path = [c.table, c.code, c.report, c.taakveld, c.categorie].map(encodeURIComponent).join("/");
+  const r = await fetch(`/digimv/iv3/value/${path}`);
+  if (r.status === 404) return { kind: "iv3", cell: null };
+  if (!r.ok) throw new Error(String(r.status));
+  return { kind: "iv3", cell: await r.json() };
+}
+
 // ponytail: session-long cache, object URLs never revoked; fine for a few hundred page images
 const loaded = new Map<string, Promise<Loaded>>();
 async function fetchPrivate(c: PrivateCitation): Promise<PrivatePage> {
@@ -58,7 +75,7 @@ function load(c: Citation): Promise<Loaded> {
   if (c.kind === "project") return fetchPrivate(c).catch(() => "error" as const);
   let p = loaded.get(c.key);
   if (!p) {
-    p = (c.kind === "page" ? fetchShot(c) : fetchFiled(c)).catch((): Loaded => {
+    p = (c.kind === "page" ? fetchShot(c) : c.kind === "iv3" ? fetchIv3(c) : fetchFiled(c)).catch((): Loaded => {
       loaded.delete(c.key); // a later look may succeed
       return "error";
     });
@@ -230,6 +247,7 @@ export function useCheck(c: Citation | undefined) {
   if (!c?.quote || !value || value === "error") return null;
   if (value.kind === "project") return !value.text.replace(/\s+/g, " ").includes(c.quote.replace(/\s+/g, " "));
   if (value.kind === "page") return value.found !== "all";
+  if (value.kind === "iv3") return value.cell?.waarde == null || !quoteMatches(c.quote, String(value.cell.waarde));
   return !value.field || !quoteMatches(c.quote, value.field.value);
 }
 
@@ -288,6 +306,67 @@ function FigureEvidence({ c, filed }: { c: FigureCitation; filed: Filed | "error
   );
 }
 
+/** 16646 with "x € 1.000" -> "16.646 (x € 1.000)": Iv3 amounts are thousands of euros, never whole euros. */
+export function formatIv3({ waarde, eenheid }: { waarde: number | null; eenheid: string }) {
+  return waarde == null ? "niet aangeleverd" : `${waarde.toLocaleString("nl-NL", { maximumFractionDigits: 4 })} (${eenheid})`;
+}
+
+function Iv3Evidence({ c, value }: { c: Iv3Citation; value: Iv3Cell | "error" | null }) {
+  const cell = value && value !== "error" ? value.cell : null;
+  return (
+    <>
+      <Heading sub={`CBS Iv3 · ${cell ? `${cell.verslagsoort} ${cell.year}` : c.table}`} title={cell?.naam ?? c.code} />
+
+      {/* The cell as the body reported it: policy area, then the category and its amount. */}
+      <div className="rounded-xl bg-muted/70 p-4 ring-1 ring-border">
+        {cell ? (
+          <>
+            <p className="text-[0.88rem] text-muted-foreground leading-snug">Taakveld {cell.taakveld}</p>
+            <p className="mt-1 font-semibold leading-snug">{cell.taakveld_naam}</p>
+            <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <span className="text-muted-foreground">{cell.soort ? `${cell.soort}: ` : ""}{cell.categorie_naam} ({cell.categorie})</span>
+              <mark className="rounded-[4px] bg-marker px-1.5 py-0.5 font-semibold text-marker-ink tabular-nums">{formatIv3(cell)}</mark>
+            </div>
+          </>
+        ) : (
+          <div className={cn("h-24", !value && "animate-pulse")} />
+        )}
+      </div>
+
+      <Status>
+        {value === "error" ? (
+          <>
+            {WARN}
+            De CBS-gegevens konden niet worden geladen. Probeer het later nog eens.
+          </>
+        ) : !value ? (
+          <span className="text-muted-foreground">CBS-gegevens laden…</span>
+        ) : !cell ? (
+          <>
+            {WARN}
+            Deze cel staat niet in CBS-tabel {c.table}.
+          </>
+        ) : cell.waarde == null ? (
+          <>
+            {WARN}
+            {cell.naam} heeft deze cel niet aangeleverd bij het CBS; dat is iets anders dan 0.
+          </>
+        ) : quoteMatches(c.quote, String(cell.waarde)) ? (
+          <>
+            {OK}
+            Zo gerapporteerd door {cell.naam} aan het CBS ({cell.plaatsing}, tabel {c.table}); onbewerkte cijfers, niet door het CBS gecontroleerd.
+          </>
+        ) : (
+          <>
+            {WARN}
+            Het antwoord noemt “{c.quote}”, maar gerapporteerd is {formatIv3(cell)}.
+          </>
+        )}
+      </Status>
+    </>
+  );
+}
+
 /** One citation's evidence, as the panel and the standalone /bron page show it. */
 export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocMeta> }) {
   const value = useLoaded(c);
@@ -297,6 +376,8 @@ export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocM
         <PrivateSource c={c} value={value as PrivatePage | "error" | null} />
       ) : c.kind === "page" ? (
         <PageEvidence c={c} doc={docs[`${c.year}/${c.docId}`]} shot={value as Shot | "error" | null} />
+      ) : c.kind === "iv3" ? (
+        <Iv3Evidence c={c} value={value as Iv3Cell | "error" | null} />
       ) : (
         <FigureEvidence c={c} filed={value as Filed | "error" | null} />
       )}
@@ -447,7 +528,7 @@ export function Evidence(props: EvidenceProps) {
             <X aria-hidden="true" className="size-5" />
           </button>
         </div>
-        <DrawerDescription className="sr-only">De pagina uit het jaarverslag of het veld uit de DigiMV-vragenlijst waar dit getal staat.</DrawerDescription>
+        <DrawerDescription className="sr-only">De pagina uit het jaarverslag, het veld uit de DigiMV-vragenlijst of de cel uit de CBS Iv3-gegevens waar dit getal staat.</DrawerDescription>
         <div className="overflow-y-auto px-5 pt-3 pb-8">
           <EvidenceBody {...props} />
         </div>

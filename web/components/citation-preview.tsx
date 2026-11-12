@@ -9,7 +9,7 @@
 
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { PrivateSource, type PrivatePage, type DocMeta, type Filed, formatFiled, pageWindow, type Shot, useCheck, useLoaded } from "@/components/evidence";
+import { PrivateSource, type PrivatePage, type DocMeta, type Filed, formatFiled, formatIv3, type Iv3Cell, pageWindow, type Shot, useCheck, useLoaded } from "@/components/evidence";
 import type { Citation } from "@/lib/citations";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -163,9 +163,11 @@ function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
   const check = useCheck(c);
   const shot = c.kind === "page" && value && value !== "error" ? (value as Shot) : null;
   const filed = c.kind === "figure" && value && value !== "error" ? (value as Filed) : null;
+  const cell = c.kind === "iv3" && value && value !== "error" ? (value as Iv3Cell).cell : null;
   if (c.kind === "project") return <PrivateSource c={c} value={value as PrivatePage | "error" | null} compact />;
-  const title = c.kind === "page" ? doc?.org : filed?.org;
-  const sub = c.kind === "page" ? `${doc?.type ?? "Document"} ${c.year} · pagina ${c.page}` : `DigiMV-vragenlijst ${c.year}`;
+  const title = c.kind === "page" ? doc?.org : c.kind === "iv3" ? cell?.naam ?? c.code : filed?.org;
+  const sub = c.kind === "page" ? `${doc?.type ?? "Document"} ${c.year} · pagina ${c.page}`
+    : c.kind === "iv3" ? `CBS Iv3${cell ? ` · ${cell.verslagsoort} ${cell.year}` : ""}` : `DigiMV-vragenlijst ${c.year}`;
   return (
     <div className="flex flex-col gap-2 text-sm">
       <div className="min-w-0">
@@ -197,6 +199,13 @@ function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
         </div>
       )}
 
+      {cell && (
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="truncate text-muted-foreground">{cell.taakveld_naam} · {cell.categorie_naam}</span>
+          <span className="shrink-0 font-semibold tabular-nums">{formatIv3(cell)}</span>
+        </p>
+      )}
+
       {filed?.field && (
         <p className="flex items-baseline justify-between gap-3">
           <span className="truncate text-muted-foreground">{filed.field.label.split(" › ").at(-2) ?? filed.field.label}</span>
@@ -214,14 +223,16 @@ function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
         <p className="font-semibold text-amber-800 leading-snug dark:text-amber-300">
           {c.kind === "page"
             ? "Controleer: niet alles staat letterlijk op deze pagina."
-            : filed?.field
+            : c.kind === "iv3"
+              ? cell ? `Controleer: gerapporteerd is ${formatIv3(cell)}.` : "Controleer: deze cel staat niet in de CBS-tabel."
+              : filed?.field
               ? `Controleer: ingevuld is ${formatFiled(filed.field)}.`
               : "Controleer: dit veld staat niet in de vragenlijst."}
         </p>
       )}
 
       <p className="text-[0.8rem] text-muted-foreground">
-        {value === "error" ? "Kon de bron niet laden. Klik om het opnieuw te proberen." : c.kind === "page" ? "Klik voor de hele pagina." : "Klik voor het veld in de vragenlijst."}
+        {value === "error" ? "Kon de bron niet laden. Klik om het opnieuw te proberen." : c.kind === "page" ? "Klik voor de hele pagina." : c.kind === "iv3" ? "Klik voor de cel in de CBS-gegevens." : "Klik voor het veld in de vragenlijst."}
       </p>
     </div>
   );

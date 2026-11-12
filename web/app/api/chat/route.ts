@@ -24,8 +24,12 @@ const API = process.env.DIGIMV_API ?? "http://127.0.0.1:8000";
 const google = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Same domain notes as mcp_server.py, plus the citation contract the UI parses (lib/citations.ts).
-const INSTRUCTIONS = `Je beantwoordt vragen over jaarverantwoordingen van Nederlandse zorgorganisaties (DigiMV-archief, 2019-2025). \
-De vrager heeft geen financiële achtergrond. Antwoord in het Nederlands: kort, helder, in gewone taal.
+const INSTRUCTIONS = `Je bent een onderzoeksassistent voor adviseurs en consultants die zorgaanbieders onderzoeken en overheden \
+adviseren. Bronnen: de jaarverantwoordingen van zorgaanbieders (DigiMV-archief, 2019-2025), het Landelijk Register Zorgaanbieders \
+(LRZa), de Iv3-verantwoording van gemeenten, gemeenschappelijke regelingen, provincies en waterschappen aan het CBS, en gepubliceerde \
+rechterlijke uitspraken. Antwoord in het Nederlands, precies en zakelijk, met vaktermen waar ze kloppen. Benoem de afbakening (groep \
+of enkelvoudig, lasten of baten, begroting of jaarrekening, welk jaar) en verschillen tussen bronnen. Lever onderbouwd bewijs; trek \
+geen adviesconclusies.
 
 Werkwijze
 Elke stap kost tijd en het aantal stappen is beperkt. Doe opzoekacties die niet op elkaars uitkomst wachten in één stap \
@@ -47,13 +51,31 @@ opende. Lees daarna alleen de gevonden pagina's. Wijkt een cijfer in een documen
 5. Bij een vervolgvraag zie je alleen de tooluitkomsten van de vorige vraag; oudere zijn weggelaten, je eigen antwoorden met hun \
 bronlinks staan er nog wel. Heb je een ouder getal opnieuw nodig, vraag het dan opnieuw op (get_document met het jaar, doc_id en de \
 pagina uit de link, of get_figures): dat gaat direct. Citeer nooit uit je geheugen.
+6. Meerdere jaren kerncijfers (omzet, resultaat, eigen vermogen, totaal activa, fte): get_key_figures(org_id, years) in één stap.
+7. Register: get_register_entry(kvk) voor rechtsvorm, AGB-codes, Wtza-melding, toelatingsvergunning en vestigingen. Een org_id van \
+8 cijfers is het KvK-nummer. Neem de tekst over de toelatingsvergunning letterlijk over: 'nee' bij een organisatie van voor 2025 kan \
+onder overgangsrecht vallen. Niet in het register zegt niet dat een organisatie geen zorg levert.
+8. Overheidsfinanciën: find_government_body om de code te vinden, dan get_government_finances(kind, year, code, taakveld), \
+bijvoorbeeld taakveld "6.7" voor Wmo en jeugdhulp in natura. Bedragen zijn x € 1.000. Lasten en baten zijn aparte categorieën: \
+noem ze apart en tel ze nooit op. Categorie L4.3.3 is een overdracht aan een gemeenschappelijke regeling: jeugdhulp wordt vaak \
+regionaal ingekocht, zoek die regeling dan ook op. delivered=false: het hele verslag is niet aangeleverd. empty_cells zijn \
+lege cellen, meestal omdat die combinatie niet bestaat: geen 0, geen cijfer en geen ontbrekende aanlevering. \
+totals_computed zijn sommen die de tool berekende: noem ze als som, met de cellen als bron. \
+Een som "onbekend" heeft geen enkele ingevulde cel: zeg dat, en noem hem nooit 0.
+9. Uitspraken: search_rulings met de naam van de organisatie, daarna get_ruling(ecli) om te lezen waar het over gaat. Een \
+vermelding maakt een organisatie geen partij.
 
 Regels
 - Noem nooit een bedrag, aantal of percentage dat je niet letterlijk in een tooluitkomst hebt gelezen. Rekenen mag (bijvoorbeeld \
 een verschil), maar citeer dan de getallen waarmee je rekende.
-- Zet direct achter elk getal een bronverwijzing, precies in een van deze twee formaten:
+- Zet direct achter elk getal een bronverwijzing, precies in een van deze formaten:
   uit een document:    [p. 12](/bron/2023/84870/12 "Eigen vermogen 108.256")
   uit de vragenlijst:  [DigiMV](/bron/vragenlijst/2025/28099814/qSomBedrijfsopbrengsten_0 "Som der bedrijfsopbrengsten 108179322")
+  uit CBS Iv3:         [CBS Iv3](/bron/iv3/45071NED/GM0546/2025X005/6.712/L3.4.1 "Begeleiding (WMO) lasten 16646")
+  Bij Iv3 is het pad de href van de cel uit get_government_finances, precies zoals gegeven; het citaat eindigt op het bedrag zoals \
+de tool het geeft (in duizenden euro's).
+  Feiten uit het register of een uitspraak (geen bedragen) citeer je met een gewone link naar hun source-URL, bijvoorbeeld \
+[LRZa](https://zoeken.zorgaanbiedersportaal.nl/zorgaanbieder/stichting-basalt/28099814).
   Bij een document is 2023 het jaar van het document, 84870 het doc_id en 12 de pagina; bij de vragenlijst het jaar, de org_id en \
 de var van het veld. Tussen de aanhalingstekens staat een kort letterlijk citaat (hooguit 80 tekens): het label en het getal precies \
 zoals ze er staan, zonder | of aanhalingstekens.
@@ -63,10 +85,11 @@ geconsolideerde cijfers, niet de enkelvoudige of gesegmenteerde.
 - Sommige organisaties leveren alles aan als één 'Verzameldocument' in plaats van een 'Jaarrekening'. Filter dus niet te vroeg op type.
 - Pagina's met source anders dan "text" zijn met OCR overgenomen: controleer belangrijke getallen tegen de totalen op die pagina.
 - Kun je iets niet vinden, zeg dat dan eerlijk en vertel wat je wel vond. Gok nooit.
-- Noem de organisatie, de bron (het soort document of de DigiMV-vragenlijst) en het jaar. Schrijf bedragen als € 1.234.567.
+- Noem de organisatie, de bron (het soort document, de DigiMV-vragenlijst, CBS Iv3, het register of de uitspraak) en het jaar. \
+Schrijf bedragen als € 1.234.567; Iv3-bedragen als € 16.646 x 1.000 (of omgerekend, met de cel als bron).
 - Eindig elk antwoord met cijfers met een Markdown-tabel (die gaat zo naar Excel). Eén rij per getal, met de kolommen \
 Organisatie (alleen bij meer dan één), Post, Jaar, Bedrag, Eenheid en Bron. Bedrag precies zoals in de bron (Nederlandse notatie, \
-zonder €-teken), Eenheid zoals de bron die geeft ('€' voor de vragenlijst, bijvoorbeeld 'x € 1.000' uit een document), Bron de \
+zonder €-teken), Eenheid zoals de bron die geeft ('€' voor de vragenlijst, 'x € 1.000' voor CBS Iv3 en bijvoorbeeld 'x € 1.000' uit een document), Bron de \
 bronverwijzing van precies dat getal. Getalkolommen rechts uitgelijnd (---:). Zet nooit twee getallen in één rij of cel.`;
 
 async function api(path: string, params: Record<string, string | number | null | undefined> = {}) {
@@ -76,6 +99,22 @@ async function api(path: string, params: Record<string, string | number | null |
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error(body?.detail ?? `DigiMV API ${res.status}`);
   return body;
+}
+
+const IV3_CELLS = 150;
+// A sum over the delivered cells; none delivered is unknown, not 0.
+const sum = (soort: string, v: number | null, empty: number) =>
+  `${soort} ${v ?? "onbekend"}${empty ? ` (${empty} lege cel${empty > 1 ? "len" : ""})` : ""}`;
+
+interface KeyFigures {
+  org_id: string; year: number; name: string; found: boolean; consolidated: boolean;
+  figures: Record<string, { label: string; value: string; unit: string; var: string }>;
+}
+
+interface Iv3Report {
+  naam: string; year: number; verslagsoort: string; delivered: boolean; scope: string; source: string; table_modified: string;
+  cells: { taakveld: string; taakveld_naam: string; soort: string; categorie: string; categorie_naam: string; waarde: number; plaatsing: string; href: string }[];
+  totals_computed: { taakveld: string; taakveld_naam: string; lasten: number | null; baten: number | null; lasten_empty: number; baten_empty: number }[];
 }
 
 interface Figures {
@@ -162,6 +201,87 @@ const tools = {
       doc_id: z.number().int().optional(),
     }),
     execute: async ({ query, org_id, year, doc_id }) => api("/kb/search", { q: query, org_id, year, doc_id, limit: 12 }),
+  }),
+  get_key_figures: tool({
+    description:
+      "Revenue (omzet), result, equity, total assets, fte and staff as filed in DigiMV, for several years in one call (2020 on). " +
+      "years empty: every indexed year. A figure missing from a year was not filed; check it with get_figures before calling it 0. " +
+      "Cite each figure as the questionnaire (/bron/vragenlijst/{year}/{org_id}/{var}).",
+    inputSchema: z.object({ org_id: z.string(), years: z.array(z.number().int().min(2020)).max(10).optional() }),
+    execute: async ({ org_id, years }): Promise<KeyFigures[]> =>
+      api(`/orgs/${encodeURIComponent(org_id)}/key-figures`, { years: years?.join(",") }),
+    toModelOutput: ({ output }) => ({
+      type: "json",
+      value: output.map(({ org_id, year, name, found, consolidated, figures }) => ({
+        org_id, year, name, found, consolidated,
+        figures: Object.fromEntries(Object.entries(figures).map(([k, f]) => [k, `${f.label} = ${f.value} ${f.unit} [${f.var}]`])),
+      })),
+    }),
+  }),
+  get_register_entry: tool({
+    description:
+      "An organisation's entry in the Landelijk Register Zorgaanbieders (LRZa) by 8-digit KvK number: legal form, address, " +
+      "registration dates, SBI and AGB codes, Wtza notification, admission permit (toelatingsvergunning), branches with their AGB " +
+      "codes, Wzd/Wvggz locations, links to accountability documents. found=false: not in the register. Cite its source URL.",
+    inputSchema: z.object({ kvk: z.string().regex(/^\d{8}$/) }),
+    execute: async ({ kvk }) => api(`/register/${kvk}`),
+  }),
+  search_register: tool({
+    description:
+      "Search the LRZa by (part of a) name or by postcode. At most 50 hits plus the total; truncated=true means there are more.",
+    inputSchema: z.object({ naam: z.string().min(2).max(200).optional(), postcode: z.string().max(7).optional() }),
+    execute: async ({ naam, postcode }) => api("/register/search", { naam, postcode }),
+  }),
+  find_government_body: tool({
+    description:
+      "Find a municipality, joint arrangement (gemeenschappelijke regeling: youth-care region, GGD, ...), province or water board " +
+      "in the CBS Iv3 data by name or code. kind: gemeenten | gemeenschappelijke-regelingen | provincies | waterschappen.",
+    inputSchema: z.object({
+      query: z.string().min(2).max(200),
+      kind: z.enum(["gemeenten", "gemeenschappelijke-regelingen", "provincies", "waterschappen"]).optional(),
+    }),
+    execute: async ({ query, kind }) => api("/iv3/bodies", { q: query, kind }),
+  }),
+  get_government_finances: tool({
+    description:
+      "A government body's own Iv3 report to CBS: amounts x € 1.000 per policy area (taakveld) and category, with soort Lasten or " +
+      'Baten. taakveld: a code prefix or words, e.g. "6.7" (Wmo and youth care in kind), "6.712", "jeugdhulp"; leave it out only ' +
+      "for an overview. verslagsoort: Jaarrekening (default), Begroting, 1e kwartaal ... 4e kwartaal. Cite each amount with the " +
+      "cell's href. delivered=false: not reported; empty cells are not 0.",
+    inputSchema: z.object({
+      kind: z.enum(["gemeenten", "gemeenschappelijke-regelingen", "provincies", "waterschappen"]),
+      year: z.number().int().min(2010),
+      code: z.string().min(2).max(20),
+      taakveld: z.string().max(100).optional(),
+      verslagsoort: z.string().max(30).default("Jaarrekening"),
+    }),
+    execute: async ({ kind, year, code, taakveld, verslagsoort }): Promise<Iv3Report> =>
+      api(`/iv3/${kind}/${year}/${encodeURIComponent(code)}`, { taakveld, verslagsoort }),
+    // One line per cell; a whole account without a taakveld can hold a thousand cells, so the model gets the first ones.
+    toModelOutput: ({ output: { cells, totals_computed, ...r } }) => ({
+      type: "json",
+      value: {
+        ...r,
+        cells: cells.slice(0, IV3_CELLS).map((c) =>
+          `${c.taakveld} ${c.taakveld_naam} | ${c.soort} ${c.categorie} ${c.categorie_naam} = ${c.waarde} (${c.plaatsing}) [${c.href}]`),
+        ...(cells.length > IV3_CELLS && { cells_left_out: cells.length - IV3_CELLS, hint: "Ask again with a narrower taakveld." }),
+        totals_computed: totals_computed.map((t) => `${t.taakveld} ${t.taakveld_naam}: ${sum("lasten", t.lasten, t.lasten_empty)}, ${sum("baten", t.baten, t.baten_empty)}`),
+      },
+    }),
+  }),
+  search_rulings: tool({
+    description:
+      "Published Dutch court rulings that mention an exact phrase, such as an organisation's name. A mention does not make it a " +
+      "party: read the ruling with get_ruling before saying what it was about.",
+    inputSchema: z.object({ query: z.string().min(3).max(200), limit: z.number().int().min(1).max(20).default(8) }),
+    execute: async ({ query, limit }) => api("/rulings/search", { q: query, limit }),
+  }),
+  get_ruling: tool({
+    description:
+      "Read a ruling by ECLI from the official open data: court, dates, case number, area of law, summary and the text, one part " +
+      "of ~8,000 characters at a time (parts says how many). Cite the deeplink in source.",
+    inputSchema: z.object({ ecli: z.string().regex(/^ECLI:[A-Z]{2}:[A-Z0-9]{1,7}:\d{4}:[A-Z0-9.]{1,25}$/i), part: z.number().int().min(1).default(1) }),
+    execute: async ({ ecli, part }) => api(`/rulings/${encodeURIComponent(ecli)}`, { part }),
   }),
 };
 

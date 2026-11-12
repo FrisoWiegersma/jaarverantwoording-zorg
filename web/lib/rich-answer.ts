@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseHref } from "./citations.ts";
+import { citationLabel, parseHref } from "./citations.ts";
 import { parseNumber } from "./excel.ts";
 
 const figureSchema = z.object({
@@ -29,7 +29,7 @@ const cell = (s: string) => s.replace(/[\\|\[\]<>`*_]/g, "\\$&").replace(/[\r\n]
 export function figureTable(figures: Figure[]) {
   const multiple = new Set(figures.map((f) => f.organization)).size > 1;
   return `| ${multiple ? "Organisatie | " : ""}Post | Jaar | Bedrag | Eenheid | Bron |\n| ${multiple ? "--- | " : ""}--- | ---: | ---: | --- | --- |\n` +
-    figures.map((f) => `| ${multiple ? `${cell(f.organization)} | ` : ""}${cell(f.label)} | ${f.year} | ${cell(f.amount)} | ${cell(f.unit)} | [${f.href.includes("/project/") ? "Projectbron" : f.href.includes("/vragenlijst/") ? "DigiMV" : `p. ${f.href.split("/").at(-1)}`}](${f.href} "${f.quote.replace(/["|\r\n]/g, " ")}") |`).join("\n");
+    figures.map((f) => `| ${multiple ? `${cell(f.organization)} | ` : ""}${cell(f.label)} | ${f.year} | ${cell(f.amount)} | ${cell(f.unit)} | [${citationLabel(parseHref(f.href)!)}](${f.href} "${f.quote.replace(/["|\r\n]/g, " ")}") |`).join("\n");
 }
 
 /** The model chooses the presentation; OpenUI receives only validated component arguments. */

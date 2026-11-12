@@ -17,6 +17,7 @@ It reads the public [DigiMV archive](https://digimv13.desan.nl/archive/search), 
 - **Look an organisation up** with ⌘K or Ctrl K and read its key figures over the years. This reads DigiMV directly, without the model.
 - **Compare** two to four organisations on shared chart scales, with the filed values in a table beneath.
 - **Export** an answer's table to Excel, with numeric cells and links to the sources, or copy it into a spreadsheet.
+- **Look past the annual report.** The chat also reads the care-provider register (permits, AGB codes, branches), what municipalities, youth-care regions, provinces and water boards spend per policy area (CBS Iv3), and court rulings. An Iv3 amount links to its cell.
 - **Work in projects.** Signed-in consultants can upload PDFs and notes, keep context and conversations together, and inspect evidence from public and private sources. Private material is sent to Gemini only after enabling that project’s permission; see [project setup and privacy](docs/projects.md).
 - **Pick up later.** Conversations are saved, an answer keeps running if the connection drops, and the bell tells you when it is done.
 

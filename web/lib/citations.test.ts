@@ -12,7 +12,7 @@ test("citations", () => {
     "Gewone link [DigiMV](https://digimv.nl).";
   const c = parseCitations(text);
   assert.deepEqual(
-    c.map((x) => (x.kind === "page" ? [x.year, x.docId, x.page, x.quote] : x.kind === "figure" ? [x.year, x.orgId, x.field, x.quote] : [x.projectId, x.documentId, x.page, x.quote])),
+    c.map((x) => (x.kind === "page" ? [x.year, x.docId, x.page, x.quote] : x.kind === "figure" ? [x.year, x.orgId, x.field, x.quote] : x.kind === "project" ? [x.projectId, x.documentId, x.page, x.quote] : [x.table, x.code, x.quote])),
     [
       [2023, 84870, 10, "Eigen vermogen 108.256"],
       [2023, 84870, 10, "41.414"],
@@ -49,4 +49,15 @@ test("private project citation links are strict and retain their quoted evidence
   assert.deepEqual(parseHref(href), { kind: "project", projectId: pid, documentId: did, page: 8 });
   assert.equal(parseCitations(`[p. 8](${href} "Omzet 123")`)[0].quote, "Omzet 123");
   for (const bad of [href + "/extra", href.replace("/8", "/0"), href.replace(did, ".."), href + "?x=1"]) assert.equal(parseHref(bad), null);
+});
+
+
+test("iv3 cell links keep the verbatim keys and refuse anything else", () => {
+  const href = "/bron/iv3/45071NED/GM0546/2025X005/6.712/L3.4.1";
+  assert.deepEqual(parseHref(href), {
+    kind: "iv3", table: "45071NED", code: "GM0546", report: "2025X005", taakveld: "6.712", categorie: "L3.4.1",
+  });
+  assert.equal(parseCitations(`[CBS Iv3](${href} "16.646")`)[0].quote, "16.646");
+  for (const bad of [href + "/x", href.replace("6.712", "%zz"), "/bron/iv3/45071ned/GM0546/2025X005/6.712/L3.4.1", "/bron/iv3/45071NED/GM0546"])
+    assert.equal(parseHref(bad), null);
 });

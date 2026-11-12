@@ -1,13 +1,34 @@
-"""MCP server over the DigiMV index and knowledge base. Run: uv run --env-file .env mcp_server.py (stdio)."""
+"""MCP server over the DigiMV index and knowledge base, the care-provider register (LRZa), CBS Iv3 government
+accounts and court rulings. Run: uv run --env-file .env mcp_server.py (stdio)."""
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 import digimv
+import sources
+
+
+def _call(fn, *args):
+    """Every failure reaches the agent as its message; the SDK hides other exceptions."""
+    try:
+        return fn(*args)
+    except KeyError as e:
+        raise ToolError(str(e.args[0]) if e.args else "not found") from e
+    except (ValueError, RuntimeError, OSError) as e:
+        raise ToolError(str(e)) from e
+
 
 mcp = MCPServer(
     "digimv",
     instructions=(
+        "Research tools for advisors and consultants on Dutch healthcare providers and the governments that fund "
+        "them. Sources: DigiMV annual reports of care providers (search_organizations, get_figures, "
+        "get_key_figures, get_document, search_documents); the care-provider register LRZa (get_register_entry, "
+        "search_register: legal form, AGB codes, Wtza notification and permit, branches); the accounts of "
+        "municipalities, joint arrangements, provinces and water boards as reported to CBS (find_government_body, "
+        "get_government_finances, x € 1.000); and published court rulings (search_rulings, get_ruling). A DigiMV "
+        "org_id of 8 digits is the KvK number the register uses. Every result says its source and scope: cite it, "
+        "and report what a source does not hold instead of filling it in.\n"
         "Dutch healthcare annual reports (DigiMV jaarverantwoording, 2019-2025). Workflow: search_organizations "
         "to find the org (org_id) and its documents. For figures (omzet, resultaat, eigen vermogen, activa, fte, "
         "WNT, ...) call get_figures(org_id, year, query) first: the values the organisation filed itself, exact, "
@@ -92,6 +113,80 @@ def search_documents(query: str, org_id: str | None = None, year: int | None = N
     use it to tell consolidated, enkelvoudige and gesegmenteerde statements apart before quoting a number.
     """
     return digimv.search_text(query, org_id, year, doc_id, limit)
+
+
+@mcp.tool()
+def get_key_figures(org_id: str, years: list[int] | None = None) -> list[dict]:
+    """Revenue (omzet), result, equity, total assets, fte and staff as filed in DigiMV, for several years at once.
+
+    years: e.g. [2021, 2022, 2023]; empty means every indexed year from 2020. Per year the filed row (label, value,
+    unit, var) for each figure that was filed; a group (consolidated=true) gets its group totals. A figure missing
+    from a year was not filed (a genuine 0 also shows as missing): check it with get_figures before saying it is 0.
+    """
+    return _call(digimv.key_figures_series, org_id, years)
+
+
+@mcp.tool()
+def get_register_entry(kvk: str) -> dict:
+    """An organisation's entry in the Landelijk Register Zorgaanbieders (LRZa), by 8-digit KvK number.
+
+    Legal form, address, registration dates, SBI codes, AGB codes, Wtza notification, Wtza admission permit
+    (toelatingsvergunning), branches (vestigingen) with their own AGB codes, Wzd/Wvggz locations and links to its
+    accountability documents. Quote the permit text as given: 'nee' for an organisation from before 2025 can fall
+    under transition rules. found=false: not in the register, which does not prove it provides no care. Cite `source`.
+    """
+    return _call(sources.register, kvk)
+
+
+@mcp.tool()
+def search_register(naam: str | None = None, postcode: str | None = None) -> dict:
+    """Search the LRZa by (part of a) name or by postcode (2543 or 2543 SW). Returns at most 50 hits and the total;
+    truncated=true means there are more, so narrow the search before saying who is or is not registered."""
+    return _call(sources.search_register, naam, postcode)
+
+
+@mcp.tool()
+def find_government_body(query: str, kind: str | None = None) -> dict:
+    """Find a municipality, joint arrangement (gemeenschappelijke regeling, e.g. a youth-care region or GGD),
+    province or water board in the CBS Iv3 data by (part of a) name or code (GM0546, GR0842, PV28, WS12).
+
+    kind: gemeenten | gemeenschappelijke-regelingen | provincies | waterschappen. Each hit lists the years it is in.
+    """
+    return _call(sources.find_body, query, kind)
+
+
+@mcp.tool()
+def get_government_finances(kind: str, year: int, code: str, taakveld: str | None = None,
+                            verslagsoort: str = "Jaarrekening") -> dict:
+    """A government body's own Iv3 report to CBS: amounts (x € 1.000) per policy area (taakveld) and category.
+
+    taakveld narrows to a code prefix or words: "6.7" (Wmo and youth care in kind), "6.712" (Wmo begeleiding),
+    "jeugdhulp". verslagsoort: Jaarrekening (default), Begroting, 1e-4e kwartaal. Each cell has soort Lasten
+    (charges) or Baten (income): report them separately, never add them up. totals_computed sums a policy area's
+    cells per soort on policy areas (not on balance posts, where they are mutations); null means no cell of that soort
+    has a value. *_empty counts the cells without one.
+    Category L4.3.3 is a transfer to a joint arrangement: youth care is often bought by the region, so look up that
+    joint arrangement too. delivered=false: the body did not report this. empty_cells had nothing entered, mostly
+    because the combination does not apply: not 0 and not missing data. Water boards report no split by function.
+    Cite each amount with its href (/bron/iv3/...).
+    """
+    return _call(sources.iv3, kind, year, code, taakveld, verslagsoort)
+
+
+@mcp.tool()
+def search_rulings(query: str, limit: int = 10) -> dict:
+    """Published Dutch court rulings that mention an exact phrase, such as an organisation's name. A mention does not
+    make an organisation a party: read the ruling (get_ruling) before saying what it was about. truncated=true means
+    more rulings match than were returned."""
+    return _call(sources.search_rulings, query, limit)
+
+
+@mcp.tool()
+def get_ruling(ecli: str, part: int = 1) -> dict:
+    """Read a court ruling by ECLI (e.g. ECLI:NL:CBB:2024:41) from the official open data: court, dates, case
+    number, area of law, summary (inhoudsindicatie) and the text, one part of ~8,000 characters at a time (`parts`
+    says how many). Natural persons are pseudonymised. Cite the deeplink in `source`."""
+    return _call(sources.get_ruling, ecli, part)
 
 
 if __name__ == "__main__":

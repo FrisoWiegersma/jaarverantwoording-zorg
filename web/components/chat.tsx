@@ -84,6 +84,45 @@ function stepsOf(m: UIMessage, live: boolean): AgentStep[] {
           ? `${list.length} ${list.length === 1 ? "plek" : "plekken"} gevonden voor ${quoted(input.query)}`
           : `In de tekst zoeken naar ${quoted(input.query)}`;
         break;
+      case "get_key_figures": {
+        const name = list.find((y) => y.name)?.name;
+        label = out ? `Kerncijfers ${list.map((y) => y.year).join(", ")}${name ? ` van ${name}` : ""}` : "Kerncijfers over de jaren opzoeken";
+        break;
+      }
+      case "get_register_entry": {
+        const r = out as Out | null;
+        label = !r ? `Zorgaanbiedersregister raadplegen (KvK ${input.kvk})`
+          : r.found ? `${r.naam} in het Landelijk Register Zorgaanbieders` : `KvK ${input.kvk} staat niet in het register`;
+        break;
+      }
+      case "search_register": {
+        const r = out as Out | null;
+        label = r ? `${r.total} zorgaanbieders in het register voor ${quoted(input.naam ?? input.postcode)}`
+          : `Zorgaanbiedersregister doorzoeken op ${quoted(input.naam ?? input.postcode)}`;
+        break;
+      }
+      case "find_government_body": {
+        const n = ((out as Out | null)?.results as unknown[] | undefined)?.length;
+        label = n == null ? `Overheid zoeken: ${quoted(input.query)}` : `${n} ${n === 1 ? "overheidsorgaan" : "overheidsorganen"} gevonden voor ${quoted(input.query)}`;
+        break;
+      }
+      case "get_government_finances": {
+        const r = out as Out | null;
+        label = r ? `${r.verslagsoort} ${r.year} van ${r.naam} (CBS Iv3)${input.taakveld ? `, taakveld ${quoted(input.taakveld)}` : ""}`
+          : `Overheidsfinanciën opzoeken bij het CBS (${input.code} ${input.year})`;
+        detail = ["Bedragen in duizenden euro's, zoals de overheid ze aan het CBS rapporteerde."];
+        break;
+      }
+      case "search_rulings": {
+        const r = out as Out | null;
+        label = r ? `${r.total} ${r.total === 1 ? "uitspraak" : "uitspraken"} noemen ${quoted(input.query)}` : `Uitspraken zoeken met ${quoted(input.query)}`;
+        break;
+      }
+      case "get_ruling": {
+        const r = out as Out | null;
+        label = r ? `Uitspraak ${r.instantie}, ${r.uitspraakdatum} gelezen (deel ${r.part} van ${r.parts})` : `Uitspraak ${input.ecli} lezen`;
+        break;
+      }
       case "list_project_documents":
         label = out ? `${list.length} projectbronnen beschikbaar` : "Projectbronnen bekijken";
         break;

@@ -7,7 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useCitationPreview } from "@/components/citation-preview";
 import { useCheck } from "@/components/evidence";
-import { citationKey, parseHref } from "@/lib/citations";
+import { citationKey, citationLabel, parseHref } from "@/lib/citations";
 import { copyRows, readTable, toRows } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +38,7 @@ export function CitationChip({
   return (
     <button
       aria-describedby={preview.openKey === key ? preview.id : undefined}
-      aria-label={`${citation?.kind === "project" ? "Bekijk de projectbron" : label === "DigiMV" ? "Bekijk de bron in de DigiMV-vragenlijst" : `Bekijk de bron, pagina ${label.slice(3)}`}${check ? ". Controleer: de bron zegt iets anders" : ""}`}
+      aria-label={`${citation?.kind === "project" ? "Bekijk de projectbron" : citation?.kind === "figure" ? "Bekijk de bron in de DigiMV-vragenlijst" : citation?.kind === "iv3" ? "Bekijk de cel in de CBS Iv3-gegevens" : `Bekijk de bron, pagina ${label.slice(3)}`}${check ? ". Controleer: de bron zegt iets anders" : ""}`}
       aria-pressed={active}
       className={cn(
         "mx-0.5 inline-flex h-6 translate-y-[-1px] items-center whitespace-nowrap rounded-[5px] bg-marker px-1.5 align-middle font-semibold text-[0.78rem] text-marker-ink tabular-nums",
@@ -196,7 +196,7 @@ export const Answer = memo(function Answer({
               <CitationChip
                 active={key === activeKey}
                 href={href}
-                label={target.kind === "figure" ? "DigiMV" : target.kind === "project" ? "Projectbron" : `p. ${target.page}`}
+                label={citationLabel(target)}
                 onClick={() => onCite(key)}
                 quote={title}
               />

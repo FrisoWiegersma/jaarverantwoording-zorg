@@ -1,12 +1,14 @@
-// The answer cites as a Markdown link with a title (the quote). Two kinds of source:
+// The answer cites as a Markdown link with a title (the quote). Public kinds of source:
 //   a PDF page:                [p. 12](/bron/2023/84870/12 "Eigen vermogen 108.256")
 //   a DigiMV questionnaire:    [DigiMV](/bron/vragenlijst/2023/82905347/qEigenVermogen_0 "Eigen vermogen 108256")
+//   a CBS Iv3 cell:            [CBS Iv3](/bron/iv3/45071NED/GM0546/2025X005/6.712/L3.4.1 "Begeleiding (WMO) 16646")
 // react-markdown renders them as <a href title>; this file turns the same text into a list to step through.
 
 export type Source =
   | { kind: "page"; year: number; docId: number; page: number }
   | { kind: "project"; projectId: string; documentId: string; page: number }
-  | { kind: "figure"; year: number; orgId: string; field: string };
+  | { kind: "figure"; year: number; orgId: string; field: string }
+  | { kind: "iv3"; table: string; code: string; report: string; taakveld: string; categorie: string };
 
 export type Citation = Source & { key: string; href: string; quote: string };
 
@@ -22,13 +24,23 @@ export function parseHref(href: string): Source | null {
   if (privateSource) return { kind: "project", projectId: privateSource[1], documentId: privateSource[2], page: +privateSource[3] };
   let m = href.match(/^\/bron\/(\d{4})\/(\d+)\/(\d+)$/);
   if (m) return { kind: "page", year: +m[1], docId: +m[2], page: +m[3] };
-  m = href.match(/^\/bron\/vragenlijst\/(\d{4})\/([^/\s]+)\/([^/\s]+)$/);
-  if (!m) return null;
   try {
-    return { kind: "figure", year: +m[1], orgId: decodeURIComponent(m[2]), field: decodeURIComponent(m[3]) };
+    m = href.match(/^\/bron\/vragenlijst\/(\d{4})\/([^/\s]+)\/([^/\s]+)$/);
+    if (m) return { kind: "figure", year: +m[1], orgId: decodeURIComponent(m[2]), field: decodeURIComponent(m[3]) };
+    m = href.match(/^\/bron\/iv3\/([A-Z0-9]+)\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)$/);
+    if (m) {
+      const [table, code, report, taakveld, categorie] = m.slice(1).map(decodeURIComponent);
+      return { kind: "iv3", table, code, report, taakveld, categorie };
+    }
   } catch {
-    return null; // a malformed escape such as %zz: not a citation, and never a crash during render
+    // a malformed escape such as %zz: not a citation, and never a crash during render
   }
+  return null;
+}
+
+/** The chip text for a source: what kind of evidence a click opens. */
+export function citationLabel(s: Source) {
+  return s.kind === "figure" ? "DigiMV" : s.kind === "iv3" ? "CBS Iv3" : s.kind === "project" ? "Projectbron" : `p. ${s.page}`;
 }
 
 /** Citations in the order the answer makes them, each once. */
