@@ -1,11 +1,11 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, ExternalLink, X } from "lucide-react";
 import { motion } from "motion/react";
-import { type CSSProperties, type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
+import { type CSSProperties, Fragment, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { Mark as Marker, MarkerText } from "@/components/kokonutui/marker-text";
-import type { Citation } from "@/lib/citations";
+import { type Citation, pathSegment } from "@/lib/citations";
 import { parseNumber } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 
@@ -23,10 +23,29 @@ export type Iv3Cell = {
     categorie_naam: string; soort: string | null; waarde: number | null; eenheid: string; plaatsing: string | null;
   } | null;
 };
-type Loaded = Shot | Filed | PrivatePage | Iv3Cell | "error";
+/** A web page's or Word document's part as text, with where the quote (or each figure and run of words in it) is. */
+export type TextPart = { kind: "text"; text: string; title: string; url: string; host: string; found: Shot["found"]; marks: [number, number][] };
+export type TableRow = {
+  kind: "row";
+  data: {
+    file_url: string; fetched_at: string; format: string; sheet: string | null; member: string | null; file_name: string;
+    title_rows: unknown[][]; columns: string[]; row: Record<string, string | number | null>;
+  } | null;
+};
+export type CbsCell = {
+  kind: "cbs";
+  cell: {
+    id: string; title: string; modified: string | null; page: string; dimensions: { title: string; value: string }[];
+    topic: string; group: string; unit: string; value: number | null; symbol: string | null; symbol_meaning: string | null; source: string;
+  } | null;
+};
+type Loaded = Shot | Filed | PrivatePage | Iv3Cell | TextPart | TableRow | CbsCell | "error";
 type PageCitation = Extract<Citation, { kind: "page" | "doc" }>;
 type FigureCitation = Extract<Citation, { kind: "figure" }>;
 type Iv3Citation = Extract<Citation, { kind: "iv3" }>;
+type TextCitation = Extract<Citation, { kind: "text" }>;
+type RowCitation = Extract<Citation, { kind: "row" }>;
+type CbsCitation = Extract<Citation, { kind: "cbs" }>;
 
 type PrivateCitation = Extract<Citation, { kind: "project" }>;
 const pagePath = (c: PageCitation | PrivateCitation) => c.kind === "project"
@@ -65,6 +84,50 @@ async function fetchIv3(c: Iv3Citation): Promise<Iv3Cell> {
   return { kind: "iv3", cell: await r.json() };
 }
 
+const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Where the quote is in a text, as the PDF check does it (digimv.render_page): the whole quote, or else each figure and
+ * run of three or more other characters in it. A figure the answer quoted but that isn't there makes it "partial". */
+export function locate(text: string, quote: string): Pick<TextPart, "found" | "marks"> {
+  if (!quote.trim()) return { found: "all", marks: [] };
+  const find = (p: string): [number, number] | null => {
+    const m = new RegExp(escapeRe(squash(p)).replace(/ /g, "\\s+"), "i").exec(text);
+    return m ? [m.index, m.index + m[0].length] : null;
+  };
+  const whole = find(quote);
+  if (whole) return { found: "all", marks: [whole] };
+  const parts = (quote.match(/-?\d[\d.,]*\d|\d|[^\d]{3,}/g) ?? []).map((p) => p.replace(/^[\s,.:;()€]+|[\s,.:;()€]+$/g, "")).filter(Boolean);
+  const marks = parts.map(find).filter((m): m is [number, number] => m !== null).sort((a, b) => a[0] - b[0])
+    .filter((m, i, all) => i === 0 || m[0] >= all[i - 1][1]);
+  const hits = parts.filter((p) => find(p)).length;
+  return { found: parts.length && hits === parts.length ? "all" : hits ? "partial" : "none", marks };
+}
+
+async function fetchText(c: TextCitation): Promise<TextPart> {
+  const r = await fetch(`/digimv/public/documents/${c.docId}/parts/${c.page}`);
+  if (!r.ok) throw new Error(String(r.status));
+  const d: { text: string; title: string; url: string; host: string } = await r.json();
+  return { kind: "text", text: d.text, title: d.title, url: d.url, host: d.host, ...locate(d.text, c.quote) };
+}
+
+/** The row from our cached copy of the file; a row that isn't there (or a file no longer cached) loads as null. */
+async function fetchRow(c: RowCitation): Promise<TableRow> {
+  const parts = c.parts.map((p) => `part=${encodeURIComponent(p)}`).join("&");
+  const r = await fetch(`/digimv/public/tables/${c.tableId}/rows/${c.row}${parts ? `?${parts}` : ""}`);
+  if (r.status === 404) return { kind: "row", data: null };
+  if (!r.ok) throw new Error(String(r.status));
+  return { kind: "row", data: await r.json() };
+}
+
+/** The value as CBS publishes it now; a cell that is not in the table loads as null. */
+async function fetchCbs(c: CbsCitation): Promise<CbsCell> {
+  const r = await fetch(`/digimv/cbs/${c.table}/cell/${[...c.codes, c.topic].map(pathSegment).join("/")}`);
+  if (r.status === 404) return { kind: "cbs", cell: null };
+  if (!r.ok) throw new Error(String(r.status));
+  return { kind: "cbs", cell: await r.json() };
+}
+
 // ponytail: session-long cache, object URLs never revoked; fine for a few hundred page images
 const loaded = new Map<string, Promise<Loaded>>();
 async function fetchPrivate(c: PrivateCitation): Promise<PrivatePage> {
@@ -80,7 +143,9 @@ function load(c: Citation): Promise<Loaded> {
   if (c.kind === "project") return fetchPrivate(c).catch(() => "error" as const);
   let p = loaded.get(c.key);
   if (!p) {
-    p = (c.kind === "page" || c.kind === "doc" ? fetchShot(c) : c.kind === "iv3" ? fetchIv3(c) : fetchFiled(c)).catch((): Loaded => {
+    const get: Promise<Loaded> = c.kind === "page" || c.kind === "doc" ? fetchShot(c) : c.kind === "iv3" ? fetchIv3(c)
+      : c.kind === "text" ? fetchText(c) : c.kind === "row" ? fetchRow(c) : c.kind === "cbs" ? fetchCbs(c) : fetchFiled(c);
+    p = get.catch((): Loaded => {
       loaded.delete(c.key); // a later look may succeed
       return "error";
     });
@@ -249,11 +314,41 @@ export function formatFiled({ value, unit }: { value: string; unit: string }) {
   return [n, unit].filter(Boolean).join(" ");
 }
 
-/** The last number in the quote, compared with the filed value. No number in the quote: nothing to contradict. */
+const lastNumber = (quote: string) => quote.match(/-?\d[\d.,]*\d|\d/g)?.at(-1);
+
+/** "8.575" (Dutch) or "92.00" (as a file or CBS has it) against a source value, either way round. */
+function sameNumber(said: string, value: string) {
+  if (said === value.trim()) return true;
+  const ours = [parseNumber(said)?.num, Number(said)].filter((n): n is number => n !== undefined && Number.isFinite(n));
+  return [Number(value), parseNumber(value)?.num].some((n) => n !== undefined && Number.isFinite(n) && ours.includes(n));
+}
+
+/** The last number in the quote, compared with the source value. No number in the quote: nothing to contradict. */
 function quoteMatches(quote: string, value: string) {
-  const said = quote.match(/-?\d[\d.,]*\d|\d/g)?.at(-1);
-  if (!said) return true;
-  return parseNumber(said)?.num === Number(value);
+  const said = lastNumber(quote);
+  return !said || sameNumber(said, value);
+}
+
+/** Whether a cell of a cited row is what the quote cites: a number is the quote's last number, a text is in the quote. */
+export function cellCited(quote: string, v: unknown) {
+  const s = String(v ?? "").trim();
+  if (!quote || !s) return false;
+  if (/^-?\d+([.,]\d+)?$/.test(s)) {
+    const said = lastNumber(quote);
+    return !!said && sameNumber(said, s);
+  }
+  return s.length >= 3 && squash(quote).toLowerCase().includes(squash(s).toLowerCase());
+}
+
+const rowCells = (d: NonNullable<TableRow["data"]>) => Object.entries(d.row).filter(([k, v]) => k !== "row" && v !== null && v !== "");
+
+/** The quote's last number is in the row: a number cell equal to it, or a text cell ("€ 95.000") that has it. */
+function numberInRow(d: NonNullable<TableRow["data"]>, quote: string) {
+  const said = lastNumber(quote);
+  return !said || rowCells(d).some(([, v]) => {
+    const s = String(v).trim();
+    return /^-?\d+([.,]\d+)?$/.test(s) ? sameNumber(said, s) : s.includes(said);
+  });
 }
 
 /** Whether the source says something else than the answer: a quote not (all) on its page, or a filed value that
@@ -262,8 +357,10 @@ export function useCheck(c: Citation | undefined) {
   const value = useLoaded(c);
   if (!c?.quote || !value || value === "error") return null;
   if (value.kind === "project") return !value.text.replace(/\s+/g, " ").includes(c.quote.replace(/\s+/g, " "));
-  if (value.kind === "page") return value.found !== "all";
+  if (value.kind === "page" || value.kind === "text") return value.found !== "all";
   if (value.kind === "iv3") return value.cell?.waarde == null || !quoteMatches(c.quote, String(value.cell.waarde));
+  if (value.kind === "cbs") return value.cell?.value == null || !quoteMatches(c.quote, String(value.cell.value));
+  if (value.kind === "row") return !value.data || !numberInRow(value.data, c.quote);
   return !value.field || !quoteMatches(c.quote, value.field.value);
 }
 
@@ -383,6 +480,218 @@ function Iv3Evidence({ c, value }: { c: Iv3Citation; value: Iv3Cell | "error" | 
   );
 }
 
+function Quote({ c }: { c: Citation }) {
+  if (!c.quote) return null;
+  return (
+    <MarkerText key={c.key} show>
+      <blockquote className="text-[1.05rem] leading-relaxed">
+        <Marker className="font-semibold transition-colors delay-150 duration-500 motion-reduce:transition-none [[data-armed]_&]:text-marker-ink">
+          {c.quote}
+        </Marker>
+      </blockquote>
+    </MarkerText>
+  );
+}
+
+function ButtonLink({ href, children, download }: { href: string; children: ReactNode; download?: boolean }) {
+  return (
+    <a
+      className="inline-flex min-h-11 w-fit items-center gap-2 rounded-full bg-primary px-4 font-semibold text-primary-foreground transition-[filter] hover:brightness-110 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+      download={download || undefined}
+      href={href}
+      rel="noopener noreferrer"
+      target={download ? undefined : "_blank"}
+    >
+      {download ? <Download aria-hidden="true" className="size-4" /> : <ExternalLink aria-hidden="true" className="size-4" />}
+      {children}
+    </a>
+  );
+}
+
+const fetchedOn = (iso: string) => new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
+
+/** A part of a web page or Word document: our copy's text, the quote marked where it stands. */
+function TextEvidence({ c, part }: { c: TextCitation; part: TextPart | "error" | null }) {
+  const box = useRef<HTMLDivElement>(null);
+  const first = useRef<HTMLElement>(null);
+  const ok = part && part !== "error" ? part : null;
+  // The box scrolls to the first mark; scrollIntoView would also scroll the panel and the page around it.
+  useEffect(() => {
+    if (box.current && first.current) box.current.scrollTop = first.current.offsetTop - box.current.clientHeight / 2;
+  }, [ok]);
+  const pieces: ReactNode[] = [];
+  if (ok) {
+    let at = 0;
+    ok.marks.forEach(([from, to], i) => {
+      pieces.push(ok.text.slice(at, from));
+      pieces.push(
+        <mark className="rounded-[3px] bg-marker px-0.5 font-semibold text-marker-ink" key={from} ref={i === 0 ? first : undefined}>
+          {ok.text.slice(from, to)}
+        </mark>
+      );
+      at = to;
+    });
+    pieces.push(ok.text.slice(at));
+  }
+  return (
+    <>
+      <div>
+        <Heading sub={`${ok?.host ?? "Openbare bron"}, deel ${c.page}`} title={ok?.title ?? "Openbare bron"} />
+        {ok?.url && (
+          <a className="text-[0.9rem] text-muted-foreground underline underline-offset-2 [overflow-wrap:anywhere] hover:text-foreground" href={ok.url} rel="noopener noreferrer" target="_blank">
+            Origineel op {ok.host}
+          </a>
+        )}
+      </div>
+      <Quote c={c} />
+      {/* The part as we read it; a web page can change after that, so this is what the answer was based on. */}
+      <div className="relative max-h-[24rem] overflow-y-auto whitespace-pre-wrap rounded-xl bg-muted/70 p-4 text-[0.94rem] leading-relaxed ring-1 ring-border [overflow-wrap:anywhere]" ref={box}>
+        {ok ? pieces : <div className={cn("h-24", !part && "animate-pulse")} />}
+      </div>
+      <Status>
+        {part === "error" ? (
+          <>{WARN}Dit deel kon niet worden geladen. Open het origineel om zelf te kijken.</>
+        ) : !ok ? (
+          <span className="text-muted-foreground">Tekst laden…</span>
+        ) : ok.found === "all" ? (
+          <>{OK}Staat letterlijk in deel {c.page}.</>
+        ) : ok.found === "partial" ? (
+          <>{WARN}Niet alles letterlijk teruggevonden in dit deel. Kijk zelf even mee.</>
+        ) : (
+          <>{WARN}Het citaat staat niet letterlijk in dit deel. Hierboven het hele deel.</>
+        )}
+      </Status>
+    </>
+  );
+}
+
+/** One row of a data file (CSV, Excel, JSON) from our copy: every filled cell under its column, the cited ones marked. */
+function RowEvidence({ c, value }: { c: RowCitation; value: TableRow | "error" | null }) {
+  const d = value && value !== "error" ? value.data : null;
+  const cells = d ? rowCells(d) : [];
+  const cited = cells.filter(([, v]) => cellCited(c.quote, v));
+  const where = [d?.member, d?.sheet && `blad ${d.sheet}`].filter(Boolean).join(" · ");
+  // A row can have 30 columns: the box scrolls to the cited number (else the first marked cell), as the text view does.
+  const box = useRef<HTMLDivElement>(null);
+  const target = (cited.find(([, v]) => /\d/.test(String(v))) ?? cited[0])?.[0];
+  useEffect(() => {
+    const el = box.current?.querySelector<HTMLElement>("[data-target]");
+    if (box.current && el) box.current.scrollTop = el.offsetTop - box.current.clientHeight / 2;
+  }, [d, target]);
+  return (
+    <>
+      <div>
+        <Heading sub={`Databestand, rij ${c.row}${where ? ` · ${where}` : ""}`} title={d?.file_name ?? "Databestand"} />
+        {d?.title_rows[0] && <p className="text-[0.9rem] text-muted-foreground">{d.title_rows[0].join(" ")}</p>}
+      </div>
+      <Quote c={c} />
+      <div className="relative max-h-[24rem] overflow-y-auto rounded-xl bg-muted/70 p-4 ring-1 ring-border" ref={box}>
+        {d ? (
+          <dl className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-4 gap-y-1.5 text-[0.94rem] leading-snug">
+            {cells.map(([k, v]) => (
+              <Fragment key={k}>
+                <dt className="text-muted-foreground [overflow-wrap:anywhere]">{k}</dt>
+                <dd className="tabular-nums [overflow-wrap:anywhere]">
+                  {cited.some(([ck]) => ck === k) ? (
+                    <mark className="rounded-[4px] bg-marker px-1.5 py-0.5 font-semibold text-marker-ink" data-target={k === target || undefined}>{String(v)}</mark>
+                  ) : (
+                    String(v)
+                  )}
+                </dd>
+              </Fragment>
+            ))}
+          </dl>
+        ) : (
+          <div className={cn("h-24", !value && "animate-pulse")} />
+        )}
+      </div>
+      <Status>
+        {value === "error" ? (
+          <>{WARN}Het bestand kon niet worden geladen. Probeer het later nog eens.</>
+        ) : !value ? (
+          <span className="text-muted-foreground">Rij laden…</span>
+        ) : !d ? (
+          <>{WARN}Rij {c.row} staat niet (meer) in onze kopie van dit bestand. Laat het opnieuw lezen.</>
+        ) : !numberInRow(d, c.quote) ? (
+          <>{WARN}Het antwoord noemt “{c.quote}”, maar dat getal staat niet in deze rij.</>
+        ) : (
+          <>{OK}Zo staat het in rij {c.row} van het bestand, opgehaald op {fetchedOn(d.fetched_at)}.</>
+        )}
+      </Status>
+      {d && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <ButtonLink download href={`/digimv/public/tables/${c.tableId}/file`}>Download het bestand</ButtonLink>
+          <a className="text-[0.9rem] text-muted-foreground underline underline-offset-2 hover:text-foreground" href={d.file_url} rel="noopener noreferrer" target="_blank">
+            Origineel op de site
+          </a>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** 8575 "aantal" -> "8.575 aantal"; a value CBS withholds says so, never 0. */
+export function formatCbs(cell: NonNullable<CbsCell["cell"]>) {
+  if (cell.value == null) return `geen waarde (${cell.symbol ?? "leeg"})`;
+  return [cell.value.toLocaleString("nl-NL", { maximumFractionDigits: 4 }), cell.unit].filter(Boolean).join(" ");
+}
+
+const label = (v: string) => {
+  const [code, ...rest] = v.split(" = ");
+  return rest.length ? `${rest.join(" = ")} (${code})` : v;
+};
+
+/** One StatLine value: what it is per dimension, then the topic and the value as CBS publishes it now. */
+function CbsEvidence({ c, value }: { c: CbsCitation; value: CbsCell | "error" | null }) {
+  const cell = value && value !== "error" ? value.cell : null;
+  return (
+    <>
+      <Heading sub={`CBS StatLine, tabel ${c.table}`} title={cell?.title ?? `CBS-tabel ${c.table}`} />
+      <Quote c={c} />
+      <div className="rounded-xl bg-muted/70 p-4 ring-1 ring-border">
+        {cell ? (
+          <>
+            {cell.dimensions.map((d) => (
+              <p className="text-[0.88rem] text-muted-foreground leading-snug" key={d.title}>
+                {d.title}: {label(d.value)}
+              </p>
+            ))}
+            <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <span className="font-semibold leading-snug">{cell.group ? `${cell.group} › ` : ""}{cell.topic}</span>
+              <mark className="rounded-[4px] bg-marker px-1.5 py-0.5 font-semibold text-marker-ink tabular-nums">{formatCbs(cell)}</mark>
+            </div>
+          </>
+        ) : (
+          <div className={cn("h-24", !value && "animate-pulse")} />
+        )}
+      </div>
+      <Status>
+        {value === "error" ? (
+          <>{WARN}De CBS-gegevens konden niet worden geladen. Probeer het later nog eens.</>
+        ) : !value ? (
+          <span className="text-muted-foreground">CBS-gegevens laden…</span>
+        ) : !cell ? (
+          <>{WARN}Deze waarde staat niet in CBS-tabel {c.table}.</>
+        ) : cell.value == null ? (
+          <>{WARN}Het CBS publiceert hier geen waarde ({cell.symbol}{cell.symbol_meaning ? `: ${cell.symbol_meaning}` : ""}); dat is iets anders dan 0.</>
+        ) : quoteMatches(c.quote, String(cell.value)) ? (
+          <>{OK}Zo gepubliceerd door het CBS in tabel {cell.id}{cell.modified ? `, bijgewerkt op ${fetchedOn(cell.modified)}` : ""}.</>
+        ) : (
+          <>{WARN}Het antwoord noemt “{c.quote}”, maar het CBS publiceert {formatCbs(cell)}.</>
+        )}
+      </Status>
+      {cell && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <ButtonLink href={cell.page}>Open de tabel bij het CBS</ButtonLink>
+          <a className="text-[0.9rem] text-muted-foreground underline underline-offset-2 hover:text-foreground" href={cell.source} rel="noopener noreferrer" target="_blank">
+            Ruwe gegevens
+          </a>
+        </div>
+      )}
+    </>
+  );
+}
+
 /** One citation's evidence, as the panel and the standalone /bron page show it. */
 export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocMeta> }) {
   const value = useLoaded(c);
@@ -394,6 +703,12 @@ export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocM
         <PageEvidence c={c} doc={docs[docKey(c)]} shot={value as Shot | "error" | null} />
       ) : c.kind === "iv3" ? (
         <Iv3Evidence c={c} value={value as Iv3Cell | "error" | null} />
+      ) : c.kind === "text" ? (
+        <TextEvidence c={c} part={value as TextPart | "error" | null} />
+      ) : c.kind === "row" ? (
+        <RowEvidence c={c} value={value as TableRow | "error" | null} />
+      ) : c.kind === "cbs" ? (
+        <CbsEvidence c={c} value={value as CbsCell | "error" | null} />
       ) : (
         <FigureEvidence c={c} filed={value as Filed | "error" | null} />
       )}
@@ -544,7 +859,7 @@ export function Evidence(props: EvidenceProps) {
             <X aria-hidden="true" className="size-5" />
           </button>
         </div>
-        <DrawerDescription className="sr-only">De pagina uit het jaarverslag, het veld uit de DigiMV-vragenlijst of de cel uit de CBS Iv3-gegevens waar dit getal staat.</DrawerDescription>
+        <DrawerDescription className="sr-only">De pagina, het veld, de rij of de CBS-waarde waar dit getal staat.</DrawerDescription>
         <div className="overflow-y-auto px-5 pt-3 pb-8">
           <EvidenceBody {...props} />
         </div>

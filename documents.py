@@ -299,9 +299,10 @@ def _cite(d, n):
 
 
 def _href(did, d, n):
-    """The in-app citation of a PDF page: the evidence panel shows our cached copy with the quote marked. The
-    original URL can't be the citation: many sites send PDFs as a download (Menzis does) and forbid framing."""
-    return f"/bron/doc/{did}/{n}" if d["kind"] == "pdf" else None
+    """The in-app citation of a page (PDF) or part (web page, Word, XML): the evidence panel shows our cached copy
+    with the quote marked. The original URL can't be the citation: many sites send PDFs as a download (Menzis does),
+    forbid framing, or change the page later."""
+    return f"/bron/doc/{did}/{n}" if d["kind"] == "pdf" else f"/bron/tekst/{did}/{n}"
 
 
 def _title(did, d):
@@ -313,6 +314,9 @@ def _title(did, d):
         if len(t.split()) >= 2 and not re.match(r"(?i)microsoft|untitled|\w+\.(docx?|pdf)$", t):
             return t[:200]
     first = next((p["markdown"] or p.get("text") or "" for p in d["pages"] if p["markdown"] or p.get("text")), "")
+    line = first.strip().split("\n", 1)[0].strip()
+    if d["kind"] == "html" and len(line.split()) >= 2 and len(line) <= 200 and not line.startswith("#"):
+        return line  # the page's <title>, which comes first; its headings are often the site's menus
     name = urllib.parse.unquote(urllib.parse.urlsplit(d["file_url"]).path.rstrip("/").rsplit("/", 1)[-1])
     return digimv.page_heading(first) or re.sub(r"\.(pdf|docx?|html?|xml)$", "", name, flags=re.I) or d["file_url"]
 
@@ -329,10 +333,18 @@ def _cached(did):
 def document_meta(did):
     """What a /bron/doc/ citation shows: the document's title, where it came from and when, and its size."""
     d = _cached(did)
-    return {"id": did, "title": d.get("title") or _title(did, d), "url": d["url"], "file_url": d["file_url"],
+    return {"id": did, "title": _title(did, d) if d["kind"] == "html" else d.get("title") or _title(did, d), "url": d["url"], "file_url": d["file_url"],
             "host": urllib.parse.urlsplit(d["file_url"]).hostname.removeprefix("www."), "kind": d["kind"], "page_count": len(d["pages"]),
             "fetched_at": d["fetched_at"],
             "file_name": urllib.parse.unquote(urllib.parse.urlsplit(d["file_url"]).path.rsplit("/", 1)[-1]) or f"{did}.pdf"}
+
+
+def document_part(did, n):
+    """One page or part of a cached public document as text: what a /bron/tekst/ citation shows."""
+    d = _cached(did)
+    if not 1 <= n <= len(d["pages"]):
+        raise KeyError(f"public document {did} has {len(d['pages'])} parts, not {n}")
+    return {**document_meta(did), "page": n, "text": d["pages"][n - 1]["markdown"]}
 
 
 def document_pdf(did):
@@ -394,7 +406,7 @@ def read(url, pages="1-5", refresh=False, db=None):
             with db:
                 db.executemany("UPDATE pub_pages_fts SET md=? WHERE doc=? AND page=?", [(texts[n - 1], did, n) for n in todo])
     sel = digimv.parse_pages(pages, len(texts))
-    return {"id": did, "title": d.get("title") or _title(did, d), "url": url, "file_url": d["file_url"],
+    return {"id": did, "title": _title(did, d) if d["kind"] == "html" else d.get("title") or _title(did, d), "url": url, "file_url": d["file_url"],
             "kind": d["kind"], "fetched_at": d["fetched_at"],
             "page_count": len(texts), "unit": "page" if d["kind"] == "pdf" else f"part of ~{PART} characters",
             "pages": [{"page": n, "source": d["pages"][n - 1]["source"], "href": _href(did, d, n), "cite": _cite(d, n),

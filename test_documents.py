@@ -6,6 +6,7 @@ Fixtures have the shapes the live services returned on 2026-11-12; `python docum
 """
 
 import io
+import json
 import os
 import pathlib
 import socket
@@ -150,9 +151,14 @@ assert calls == [url], "a second read comes from the cache"
 s = d.search_text("tarief", url=url, db=db)
 assert [(h["page"], h["cite"]) for h in s["results"]] == [(1, url)] and "«tarief»" in s["results"][0]["snippet"], s
 assert d._cite({"kind": "pdf", "file_url": "https://x.example/a.pdf"}, 4) == "https://x.example/a.pdf#page=4"
-# A PDF page is cited by our own copy, which opens in the evidence panel; other kinds keep the site's link.
-assert r["pages"][0]["href"] is None and s["results"][0]["href"] is None
+# Every page or part is cited by our own copy, which opens in the evidence panel: a PDF as its page, the rest as text.
+assert r["pages"][0]["href"] == s["results"][0]["href"] == f"/bron/tekst/{r['id']}/1", (r["pages"][0], s["results"][0])
 assert d._href(r["id"], {"kind": "pdf"}, 4) == f"/bron/doc/{r['id']}/4"
+p = d.document_part(r["id"], 1)
+assert (p["page"], p["kind"], p["url"], p["text"]) == (1, "html", url, r["pages"][0]["markdown"]), p
+raises(KeyError, d.document_part, r["id"], 2)
+page = {"kind": "html", "file_url": "https://a.example/p", "pages": [{"markdown": "Kosten Wlz | Zorgcijfers\n## Menu\n## Tabel vinden"}]}
+assert d._title("x", page) == "Kosten Wlz | Zorgcijfers", "a web page is named by its <title>, not its menu headings"
 m = d.document_meta(r["id"])
 assert (m["title"], m["host"], m["url"], m["page_count"]) == ("Inkoopbeleid wijkverpleging", "insurer.example", url, 1), m
 for bad in ["../../etc/passwd", "0" * 20, r["id"].upper()]:  # a path, an id not in the cache, not our id shape
@@ -337,6 +343,36 @@ assert "member" in raises(ValueError, datasets.read_table, "https://x.example/tw
 assert datasets.read_table("https://x.example/two.zip", member="b.json")["rows"] == [{"row": 1, "x": 2}]
 raises(KeyError, datasets.read_table, "https://x.example/two.zip", member="c.csv")
 
+# A /bron/rij/ citation opens one row of our cached copy, by its number in the file, in the sheet or member it names
+tables = d.PUB / "tables"
+tables.mkdir(parents=True, exist_ok=True)
+
+
+def cached(did, body, ctype, url):
+    (tables / did).write_bytes(body)
+    (tables / f"{did}.json").write_text(json.dumps({"content_type": ctype, "file_url": url, "fetched_at": "2026-11-12T10:00:00+00:00"}))
+
+
+cached("a" * 20, big, "text/csv", "https://x.example/services/file/get?key=abc")
+r = datasets.table_row("a" * 20, want[0])
+assert r["row"] == {"row": want[0], "JAAR": "2024", "DIAGNOSE_CD": "1101", "AANTAL": whole[want[0] - 1][2]}, r
+assert (r["columns"], r["title_rows"], r["file_name"]) == (["JAAR", "DIAGNOSE_CD", "AANTAL"], [["Overzicht DBC"]], "x.example-aaaaaaaa.csv"), r
+assert datasets.table_row("a" * 20, len(whole))["row"]["AANTAL"] == "Zorg één", "the cp1252 row itself"
+for n in (2, 3, len(whole) + 1):  # a blank row, the header, past the end
+    raises(KeyError, datasets.table_row, "a" * 20, n)
+sheet = datasets.xlsx_rows(xlsx)[0]
+cached("b" * 20, xlsx, "application/octet-stream", "https://gemeente.example/subsidies.xlsx")
+r = datasets.table_row("b" * 20, 4, [sheet])
+assert (r["row"]["Ontvanger"], r["row"]["Bedrag"], r["sheet"], r["member"], r["file_name"]) == \
+    ("St. Overweeghuis", 95000, sheet, None, "subsidies.xlsx"), r
+raises(KeyError, datasets.table_row, "b" * 20, 4, ["Nope"])
+cached("c" * 20, zipped({"a.csv": "x\n1\n", "b.json": '[{"x": 2}]'}), "application/zip", "https://x.example/two.zip")
+r = datasets.table_row("c" * 20, 1, ["b.json"])
+assert (r["row"], r["member"], r["format"]) == ({"row": 1, "x": 2}, "b.json", "json"), r
+raises(ValueError, datasets.table_row, "c" * 20, 1)  # two data files, the citation names none
+for bad in ["../../etc/passwd", "0" * 20, "A" * 20]:
+    raises(KeyError, datasets.table_row, bad, 1)
+
 
 # ---------------------------------------------------------------- CBS: padded keys, the row cap, symbols
 
@@ -372,6 +408,17 @@ assert "describe_cbs_table" in raises(KeyError, datasets.get_cbs, "40100NED", {"
 raises(KeyError, datasets.get_cbs, "40100NED", {"Gemeente": ["GM0546"]})
 raises(KeyError, datasets.get_cbs, "40100NED", {"RegioS": ["GM0546"]}, ["Nope"])
 assert datasets._cbs_value(" 12 ") == (12, None) and datasets._cbs_value("-") == (None, "-") and datasets._cbs_value(None) == (None, None)
+
+# A /bron/cbs/{table}/{code per dimension}/{topic} citation: the one value, read from CBS again, with its labels
+c = datasets.cbs_cell("40100NED", ["GM0546", "2024JJ00", "V00"], "Clienten_1")
+assert (c["value"], c["symbol"], c["topic"], c["unit"], c["page"]) == (8575, None, "Cliënten", "aantal", "https://dataderden.cbs.nl"), c
+assert c["dimensions"] == [{"title": "Regio's", "value": "GM0546 = Leiden"}, {"title": "Perioden", "value": "2024JJ00 = 2024"},
+                           {"title": "Voorziening", "value": "V00 = v0"}] and "%27GM0546%20%20%20%20%27" in c["source"], c
+sources._all = lambda url: [{"RegioS": "GM0546    ", "Perioden": "2025JJ00", "Voorziening": "V00", "Clienten_1": "x"}]
+c = datasets.cbs_cell("40100NED", ["GM0546", "2025JJ00", "V00"], "Clienten_1")
+assert c["value"] is None and c["symbol"] == "x" and c["symbol_meaning"], "a value CBS withholds is never 0"
+assert "3 dimensions" in raises(KeyError, datasets.cbs_cell, "40100NED", ["GM0546", "2024JJ00"], "Clienten_1")
+raises(KeyError, datasets.cbs_cell, "40100NED", ["GM0546", "2024JJ00", "V99"], "Clienten_1")
 
 
 # ---------------------------------------------------------------- Swing: a key per site, sent only to that site

@@ -16,12 +16,14 @@ Checked against the live services on 2026-11-12:
              '-') that the typed feed turns into null; a query of 10,000 rows or more is refused, not paged."""
 
 import csv
+import functools
 import io
 import itertools
 import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import zipfile
@@ -265,8 +267,9 @@ def _in_memory(size, what):
                          "look for a CSV version of it")
 
 
-def _scan(rows, header_row, filters, words, offset, limit, shift):
-    """One pass over rows (a list or a stream): header, the counts, and only the requested page kept."""
+def _scan(rows, header_row, filters, words, offset, limit, shift, row=None):
+    """One pass over rows (a list or a stream): header, the counts, and only the requested page kept. With row, only
+    that row (by its number in the file), stopping there: what a /bron/rij/ citation shows; the counts are then partial."""
     rows = iter(rows)
     first = list(itertools.islice(rows, max(30, header_row or 0)))
     h = header_row or _header_row(first)
@@ -288,6 +291,13 @@ def _scan(rows, header_row, filters, words, offset, limit, shift):
     for n, r in itertools.chain(enumerate(first[h:], h + 1), enumerate(rows, len(first) + 1)):
         if not any(v not in (None, "") for v in r):
             continue
+        if row is not None:
+            if n - shift < row:
+                continue
+            if n - shift == row:
+                page.append((row, r))
+                width = max(width, len(r))
+            break
         total += 1
         width = max(width, len(r))
         if not all(i < len(r) and str(r[i]).strip().casefold() in vals for i, vals in want.items()):
@@ -311,11 +321,19 @@ def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None,
     that column is one of the values (exact, case ignored): how to match a code without hitting amounts. header_row
     (1-based) overrides the detected header. member picks a file inside a ZIP."""
     path, ctype, final, fetched = _file(url.strip(), refresh)
+    fmt, out, sheet, sheets, member, members = _read(path, ctype, query, limit, offset, sheet, header_row, filters, member)
+    # id: our cached copy, which a /bron/rij/{id}/.../{row} citation opens (the site's link may expire, as Zorginzicht's do)
+    return {"id": path.name, "url": url, "file_url": final, "format": fmt, "sheet": sheet, "sheets": sheets,
+            "member": member, "members": members, "fetched_at": fetched, **out, "scope": TABLE_SCOPE}
+
+
+def _read(path, ctype, query, limit, offset, sheet, header_row, filters, member, row=None):
+    """The table in a cached file: (format, scan, sheet, sheets, member, members)."""
     with open(path, "rb") as f:
         head = f.read(2048)
     sheets = members = None
     words = [sources._fold(w) for w in (query or "").split()]
-    scan = lambda rows, shift=0: _scan(rows, header_row, filters, words, offset, min(limit, 200), shift)
+    scan = lambda rows, shift=0: _scan(rows, header_row, filters, words, offset, min(limit, 200), shift, row)
     if head[:4] == b"\xd0\xcf\x11\xe0":
         raise ValueError("an old binary Excel file (.xls), which cannot be read here; look for a .xlsx or .csv version")
     if head[:6] == b"7z\xbc\xaf\x27\x1c":
@@ -355,8 +373,43 @@ def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None,
         raise ValueError("this URL is a web page, not a data file: read it with read_document to find the file link")
     else:
         fmt, out = "csv", _scan_csv(lambda: open(path, "rb"), scan)
-    return {"url": url, "file_url": final, "format": fmt, "sheet": sheet, "sheets": sheets, "member": member,
-            "members": members, "fetched_at": fetched, **out, "scope": TABLE_SCOPE}
+    return fmt, out, sheet, sheets, member, members
+
+
+def _cached_table(did):
+    if not re.fullmatch(r"[0-9a-f]{20}", did or ""):  # also keeps a path out of the file name
+        raise KeyError(f"no table {did!r}")
+    path = documents.PUB / "tables" / did
+    meta = path.with_suffix(".json")
+    if not (path.exists() and meta.exists()):
+        raise KeyError(f"table {did} is not in the cache here; read its URL again")
+    return path, json.loads(meta.read_text())
+
+
+def table_row(did, row, parts=()):
+    """One row of a table read before, from our cached copy, as a /bron/rij/ citation shows it: the header and that
+    row. parts: the ZIP member and/or Excel sheet the citation names, member first."""
+    path, meta = _cached_table(did)
+    fmt, out, sheet, _, member, members = _read(path, meta["content_type"], None, 1, 0, parts[-1] if parts else None,
+                                                None, None, parts[0] if parts else None, row)
+    if not out["rows"]:
+        raise KeyError(f"row {row} is not in this table: a blank row, the header, or past the end")
+    return {"id": did, "file_url": meta["file_url"], "fetched_at": meta["fetched_at"], "format": fmt, "sheet": sheet,
+            "member": member if members is not None else None, "file_name": table_file(did)[1],
+            "header_row": out["header_row"], "title_rows": out["title_rows"], "columns": out["columns"], "row": out["rows"][0]}
+
+
+def table_file(did):
+    """Our cached copy of a table and a file name for it: the site's own, or one with the right extension."""
+    path, meta = _cached_table(did)
+    name = urllib.parse.unquote(urllib.parse.urlsplit(meta["file_url"]).path.rsplit("/", 1)[-1])
+    if "." not in name:  # Zorginzicht serves its files as /services/file/get?key=...
+        with open(path, "rb") as f:
+            head = f.read(2048)
+        ext = ("xlsx" if "xl/workbook.xml" in zipfile.ZipFile(path).namelist() else "zip") if head[:2] == b"PK" \
+            else "json" if head.lstrip()[:1] in (b"[", b"{") else "csv"
+        name = f"{urllib.parse.urlsplit(meta['file_url']).hostname or 'bestand'}-{did[:8]}.{ext}"
+    return path, name, meta["content_type"]
 
 
 # ---------------------------------------------------------------- CBS StatLine (opendata + dataderden)
@@ -440,6 +493,10 @@ def _cbs_dims(db, t):
     return d
 
 
+def _cbs_page(t):
+    return f"{t['host']}/#/CBS/nl/dataset/{t['id']}/table" if "opendata" in t["host"] else t["host"]
+
+
 def describe_cbs_table(table_id, dimension=None, query=None, db=None):
     """What a table holds: its topics (with unit) and dimensions. With `dimension`, that dimension's codes,
     filtered on `query` (words in code or title): how to find e.g. a municipality's code in a regional table."""
@@ -448,7 +505,7 @@ def describe_cbs_table(table_id, dimension=None, query=None, db=None):
     d = _cbs_dims(db, t)
     out = {"id": t["id"], "title": d["title"], "period": d["period"], "modified": d["modified"],
            "description": d["description"][:3000], "catalogue": t["host"].split("//")[1],
-           "page": f"{t['host']}/#/CBS/nl/dataset/{t['id']}/table" if "opendata" in t["host"] else t["host"],
+           "page": _cbs_page(t),
            "topics": [{k: x[k] for k in ("key", "title", "unit", "group")} for x in d["topics"]],
            "dimensions": [{"key": x["key"], "title": x["title"], "type": x["type"], "codes": len(x["codes"]),
                            "first_codes": [f"{c['key'].strip()} = {c['title']}" for c in x["codes"][:12]]} for x in d["dims"]],
@@ -532,6 +589,32 @@ def get_cbs(table_id, filters=None, topics=None, limit=200, db=None):
             "topics": {x["key"]: f"{x['title']} ({x['unit']})" if x["unit"] else x["title"] for x in tops},
             "symbols": {s: CBS_SYMBOLS.get(s, "see the table's description") for s in sorted(symbols)},
             "source": url, "scope": CBS_SCOPE}
+
+
+def cbs_cell(table_id, codes, topic):
+    """One CBS value as a /bron/cbs/{table}/{code per dimension, in the table's order}/{topic} citation names it,
+    read from CBS again: what the evidence panel shows next to the answer."""
+    return _cbs_cell(table_id, tuple(codes), topic, int(time.time() // 3600))
+
+
+@functools.lru_cache(maxsize=2048)  # ponytail: per process, an hour per cell; the panel loads every chip of an answer at once
+def _cbs_cell(table_id, codes, topic, _hour):
+    db = cbs_catalog()
+    t = _cbs_table(db, table_id)
+    d = _cbs_dims(db, t)
+    if len(codes) != len(d["dims"]):
+        raise KeyError(f"{t['id']} has {len(d['dims'])} dimensions {[x['key'] for x in d['dims']]}; the citation names {len(codes)}")
+    r = get_cbs(t["id"], {x["key"]: [c] for x, c in zip(d["dims"], codes)}, [topic], db=db)
+    if not r["rows"]:
+        raise KeyError(f"CBS has no row for {list(codes)} in {t['id']}")
+    row, top = r["rows"][0], next(x for x in d["topics"] if x["key"].lower() == topic.lower())
+    v = row[top["key"]]
+    sym = v["symbol"] if isinstance(v, dict) else None
+    return {"id": t["id"], "title": d["title"], "modified": d["modified"], "page": _cbs_page(t),
+            "dimensions": [{"title": x["title"], "value": row[x["key"]]} for x in d["dims"]],
+            "topic": top["title"], "group": top["group"], "unit": top["unit"],
+            "value": None if sym else v, "symbol": sym, "symbol_meaning": r["symbols"].get(sym) if sym else None,
+            "source": r["source"]}
 
 
 # ---------------------------------------------------------------- Swing Open Data Service (ABF)

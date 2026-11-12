@@ -310,6 +310,25 @@ def public_page_png(doc_id: str, page: int, quote: list[str] = Query([])):
         "X-Mark": ",".join(f"{v:.4f}" for v in mark or ()), "X-Found": found, "Cache-Control": "max-age=3600"})
 
 
+@app.get("/public/documents/{doc_id}/parts/{page}")
+def public_part(doc_id: str, page: int):
+    """One page or part of a cached public document as text: what a /bron/tekst/ citation shows."""
+    return _source(documents.document_part, doc_id, page)
+
+
+@app.get("/public/tables/{table_id}/rows/{row}")
+def public_table_row(table_id: str, row: int, part: list[str] = Query([])):
+    """One row of a table read before, with its header: what a /bron/rij/ citation shows. part: ZIP member and/or sheet."""
+    return _source(datasets.table_row, table_id, row, part[:2])
+
+
+@app.get("/public/tables/{table_id}/file")
+def public_table_file(table_id: str):
+    """Our cached copy of a table, as a download: the site's own link may have expired."""
+    path, name, ctype = _source(datasets.table_file, table_id)
+    return FileResponse(path, media_type=(ctype or "").split(";")[0] or "application/octet-stream", filename=name)
+
+
 @app.get("/public/links")
 def public_links(url: str, q: str | None = None, limit: int = 100):
     """The links on a public web page, files first."""
@@ -364,6 +383,15 @@ def cbs_values(table_id: str, filters: str | None = None, topics: str | None = N
     if flt is not None and not isinstance(flt, dict):
         raise HTTPException(400, 'filters must be a JSON object, e.g. {"RegioS":["GM0546"]}')
     return _source(datasets.get_cbs, table_id, flt, topics.split(",") if topics else None, limit)
+
+
+@app.get("/cbs/{table_id}/cell/{path:path}")
+def cbs_cell(table_id: str, path: str):
+    """One CBS value: a code per dimension in the table's order, then the topic. What a /bron/cbs/ citation shows."""
+    *codes, topic = path.split("/")
+    if not codes:
+        raise HTTPException(400, "give a code per dimension, then the topic")
+    return _source(datasets.cbs_cell, table_id, codes, topic)
 
 
 @app.get("/cbs/{table_id}")
