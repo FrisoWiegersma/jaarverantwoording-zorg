@@ -314,7 +314,8 @@ export default function SmoothTab({
                 tabIndex={i === selected ? 0 : -1}
                 type="button"
               >
-                {Icon && <Icon aria-hidden="true" className="size-4" />}
+                {/* On a phone four tabs with icons are wider than the bar: the last one was cut off. */}
+                {Icon && <Icon aria-hidden="true" className="hidden size-4 sm:block" />}
                 <span className="whitespace-nowrap">{item.title}</span>
               </button>
             );
@@ -331,7 +332,7 @@ export default function SmoothTab({
               const Icon = item.icon;
               return (
                 <span className={cn(tab, "text-primary-foreground")} key={item.id}>
-                  {Icon && <Icon className="size-4" />}
+                  {Icon && <Icon className="hidden size-4 sm:block" />}
                   <span className="whitespace-nowrap">{item.title}</span>
                 </span>
               );
