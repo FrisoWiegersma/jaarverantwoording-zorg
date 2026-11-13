@@ -119,6 +119,10 @@ _plain = urllib.request.build_opener(_Redirects(robots=False))  # for robots.txt
 # KOOP's documented APIs (Woo search, SRU) hand out these hosts' file URLs to download; their robots.txt keeps
 # search engines out of the portal, not API clients out of the files
 ROBOTS_EXEMPT = {"open.overheid.nl", "repository.overheid.nl"}
+# Government platforms whose robots.txt itself errors while their pages answer: there a 5xx means no rules, not
+# stay away. Rules they do serve still apply. puc.overheid.nl (where the NZa and others publish Woo decisions):
+# robots.txt has answered HTTP 500 since at least 2026-11-13.
+ROBOTS_BROKEN = {"puc.overheid.nl"}
 _robots, _next_slot = {}, {}
 
 
@@ -133,7 +137,7 @@ def _robots_for(origin):
         with _plain.open(urllib.request.Request(origin + "/robots.txt", headers={"User-Agent": digimv.UA}), timeout=20) as r:
             rp.parse(r.read(512 * 1024).decode("utf-8-sig", "replace").splitlines())  # some files start with a BOM
     except urllib.error.HTTPError as e:
-        if e.code >= 500:
+        if e.code >= 500 and urllib.parse.urlsplit(origin).hostname not in ROBOTS_BROKEN:
             raise RuntimeError(f"{origin}/robots.txt answers HTTP {e.code}, so the site is not read now; try later") from e
         rp.parse([])
     except OSError as e:

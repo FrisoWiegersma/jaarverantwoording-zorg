@@ -88,6 +88,11 @@ d._allowed("https://gone.example/anything")  # RFC 9309: no robots.txt (4xx) mea
 assert "503" in raises(RuntimeError, d._allowed, "https://down.example/x")  # 5xx: stay away for now
 assert "https://down.example" not in d._robots, "a failed robots.txt is not cached, so the next call tries again"
 d._allowed("https://open.overheid.nl/documenten/oep-1")  # KOOP's API file host: exempt, never fetched
+answers["https://puc.overheid.nl/robots.txt"] = Answer(code=500)
+d._allowed("https://puc.overheid.nl/nza/doc/PUC_1")  # its robots.txt is broken: a 5xx there means no rules
+answers["https://puc.overheid.nl/robots.txt"] = Answer(b"User-agent: *\nDisallow: /intern\n")
+d._robots.clear()
+assert "robots.txt" in raises(ValueError, d._allowed, "https://puc.overheid.nl/intern/x"), "rules it does serve still apply"
 
 
 # ---------------------------------------------------------------- recognising and reading files
