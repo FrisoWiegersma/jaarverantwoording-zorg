@@ -307,6 +307,8 @@ def _scan(rows, header_row, filters, words, offset, limit, shift, row=None, sort
     only offset + limit rows are held, so a 10-million-row file is still one pass."""
     rows = iter(rows)
     first = list(itertools.islice(rows, max(30, header_row or 0)))
+    if not any(first):
+        raise KeyError("no rows: this sheet or file is empty")  # KeyError: with no sheet asked, the next sheet is tried
     h = header_row or _header_row(first)
     if not 1 <= h <= len(first):
         raise ValueError(f"header_row must be between 1 and {len(first)}")

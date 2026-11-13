@@ -326,6 +326,12 @@ assert datasets.read_table("https://gemeente.example/subsidies.xlsx", filters={"
 assert "uitleg" in raises(KeyError, datasets.read_table, "https://gemeente.example/subsidies.xlsx", sheet="Subsidies",
                           filters={"uitleg": ["x"]}), "a sheet asked for is never swapped"
 assert "Nope" in raises(KeyError, datasets.read_table, "https://gemeente.example/subsidies.xlsx", filters={"Nope": ["x"]})
+z = zipfile.ZipFile(io.BytesIO(xlsx))
+serve(zipped({**{n: z.read(n).decode() for n in z.namelist()},
+              "xl/worksheets/sheet1.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>'}))
+assert datasets.read_table("https://x.example/leeg-voorblad.xlsx")["sheet"] == "Toelichting", "an empty first sheet is passed over"
+serve(b"", "text/csv")
+assert "empty" in raises(KeyError, datasets.read_table, "https://x.example/leeg.csv")
 serve(b'[{"a": 1}, {"a": 2}]', "application/json")
 assert [x["row"] for x in datasets.read_table("https://x.example/a.json")["rows"]] == [1, 2]  # JSON: the record number
 serve(b"<!doctype html><html>", "text/html")

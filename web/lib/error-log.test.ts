@@ -22,4 +22,6 @@ test("a failed tool call is appended with its input; project tools keep input ou
   assert.ok(c.error.length < 2100);
   const long = errorEntry(chat, 1, "present_answer", {}, new Error(`Value: ${"x".repeat(5000)} Error message: summary too short`));
   assert.match(long.error, /summary too short$/, "the reason at the end of a long validation error is kept");
+  const net = errorEntry(chat, 2, "read_table", {}, new TypeError("fetch failed", { cause: Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" }) }));
+  assert.equal(net.error, "TypeError: fetch failed (cause: UND_ERR_SOCKET)");
 });

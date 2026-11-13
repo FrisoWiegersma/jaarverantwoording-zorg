@@ -141,7 +141,8 @@ bronverwijzing van precies dat getal. Getalkolommen rechts uitgelijnd (---:). Ze
 async function api(path: string, params: Record<string, string | number | null | undefined> = {}) {
   const url = new URL(path, API);
   for (const [k, v] of Object.entries(params)) if (v != null && v !== "") url.searchParams.set(k, String(v));
-  const res = await fetch(url, { cache: "no-store" });
+  // ponytail: one retry. A pooled connection the API has just closed fails at once ("fetch failed"); a GET is safe to resend.
+  const res = await fetch(url, { cache: "no-store" }).catch(() => fetch(url, { cache: "no-store" }));
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error(body?.detail ?? `DigiMV API ${res.status}`);
   return body;

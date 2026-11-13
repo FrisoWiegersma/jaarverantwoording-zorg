@@ -12,12 +12,18 @@ const cut = (v: unknown, n = 2000) => {
 
 interface Chat { id: string; model: string; effort: string }
 
+// "fetch failed" says nothing; its cause says which (ECONNRESET, UND_ERR_SOCKET, a timeout).
+const causeOf = (e: Error) => {
+  const c = e.cause as { code?: string; message?: string } | undefined;
+  return c ? ` (cause: ${cut(c.code ?? c.message ?? String(c), 300)})` : "";
+};
+
 /** One failure with what's needed to reproduce it: the tool, its input and the error. Project tools keep their input private. */
 export function errorEntry(chat: Chat, step: number | null, tool: string | null, input: unknown, error: unknown) {
   return {
     at: new Date().toISOString(), chat: chat.id, model: chat.model, effort: chat.effort, step, tool,
     input: tool && !tool.includes("_project_") ? cut(input) : undefined,
-    error: error instanceof Error ? `${error.name}: ${cut(error.message)}` : cut(error),
+    error: error instanceof Error ? `${error.name}: ${cut(error.message)}${causeOf(error)}` : cut(error),
     status: (error as { statusCode?: number } | null)?.statusCode,
   };
 }
