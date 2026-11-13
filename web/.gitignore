@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# built-in login accounts (AUTH_MODE=builtin)
+/data/

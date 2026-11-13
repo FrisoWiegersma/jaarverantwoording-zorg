@@ -5,6 +5,7 @@ import { generateId, getToolName, isToolUIPart, type UIMessage } from "ai";
 import Link from "next/link";
 import { Copy, SquarePen } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AccountMenu } from "@/components/account-menu";
 import { Answer, DrawnCheck } from "@/components/answer";
 import { CitationPreviewProvider } from "@/components/citation-preview";
 import { RichAnswer } from "@/components/rich-answer";
@@ -444,6 +445,7 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
                   <span className="hidden @2xl:inline">Nieuwe vraag</span>
                 </CommandButton>
               )}
+              <AccountMenu />
             </div>
           </header>}
 

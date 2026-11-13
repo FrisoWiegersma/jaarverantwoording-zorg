@@ -25,6 +25,7 @@ services:
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3210}
     volumes:
       - web-logs:/app/logs
+      - web-data:/app/data
     ports:
       - "127.0.0.1:3210:3000"
     depends_on:
@@ -40,3 +41,4 @@ services:
 volumes:
   digimv-data:
   web-logs:
+  web-data:

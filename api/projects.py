@@ -56,7 +56,7 @@ def database():
 def owner(request):
     user = request.headers.get("cf-access-authenticated-user-email", "").strip()
     if not user:
-        raise HTTPException(401, "Meld je aan via Cloudflare Access om privéprojecten te gebruiken.")
+        raise HTTPException(401, "Meld je aan om privéprojecten te gebruiken.")
     return user
 
 

@@ -15,6 +15,7 @@
     "@ai-sdk/react": "^4.0.168",
     "@openuidev/react-lang": "1.1.0",
     "ai": "^7.0.164",
+    "better-auth": "^1.7.23",
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
     "lucide-react": "^1.70.0",
@@ -32,7 +33,7 @@
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

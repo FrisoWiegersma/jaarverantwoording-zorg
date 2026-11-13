@@ -25,9 +25,9 @@ Answers link to filename, physical PDF page and supporting quotation. Open yello
 
 ## Access, deployment and backup
 
-Projects require a non-empty `cf-access-authenticated-user-email` from the trusted Cloudflare Access gateway. Anonymous local sessions can use public chat but cannot create/read private projects. Each project belongs to one owner; sharing is not supported.
+Projects belong to the signed-in person: the built-in login or, with `AUTH_MODE=cloudflare`, Cloudflare Access. Either way the web app passes the owner to the API in the internal `cf-access-authenticated-user-email` header: the email Cloudflare Access verified, or with the built-in login the account's id. The built-in login does not verify email addresses, so it never uses one as the owner; it drops any such header from the browser and sets it from the session. Projects made under one mode are not visible under the other. Without a signed-in person there are no private projects. Each project belongs to one owner; sharing is not supported.
 
-Keep the web service on loopback behind Access, the API on the private Compose network, and ensure the gateway replaces caller-supplied identity headers. Public origin access or accepting forged headers invalidates this boundary. Match `APP_ORIGIN` to the exact browser origin on both services (default `http://localhost:3210`); cross-origin private mutations are rejected.
+Keep the web service on loopback (behind Access in `cloudflare` mode), the API on the private Compose network, and ensure the gateway replaces caller-supplied identity headers. Public origin access or accepting forged headers invalidates this boundary. Match `APP_ORIGIN` to the exact browser origin on both services (default `http://localhost:3210`); cross-origin private mutations are rejected.
 
 Projects, page text and conversations live in `DATA_DIR/chats.db`. Markdown and pasted-text originals are retained in the database and can be downloaded from their source view. PDF and saved table originals live in `DATA_DIR/private/`. These are private user data, separate from the public DigiMV cache. Back up the whole data volume consistently using the procedure in [docker.md](docker.md); preserve both the database and originals. Treat backups and exported spreadsheets as confidential. Archive is not erasure.
 

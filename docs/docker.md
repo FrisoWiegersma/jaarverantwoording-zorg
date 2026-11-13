@@ -18,7 +18,7 @@ Edit `.env` and set `GEMINI_API_KEY`. Leave `APP_ORIGIN=http://localhost:3210` f
 docker compose up -d --build --wait
 ```
 
-Open **http://localhost:3210**.
+Open **http://localhost:3210** and create an account. Each person's conversations and projects are their own.
 
 On first start, the API builds the organisation/document index in the background. Container health means the service is running; it does not mean every archive year has finished syncing. Watch the per-year `ok` lines:
 
@@ -26,7 +26,7 @@ On first start, the API builds the organisation/document index in the background
 docker compose logs -f api
 ```
 
-Use Ctrl+C to stop watching logs; the containers keep running. You can also open `http://localhost:3210/digimv/health` to see the latest successful sync timestamp. If a year reports `FAILED`, inspect the error and retry indexing:
+Use Ctrl+C to stop watching logs; the containers keep running. Once signed in, you can also open `http://localhost:3210/digimv/health` to see the latest successful sync timestamp. If a year reports `FAILED`, inspect the error and retry indexing:
 
 ```sh
 docker compose exec api .venv/bin/python api/digimv.py sync
@@ -45,6 +45,7 @@ PDFs and questionnaire answers are fetched as requested, so the initial sync doe
 | `web` | Next.js chat, evidence views, Excel downloads | `127.0.0.1:3210` |
 | `api` | FastAPI retrieval and document processing | Internal Compose network only |
 | `digimv-data` volume | SQLite, PDFs, extracted pages | Persistent Docker volume |
+| `web-data` volume | Accounts (`auth.db`) and the session secret for the built-in login | Persistent Docker volume |
 
 The API image includes the SQLite tokenizer needed by the index and runs the offline Python self-check during its build. Both services have health checks and restart policies.
 
@@ -54,6 +55,10 @@ The API image includes the SQLite tokenizer needed by the index and runs the off
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Required | Your server-side provider key |
 | `APP_ORIGIN` | `http://localhost:3210` | The exact address users open; Excel source links must match it |
+| `AUTH_MODE` | `builtin` | `cloudflare` when Cloudflare Access signs people in (see below) |
+| `BETTER_AUTH_SECRET` | Made on first start | Set your own (`openssl rand -hex 32`) to manage it with your other secrets |
+| `AUTH_ALLOWED_EMAILS` | Empty: anyone may sign up | Addresses or `@domains`, comma-separated, that may create an account |
+| `AUTH_ALLOW_SIGNUP` | `true` | `false` closes sign-up once everyone has an account |
 | `GEMINI_MODEL` | `gemini-3.5-flash-lite` | Override scanned-page OCR |
 | `APP_VERSION` | `latest` | Optional local image tag for a release |
 
@@ -65,7 +70,11 @@ For remote access, use an authenticated reverse proxy or tunnel on the Docker ho
 docker compose up -d web api
 ```
 
-Protect the entire hostname, including `/api/*`, `/digimv/*`, and `/bron/*`. The app does not implement its own user login or rate limiting. Keep the loopback binding unless a different network arrangement is explicitly configured.
+With the built-in login every page and endpoint except the login and landing page requires an account. The login does not send mail, so email addresses are not verified: `AUTH_ALLOWED_EMAILS` keeps out people who don't know an allowed address, and on a public address you should create the accounts and then set `AUTH_ALLOW_SIGNUP=false`. Projects and conversations belong to the account, not to its email address. The app has no rate limiting. Keep the loopback binding unless a different network arrangement is explicitly configured.
+
+### Sign-in through Cloudflare Access
+
+Set `AUTH_MODE=cloudflare` when Cloudflare Access protects the entire hostname, including `/api/*`, `/digimv/*`, and `/bron/*`. The app then has no login page and trusts the `cf-access-authenticated-user-email` header Cloudflare sets. Only use it behind Cloudflare Access: without it anyone can send that header and act as any user.
 
 ## Stop, inspect, update
 
@@ -96,7 +105,7 @@ systemctl --user enable --now "$PWD/deploy/jaarverantwoording-deploy.timer"
 loginctl enable-linger "$USER"   # keep user timers running without a login session
 ```
 
-Push to `main` and the new commit is live within about two minutes of the checks passing. Watch or trigger a run with:
+On an install from before the built-in login, the script adds `AUTH_MODE=cloudflare` to a `.env` that has no `AUTH_MODE`, because Cloudflare Access was the only way to sign in then and projects belong to those emails. Push to `main` and the new commit is live within about two minutes of the checks passing. Watch or trigger a run with:
 
 ```sh
 journalctl --user -u jaarverantwoording-deploy -f
@@ -112,10 +121,11 @@ Stop both services so the archive contains a consistent database and document ca
 ```sh
 docker compose stop web api
 docker compose run --rm --no-deps -T api .venv/bin/python -c "import sys,tarfile; t=tarfile.open(fileobj=sys.stdout.buffer,mode='w|gz'); t.add('/app/data',arcname='data'); t.close()" > digimv-backup.tar.gz
+docker compose run --rm --no-deps -T web cat /app/data/auth.db > auth-backup.db
 docker compose up -d --wait
 ```
 
-This archive contains the data volume, not `.env`. Back up the environment file separately using your normal secret-storage process. Do not copy a live SQLite database alone while its WAL is being written.
+The first archive holds the API's data volume; `auth-backup.db` holds the accounts of the built-in login (skip that line with `AUTH_MODE=cloudflare`). To restore the accounts, put the file back in an empty `web-data` volume with `docker compose run --rm --no-deps -T web sh -c 'cat > /app/data/auth.db' < auth-backup.db`. Neither contains `.env`. Back up the environment file separately using your normal secret-storage process. Do not copy a live SQLite database alone while its WAL is being written.
 
 ## Restore without overwriting the old volume
 
