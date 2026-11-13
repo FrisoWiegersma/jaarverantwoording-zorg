@@ -225,10 +225,48 @@ function Heading({ title, sub }: { title: string; sub: string }) {
   );
 }
 
-function PageEvidence({ c, shot, doc }: { c: PageCitation; shot: Shot | "error" | null; doc?: DocMeta }) {
-  const pdf = `${pagePath(c)}/pdf#page=${c.page}`;
+/** The real page, as printed, for public and private PDFs alike: a window around the marked passage, or without a mark
+ * (a scan has no text to find) the whole page in a bounded scroll box. A click opens the whole PDF on that page. */
+function PageImage({ shot, href, page, quoted }: { shot: Shot | "error" | null; href: string; page: number; quoted: boolean }) {
   // The box is drawn once the page image has a size to draw it on.
   const [shown, setShown] = useState<string | null>(null);
+  return (
+    <a
+      aria-label={`Open pagina ${page} in de PDF`}
+      className={cn(
+        "relative block overflow-hidden rounded-xl bg-white shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-18px_rgb(0_0_0/0.45)] ring-1 ring-black/10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+        shot && shot !== "error" && shot.mark ? "h-[20rem]" : "max-h-[32rem] overflow-y-auto"
+      )}
+      href={href}
+      rel="noopener"
+      target="_blank"
+    >
+      {shot && shot !== "error" ? (
+        <MarkerText delay={quoted ? 350 : 0} key={shot.src} show={shown === shot.src} style={shot.mark ? pageWindow(shot.mark) : undefined}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- blob URL of a rendered page, nothing to optimise */}
+          <img alt={`Pagina ${page}`} className="block h-auto w-full" onLoad={() => setShown(shot.src)} src={shot.src} />
+          {shot.mark && (
+            <Marker
+              className="pointer-events-none absolute"
+              style={{
+                top: `${shot.mark[0] * 100}%`,
+                left: `${shot.mark[1] * 100}%`,
+                width: `${(shot.mark[3] - shot.mark[1]) * 100}%`,
+                height: `${(shot.mark[2] - shot.mark[0]) * 100}%`,
+              }}
+              type="box"
+            />
+          )}
+        </MarkerText>
+      ) : (
+        <div className={cn("h-[20rem]", shot === "error" ? "" : "animate-pulse bg-black/[0.04]")} />
+      )}
+    </a>
+  );
+}
+
+function PageEvidence({ c, shot, doc }: { c: PageCitation; shot: Shot | "error" | null; doc?: DocMeta }) {
+  const pdf = `${pagePath(c)}/pdf#page=${c.page}`;
   return (
     <>
       {c.kind === "doc" ? (
@@ -255,38 +293,7 @@ function PageEvidence({ c, shot, doc }: { c: PageCitation; shot: Shot | "error" 
         </MarkerText>
       )}
 
-      {/* The real page, as printed. A click opens the whole PDF on that page. */}
-      <a
-        aria-label={`Open pagina ${c.page} in de PDF`}
-        className={cn(
-          "relative block overflow-hidden rounded-xl bg-white shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-18px_rgb(0_0_0/0.45)] ring-1 ring-black/10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
-          shot && shot !== "error" && shot.mark ? "h-[20rem]" : "max-h-[32rem] overflow-y-auto"
-        )}
-        href={pdf}
-        rel="noopener"
-        target="_blank"
-      >
-        {shot && shot !== "error" ? (
-          <MarkerText delay={c.quote ? 350 : 0} key={shot.src} show={shown === shot.src} style={shot.mark ? pageWindow(shot.mark) : undefined}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- blob URL of a rendered page, nothing to optimise */}
-            <img alt={`Pagina ${c.page}`} className="block h-auto w-full" onLoad={() => setShown(shot.src)} src={shot.src} />
-            {shot.mark && (
-              <Marker
-                className="pointer-events-none absolute"
-                style={{
-                  top: `${shot.mark[0] * 100}%`,
-                  left: `${shot.mark[1] * 100}%`,
-                  width: `${(shot.mark[3] - shot.mark[1]) * 100}%`,
-                  height: `${(shot.mark[2] - shot.mark[0]) * 100}%`,
-                }}
-                type="box"
-              />
-            )}
-          </MarkerText>
-        ) : (
-          <div className={cn("h-[20rem]", shot === "error" ? "" : "animate-pulse bg-black/[0.04]")} />
-        )}
-      </a>
+      <PageImage href={pdf} page={c.page} quoted={Boolean(c.quote)} shot={shot} />
 
       <Status>
         {shot === "error" ? (
@@ -736,10 +743,7 @@ export function PrivateSource({ c, value, compact = false }: { c: PrivateCitatio
     <Heading title={value.filename} sub={`Privébron · ${value.documentKind === "pdf" ? "pagina" : "sectie"} ${c.page} · ${value.source === "text" || value.source === "note" || value.source === "markdown" ? "tekst" : value.source === "needs_ocr" || value.source === "pending" ? "OCR niet beschikbaar" : "OCR — controleer de tekst"}`} />
     {c.quote && <blockquote className="rounded-lg bg-marker p-3 text-marker-ink">{c.quote}</blockquote>}
     {c.quote && <p className="text-sm text-muted-foreground">{matched ? "Citaat teruggevonden in de brontekst. Controleer de betekenis zelf." : "Citaat niet letterlijk teruggevonden. Controleer de originele pagina."}</p>}
-    {!compact && value.shot && <>
-      {/* eslint-disable-next-line @next/next/no-img-element -- authenticated rendered PDF page */}
-      <img alt={`Pagina ${c.page} van ${value.filename}`} className="w-full rounded-lg" src={value.shot.src} />
-    </>}
+    {!compact && value.shot && <PageImage href={`${pagePath(c)}/pdf#page=${c.page}`} page={c.page} quoted={Boolean(c.quote)} shot={value.shot} />}
     {!compact && value.text && <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-4 font-sans text-sm">{value.text}</pre>}
     {!compact && value.documentKind !== "pdf" && <a className="underline" href={`${pagePath(c)}/original`}>Download {value.documentKind === "markdown" ? "kennisbestand (.md)" : "tekstbron"}</a>}
     {!compact && value.documentKind === "pdf" && <a className="underline" href={`${pagePath(c)}/pdf#page=${c.page}`} target="_blank" rel="noopener">Open originele PDF op pagina {c.page}</a>}
@@ -863,7 +867,9 @@ export function Evidence(props: EvidenceProps) {
 
   return (
     <Drawer onOpenChange={(o) => !o && onClose()} open={open}>
-      <DrawerContent className="max-h-[92dvh]">
+      {/* Centred and capped on a wide screen: a project chat always uses this drawer, and a page as wide as the
+          monitor shows only its letterhead. */}
+      <DrawerContent className="mx-auto max-h-[92dvh] w-full max-w-2xl">
         <div className="flex shrink-0 items-center justify-between pr-2 pl-5">
           <DrawerTitle className="font-semibold">Waar het staat</DrawerTitle>
           <button aria-label="Sluit" className="flex size-11 items-center justify-center rounded-full hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" onClick={onClose} type="button">
