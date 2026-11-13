@@ -84,14 +84,27 @@ def doc_url(year, doc_id):
 
 # ---------------------------------------------------------------- index sync
 
+
 def flatten(data):
     """API response for one year -> (org rows, doc rows). Plain lists, no dedup: collisions must fail loudly."""
     orgs, docs = [], []
 
     def add_docs(entry, parent_id, desaveu=None):
         for d in entry["documents"]:
-            docs.append((d["id"], entry["externalOrganizationId"], parent_id, d["type"], d["fileName"],
-                         d["fileSize"], d["publishedDate"], d["description"], d["locationSummary"], desaveu))
+            docs.append(
+                (
+                    d["id"],
+                    entry["externalOrganizationId"],
+                    parent_id,
+                    d["type"],
+                    d["fileName"],
+                    d["fileSize"],
+                    d["publishedDate"],
+                    d["description"],
+                    d["locationSummary"],
+                    desaveu,
+                )
+            )
 
     for o in data:
         oid = o["externalOrganizationId"]
@@ -122,8 +135,7 @@ def load_year(db, year, data):
         n_docs = db.execute("SELECT count(*) FROM docs WHERE year=?", (year,)).fetchone()[0]
         if (n_orgs, n_docs) != (len(orgs), len(docs)):
             raise ValueError(f"{year}: stored {n_orgs} orgs/{n_docs} docs, API had {len(orgs)}/{len(docs)}")
-        db.execute("INSERT INTO sync_log VALUES (?,?,?,?)",
-                   (year, datetime.now(UTC).isoformat(timespec="seconds"), n_orgs, n_docs))
+        db.execute("INSERT INTO sync_log VALUES (?,?,?,?)", (year, datetime.now(UTC).isoformat(timespec="seconds"), n_orgs, n_docs))
     return len(orgs), n_orgs, len(docs), n_docs
 
 
@@ -150,6 +162,7 @@ def last_sync(db=None):
 
 
 # ---------------------------------------------------------------- search
+
 
 def _org_query(q):
     """'woonzorgg  arnh' -> '"woonzorgg" "arnh"': every token is a substring (trigram index), so Dutch
@@ -189,11 +202,15 @@ def search(q, year=None, doc_type=None, limit=50, db=None):
     if db.execute("SELECT 1 FROM orgs WHERE org_id=?", (q,)).fetchone():
         ids = [r[0] for r in db.execute(f"SELECT DISTINCT o.org_id FROM orgs o WHERE o.org_id=?{filters}", (q, *args))]
     elif match := _org_query(q):
-        ids = [r[0] for r in db.execute(
-            f"""SELECT o.org_id FROM orgs_fts JOIN orgs o ON o.rowid = orgs_fts.rowid
+        ids = [
+            r[0]
+            for r in db.execute(
+                f"""SELECT o.org_id FROM orgs_fts JOIN orgs o ON o.rowid = orgs_fts.rowid
                 WHERE orgs_fts MATCH ?{filters}
                 GROUP BY o.org_id ORDER BY min(orgs_fts.rank), max(o.year) DESC, min(o.name) LIMIT ?""",
-            (match, *args, limit))]  # trigram bm25 ties a lot; recent filers first
+                (match, *args, limit),
+            )
+        ]  # trigram bm25 ties a lot; recent filers first
     else:
         return []
 
@@ -207,30 +224,36 @@ def search(q, year=None, doc_type=None, limit=50, db=None):
         if type_like:
             dq += " AND type LIKE ?"
             dargs.append(type_like)
-        out.append({
-            "org_id": oid,
-            "name": rows[0]["name"],
-            "town": rows[0]["town"],
-            "former_names": sorted({r["name"] for r in rows} - {rows[0]["name"]}),
-            "parents": sorted({r["parent_id"] for r in rows if r["parent_id"] not in ("", oid)}),
-            "years": sorted({r["year"] for r in rows}),
-            "documents": [_doc_dict(d) for d in db.execute(dq + " ORDER BY year DESC, type, id", dargs)],
-        })
+        out.append(
+            {
+                "org_id": oid,
+                "name": rows[0]["name"],
+                "town": rows[0]["town"],
+                "former_names": sorted({r["name"] for r in rows} - {rows[0]["name"]}),
+                "parents": sorted({r["parent_id"] for r in rows if r["parent_id"] not in ("", oid)}),
+                "years": sorted({r["year"] for r in rows}),
+                "documents": [_doc_dict(d) for d in db.execute(dq + " ORDER BY year DESC, type, id", dargs)],
+            }
+        )
     return out
 
 
 def get_doc(year, doc_id, db=None):
     """Index metadata for one document, joined with its organisation's name."""
     db = db or connect()
-    r = db.execute("""SELECT d.*, o.name AS org_name FROM docs d
+    r = db.execute(
+        """SELECT d.*, o.name AS org_name FROM docs d
                       LEFT JOIN orgs o ON o.year=d.year AND o.org_id=d.org_id AND o.parent_id=d.parent_id
-                      WHERE d.year=? AND d.id=?""", (year, doc_id)).fetchone()
+                      WHERE d.year=? AND d.id=?""",
+        (year, doc_id),
+    ).fetchone()
     if not r:
         raise KeyError(f"document {year}/{doc_id} is not in the index (run: digimv.py sync)")
     return _doc_dict(r)
 
 
 # ---------------------------------------------------------------- PDF cache
+
 
 def pdf_path(year, doc_id):
     return DATA / "pdf" / str(year) / f"{doc_id}.pdf"
@@ -251,8 +274,7 @@ def get_pdf(year, doc_id, db=None):
         if _pdf_ok(data, d["file_size"]):
             break
     else:
-        raise ValueError(f"{year}/{doc_id}: got {len(data)} bytes starting {data[:5]!r}, "
-                         f"index says {d['file_size']} bytes of PDF")
+        raise ValueError(f"{year}/{doc_id}: got {len(data)} bytes starting {data[:5]!r}, index says {d['file_size']} bytes of PDF")
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".part")
     tmp.write_bytes(data)
@@ -261,6 +283,7 @@ def get_pdf(year, doc_id, db=None):
 
 
 # ---------------------------------------------------------------- OCR + knowledge base
+
 
 def _safe(s):
     return re.sub(r"[^\w.-]", "_", s)
@@ -290,8 +313,7 @@ def _is_scan(page):
     imgs = page.get_image_info()
     if not imgs:
         return False  # blank or pure text
-    visible = sum(1 for sp in page.get_texttrace() if sp["type"] != 3 and sp.get("opacity", 1) > 0
-                  for c in sp["chars"] if chr(c[0]).strip())
+    visible = sum(1 for sp in page.get_texttrace() if sp["type"] != 3 and sp.get("opacity", 1) > 0 for c in sp["chars"] if chr(c[0]).strip())
     cover = max(abs(pymupdf.Rect(i["bbox"]) & page.rect) / abs(page.rect) for i in imgs)
     # ponytail: a photo cover page with a short title also goes to Gemini; costs one page, loses nothing
     return visible < 50 or (visible < 200 and cover >= 0.5)
@@ -302,17 +324,18 @@ def _gemini(pdf_bytes, before_request=None, prompt=None):
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("GEMINI_API_KEY is not set (needed for scanned pages)")
-    body = {"contents": [{"parts": [
-                {"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(pdf_bytes).decode()}},
-                {"text": prompt or SCAN_PROMPT}]}],
-            "generationConfig": {"temperature": 0}}
+    body = {
+        "contents": [
+            {"parts": [{"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(pdf_bytes).decode()}}, {"text": prompt or SCAN_PROMPT}]}
+        ],
+        "generationConfig": {"temperature": 0},
+    }
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     for attempt in range(4):
         try:
             if before_request:
                 before_request()
-            raw = _http(url, data=json.dumps(body).encode(), timeout=300,
-                        headers={"x-goog-api-key": key, "Content-Type": "application/json"})
+            raw = _http(url, data=json.dumps(body).encode(), timeout=300, headers={"x-goog-api-key": key, "Content-Type": "application/json"})
             break
         except urllib.error.HTTPError as e:
             msg = e.read()[:400].decode(errors="replace")
@@ -366,17 +389,26 @@ def convert_pages(path, numbers):
     import pymupdf
     import pymupdf4llm
 
-    chunks = pymupdf4llm.to_markdown(pymupdf.open(path), pages=[n - 1 for n in numbers], page_chunks=True,
-                                     use_ocr=False, show_progress=False)
+    chunks = pymupdf4llm.to_markdown(pymupdf.open(path), pages=[n - 1 for n in numbers], page_chunks=True, use_ocr=False, show_progress=False)
     by_page = {c["metadata"]["page_number"]: c["text"].strip() for c in chunks}
     return [by_page[n] for n in numbers]
 
 
 def build_md(d, pages, sources=None):
     ocr = sorted({s for s in sources or [] if s != "text"})
-    fm = {"org": d["org_name"], "org_id": d["org_id"], "year": d["year"], "doc_id": d["id"], "type": d["type"],
-          "file_name": d["file_name"], "published": d["published"], "source": d["url"], "pages": len(pages),
-          "ocr_pages": [i for i, s in enumerate(sources or [], 1) if s != "text"], "ocr_model": ocr[0] if ocr else None}
+    fm = {
+        "org": d["org_name"],
+        "org_id": d["org_id"],
+        "year": d["year"],
+        "doc_id": d["id"],
+        "type": d["type"],
+        "file_name": d["file_name"],
+        "published": d["published"],
+        "source": d["url"],
+        "pages": len(pages),
+        "ocr_pages": [i for i, s in enumerate(sources or [], 1) if s != "text"],
+        "ocr_model": ocr[0] if ocr else None,
+    }
     head = "---\n" + "".join(f"{k}: {json.dumps(v, ensure_ascii=False)}\n" for k, v in fm.items()) + "---\n"
     return head + "".join(f"\n<!-- page {i} -->\n{md}\n" for i, md in enumerate(pages, 1))
 
@@ -385,10 +417,8 @@ def index_pages(db, d, pages):
     with db:
         # ponytail: delete filters on UNINDEXED columns = full scan; fine until the KB holds ~1M pages
         db.execute("DELETE FROM pages_fts WHERE year=? AND doc_id=?", (d["year"], d["id"]))
-        db.executemany("INSERT INTO pages_fts VALUES (?,?,?,?,?)",
-                       [(md, d["year"], d["id"], i, d["org_id"]) for i, md in enumerate(pages, 1)])
-        db.execute("INSERT OR REPLACE INTO kb VALUES (?,?,?,?,?)",
-                   (d["year"], d["id"], d["org_id"], d["published"], len(pages)))
+        db.executemany("INSERT INTO pages_fts VALUES (?,?,?,?,?)", [(md, d["year"], d["id"], i, d["org_id"]) for i, md in enumerate(pages, 1)])
+        db.execute("INSERT OR REPLACE INTO kb VALUES (?,?,?,?,?)", (d["year"], d["id"], d["org_id"], d["published"], len(pages)))
 
 
 _doc_locks, _doc_locks_guard = {}, threading.Lock()
@@ -418,8 +448,7 @@ def get_document(year, doc_id, pages=None, db=None):
         if fresh:
             if cached and cached["published"] != d["published"]:  # never reuse the old PDF, even if same size
                 pdf_path(year, doc_id).unlink(missing_ok=True)
-            cached = {"published": d["published"], "extractor": EXTRACTOR, "doc": d,
-                      "pages": extract_pages(get_pdf(year, doc_id, db))}
+            cached = {"published": d["published"], "extractor": EXTRACTOR, "doc": d, "pages": extract_pages(get_pdf(year, doc_id, db))}
         todo = [n for n in parse_pages(pages, len(cached["pages"])) if cached["pages"][n - 1]["markdown"] is None]
         if todo:
             for n, md in zip(todo, convert_pages(get_pdf(year, doc_id, db), todo)):
@@ -439,10 +468,8 @@ def get_document(year, doc_id, pages=None, db=None):
             index_pages(db, d, texts)
         elif todo:  # search hits on a page read since show its Markdown headings, as on a page read at once
             with db:
-                db.executemany("UPDATE pages_fts SET md=? WHERE year=? AND doc_id=? AND page=?",
-                               [(texts[n - 1], year, doc_id, n) for n in todo])
-    return {**d, "pages": texts, "page_sources": sources, "page_count": len(texts),
-            "pdf_path": str(pdf_path(year, doc_id)), "md_path": str(md_file)}
+                db.executemany("UPDATE pages_fts SET md=? WHERE year=? AND doc_id=? AND page=?", [(texts[n - 1], year, doc_id, n) for n in todo])
+    return {**d, "pages": texts, "page_sources": sources, "page_count": len(texts), "pdf_path": str(pdf_path(year, doc_id)), "md_path": str(md_file)}
 
 
 def parse_pages(spec, n):
@@ -516,10 +543,13 @@ def search_text(q, org_id=None, year=None, doc_id=None, limit=20, db=None):
         return []
     if year is not None and (org_id is not None or doc_id is not None):
         _ensure_indexed(db, year, org_id, doc_id)
-    sql, args = """SELECT p.year, p.doc_id, p.page, p.org_id, d.type, d.file_name, p.md,
+    sql, args = (
+        """SELECT p.year, p.doc_id, p.page, p.org_id, d.type, d.file_name, p.md,
                           snippet(pages_fts, 0, '«', '»', ' … ', 24) AS snippet
                    FROM pages_fts p LEFT JOIN docs d ON d.year=p.year AND d.id=p.doc_id
-                   WHERE pages_fts MATCH ?""", [match]
+                   WHERE pages_fts MATCH ?""",
+        [match],
+    )
     for col, val in (("org_id", org_id), ("year", year), ("doc_id", doc_id)):
         if val is not None:
             sql += f" AND p.{col}=?"
@@ -569,8 +599,7 @@ def render_label(text):
                 if depth == 0:
                     break
             k += 1
-        branches = [a if a is not None else b for a, b in
-                    re.findall(r"[?:]\s*(?:'((?:[^'\\]|\\.)*)'|\"((?:[^\"\\]|\\.)*)\")", text[j:k])]
+        branches = [a if a is not None else b for a, b in re.findall(r"[?:]\s*(?:'((?:[^'\\]|\\.)*)'|\"((?:[^\"\\]|\\.)*)\")", text[j:k])]
         alts = list(dict.fromkeys(b.strip() for b in branches if b.strip()))
         part = " / ".join(alts)
         out.append(f" [{part}]" if part and len(alts) < len(branches) else f" {part}" if part else "")
@@ -632,12 +661,14 @@ def _fetch_figures(db, org_id, year):
     with db:
         # ponytail: delete on UNINDEXED columns = full scan; fine until ~10k org-years are cached
         db.execute("DELETE FROM figures_fts WHERE year=? AND org_id=?", (year, org_id))
-        db.executemany("INSERT INTO figures_fts(label, var, value, unit, year, org_id, category_id, rgi) "
-                       "VALUES (?,?,?,?,?,?,?,?)",
-                       [(lab, var, val, unit, year, org_id, cid, rgi) for cid, rgi, var, lab, unit, val in rows])
-        db.execute("INSERT OR REPLACE INTO figures_log VALUES (?,?,?,?,?,?,?)",
-                   (year, org_id, datetime.now(UTC).isoformat(timespec="seconds"),
-                    sc.get("name"), sc.get("dateFinished"), len(rows), FIGURES_V))
+        db.executemany(
+            "INSERT INTO figures_fts(label, var, value, unit, year, org_id, category_id, rgi) VALUES (?,?,?,?,?,?,?,?)",
+            [(lab, var, val, unit, year, org_id, cid, rgi) for cid, rgi, var, lab, unit, val in rows],
+        )
+        db.execute(
+            "INSERT OR REPLACE INTO figures_log VALUES (?,?,?,?,?,?,?)",
+            (year, org_id, datetime.now(UTC).isoformat(timespec="seconds"), sc.get("name"), sc.get("dateFinished"), len(rows), FIGURES_V),
+        )
 
 
 def get_figures(org_id, year, query=None, limit=100, refresh=False, db=None):
@@ -666,15 +697,22 @@ def get_figures(org_id, year, query=None, limit=100, refresh=False, db=None):
         args.append(match)
     rows = [dict(r) for r in db.execute(sql + " ORDER BY rowid", args)]
     rows.sort(key=lambda r: _is_zero(r["value"]))  # stable: filed zeros after real figures, order kept
-    cons = db.execute("SELECT value FROM figures_fts WHERE year=? AND org_id=? AND figures_fts MATCH ?",
-                      (year, org_id, 'label:"geconsolideerd"'))
-    return {"org_id": org_id, "year": year, "name": log["name"], "found": bool(log["n"]), "filed": log["finished"],
-            "consolidated": any(not _is_zero(v) for v, in cons),  # only groups fill the consolidated fields
-            "scope": "as filed in the DigiMV questionnaire. consolidated=true: a group; fields under 'geconsolideerde "
-                     "jaarrekening' (var ending in Cons) are the group totals, the 'enkelvoudige jaarrekening' fields "
-                     "the legal entity alone. consolidated=false: one set, for the organisation itself",
-            "source": f"{ARCHIVE}?externalOrganizationId={org_id}&questionnaireName=DigiMV{year}",
-            "total_fields": log["n"], "matched": len(rows), "figures": rows[:limit]}
+    cons = db.execute("SELECT value FROM figures_fts WHERE year=? AND org_id=? AND figures_fts MATCH ?", (year, org_id, 'label:"geconsolideerd"'))
+    return {
+        "org_id": org_id,
+        "year": year,
+        "name": log["name"],
+        "found": bool(log["n"]),
+        "filed": log["finished"],
+        "consolidated": any(not _is_zero(v) for (v,) in cons),  # only groups fill the consolidated fields
+        "scope": "as filed in the DigiMV questionnaire. consolidated=true: a group; fields under 'geconsolideerde "
+        "jaarrekening' (var ending in Cons) are the group totals, the 'enkelvoudige jaarrekening' fields "
+        "the legal entity alone. consolidated=false: one set, for the organisation itself",
+        "source": f"{ARCHIVE}?externalOrganizationId={org_id}&questionnaireName=DigiMV{year}",
+        "total_fields": log["n"],
+        "matched": len(rows),
+        "figures": rows[:limit],
+    }
 
 
 # The organisation page's key figures. The questionnaire renamed its fields in 2022 and small organisations file a
@@ -709,8 +747,7 @@ def pick_key_figures(rows, consolidated):
 
 def key_figures(org_id, year, db=None):
     f = get_figures(org_id, year, limit=None, db=db)
-    return {k: f[k] for k in ("org_id", "year", "name", "found", "consolidated")} | \
-        {"figures": pick_key_figures(f["figures"], f["consolidated"])}
+    return {k: f[k] for k in ("org_id", "year", "name", "found", "consolidated")} | {"figures": pick_key_figures(f["figures"], f["consolidated"])}
 
 
 def key_figures_series(org_id, years=None, db=None):
@@ -718,8 +755,7 @@ def key_figures_series(org_id, years=None, db=None):
     parallel: a first questionnaire read takes ~3 s, so six years cost one wait instead of six."""
     db = db or connect()
     if not years:
-        years = [y for y, in db.execute("SELECT DISTINCT year FROM orgs WHERE org_id=? AND year>=? ORDER BY year",
-                                        (org_id, FIGURES_FROM))]
+        years = [y for (y,) in db.execute("SELECT DISTINCT year FROM orgs WHERE org_id=? AND year>=? ORDER BY year", (org_id, FIGURES_FROM))]
     years = sorted({int(y) for y in years})
     if not years:
         raise KeyError(f"organisation {org_id} has no indexed year from {FIGURES_FROM} on")
@@ -728,6 +764,7 @@ def key_figures_series(org_id, years=None, db=None):
 
 
 # ---------------------------------------------------------------- integrity
+
 
 def verify(db=None):
     """Check every cached file against the index. Returns a list of problems (empty = clean)."""
@@ -762,6 +799,7 @@ def verify(db=None):
 
 
 # ---------------------------------------------------------------- CLI
+
 
 def _fmt_size(n):
     return f"{n / 1e6:.1f} MB" if n >= 1e6 else f"{n / 1e3:.0f} kB"
@@ -813,8 +851,7 @@ def main(argv=None):
             y, i = a.doc.split("/")
             targets = [(int(y), int(i))]
         else:
-            targets = [(d["year"], d["id"]) for o in search(a.org, a.year, a.type) if o["org_id"] == a.org
-                       for d in o["documents"]]
+            targets = [(d["year"], d["id"]) for o in search(a.org, a.year, a.type) if o["org_id"] == a.org for d in o["documents"]]
             if not targets:
                 print("no matching documents", file=sys.stderr)
                 return 1

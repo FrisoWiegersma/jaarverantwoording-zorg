@@ -1,4 +1,5 @@
 """Owner-scoped consultant workspaces. Private content never enters the public index."""
+
 import json
 import re
 import sqlite3
@@ -101,13 +102,16 @@ class NoteIn(BaseModel):
 def list_projects(request: Request):
     user = owner(request)
     with database() as db:
-        return [dict(r) for r in db.execute(
-            """SELECT p.id, p.name, p.updated,
+        return [
+            dict(r)
+            for r in db.execute(
+                """SELECT p.id, p.name, p.updated,
                       (SELECT count(*) FROM project_documents d WHERE d.project_id=p.id AND d.archived=0) AS doc_count,
                       (SELECT count(*) FROM chats c WHERE c.project_id=p.id AND c.user=p.owner) AS chat_count
                FROM projects p WHERE p.owner=? ORDER BY p.updated DESC""",
-            (user,),
-        )]
+                (user,),
+            )
+        ]
 
 
 @router.post("", status_code=201)
@@ -128,8 +132,7 @@ def get_project(pid: str, request: Request):
 def update_project(pid: str, body: ProjectIn, request: Request):
     with database() as db:
         project(db, pid, owner(request))
-        db.execute("UPDATE projects SET name=?,context=?,allow_private=?,updated=? WHERE id=?",
-                   (body.name, body.context, body.allow_private, now(), pid))
+        db.execute("UPDATE projects SET name=?,context=?,allow_private=?,updated=? WHERE id=?", (body.name, body.context, body.allow_private, now(), pid))
         if body.allow_private:
             db.execute("UPDATE project_documents SET status='queued' WHERE project_id=? AND status='needs_ocr'", (pid,))
         return unpack(project(db, pid, owner(request)))
@@ -159,8 +162,14 @@ def documents(pid: str, request: Request, for_model: bool = False):
         p = project(db, pid, owner(request))
         if for_model and not p["allow_private"]:
             raise HTTPException(403, "Privémateriaal naar Gemini is uitgeschakeld")
-        return [dict(r) for r in db.execute("""SELECT d.*, (SELECT count(*) FROM project_pages p WHERE p.document_id=d.id) AS processed
-                    FROM project_documents d WHERE project_id=? AND (?=0 OR archived=0) ORDER BY created DESC""", (pid, for_model))]
+        return [
+            dict(r)
+            for r in db.execute(
+                """SELECT d.*, (SELECT count(*) FROM project_pages p WHERE p.document_id=d.id) AS processed
+                    FROM project_documents d WHERE project_id=? AND (?=0 OR archived=0) ORDER BY created DESC""",
+                (pid, for_model),
+            )
+        ]
 
 
 @router.post("/{pid}/documents", status_code=201)
@@ -182,6 +191,7 @@ async def upload(pid: str, request: Request, file: UploadFile = File(...)):
             raise HTTPException(400, "Gebruik Markdown-tekst met maximaal 100.000 tekens")
         return add_note(pid, NoteIn(title=filename, text=text), request)
     import pymupdf
+
     try:
         with pymupdf.open(stream=bytes(data), filetype="pdf") as pdf:
             if not bytes(data[:1024]).lstrip().startswith(b"%PDF-") or pdf.needs_pass or not 1 <= pdf.page_count <= 200:
@@ -195,8 +205,10 @@ async def upload(pid: str, request: Request, file: UploadFile = File(...)):
     target.write_bytes(data)
     try:
         with database() as db:
-            db.execute("INSERT INTO project_documents(id,project_id,filename,kind,pages,status,created) VALUES (?,?,?,?,?,'queued',?)",
-                       (did, pid, filename, "pdf", pages, now()))
+            db.execute(
+                "INSERT INTO project_documents(id,project_id,filename,kind,pages,status,created) VALUES (?,?,?,?,?,'queued',?)",
+                (did, pid, filename, "pdf", pages, now()),
+            )
     except Exception:
         target.unlink(missing_ok=True)
         raise
@@ -209,7 +221,9 @@ def add_note(pid: str, body: NoteIn, request: Request):
     kind = "markdown" if body.title.lower().endswith(".md") else "note"
     with database() as db:
         project(db, pid, owner(request))
-        db.execute("INSERT INTO project_documents(id,project_id,filename,kind,pages,status,created) VALUES (?,?,?,?,1,'ready',?)", (did, pid, body.title, kind, now()))
+        db.execute(
+            "INSERT INTO project_documents(id,project_id,filename,kind,pages,status,created) VALUES (?,?,?,?,1,'ready',?)", (did, pid, body.title, kind, now())
+        )
         store_page(db, did, 1, body.text, kind)
     return {"id": did}
 
@@ -270,9 +284,16 @@ def read_page(pid: str, did: str, page: int, request: Request, for_model: bool =
         row = db.execute("SELECT * FROM project_pages WHERE document_id=? AND page=?", (did, page)).fetchone()
         if not 1 <= page <= d["pages"]:
             raise HTTPException(404, "Pagina niet gevonden")
-        return {"document_id": did, "filename": d["filename"], "kind": d["kind"], "page": page, "page_count": d["pages"],
-                "text": row["text"] if row else "", "source": row["source"] if row else "pending",
-                "href": f"/bron/project/{pid}/{did}/{page}"}
+        return {
+            "document_id": did,
+            "filename": d["filename"],
+            "kind": d["kind"],
+            "page": page,
+            "page_count": d["pages"],
+            "text": row["text"] if row else "",
+            "source": row["source"] if row else "pending",
+            "href": f"/bron/project/{pid}/{did}/{page}",
+        }
 
 
 @router.get("/{pid}/documents/{did}/pdf")
@@ -305,10 +326,13 @@ def search(pid: str, request: Request, q: str = Query(max_length=500), for_model
         match = digimv._text_query(q)
         if not match:
             return []
-        rows = db.execute("""SELECT f.document_id,f.page,d.filename,p.source,snippet(project_pages_fts,0,'','', ' … ',48) AS excerpt
+        rows = db.execute(
+            """SELECT f.document_id,f.page,d.filename,p.source,snippet(project_pages_fts,0,'','', ' … ',48) AS excerpt
           FROM project_pages_fts f JOIN project_documents d ON d.id=f.document_id
           JOIN project_pages p ON p.document_id=f.document_id AND p.page=f.page
-          WHERE project_pages_fts MATCH ? AND d.project_id=? AND d.archived=0 ORDER BY rank LIMIT 12""", (match, pid)).fetchall()
+          WHERE project_pages_fts MATCH ? AND d.project_id=? AND d.archived=0 ORDER BY rank LIMIT 12""",
+            (match, pid),
+        ).fetchall()
         return [{**dict(r), "href": f"/bron/project/{pid}/{r['document_id']}/{r['page']}"} for r in rows]
 
 
@@ -320,6 +344,7 @@ def require_consent(pid):
 
 def process_document(did):
     import pymupdf
+
     with database() as db:
         d = dict(db.execute("SELECT * FROM project_documents WHERE id=?", (did,)).fetchone())
         db.execute("UPDATE project_documents SET status='processing',error='' WHERE id=?", (did,))
@@ -369,7 +394,10 @@ def worker(stop):
                 db.execute("UPDATE project_documents SET status='needs_ocr' WHERE id=?", (row[0],))
         except Exception:
             with database() as db:
-                db.execute("UPDATE project_documents SET status='error',error=? WHERE id=?", ("Verwerking mislukt. Controleer de PDF en OCR-configuratie en probeer opnieuw.", row[0]))
+                db.execute(
+                    "UPDATE project_documents SET status='error',error=? WHERE id=?",
+                    ("Verwerking mislukt. Controleer de PDF en OCR-configuratie en probeer opnieuw.", row[0]),
+                )
 
 
 def start_worker():
@@ -377,6 +405,7 @@ def start_worker():
     thread = threading.Thread(target=worker, args=(stop,), daemon=True)
     thread.start()
     return stop
+
 
 @router.get("/{pid}/model-context")
 def model_context(pid: str, request: Request):
@@ -386,30 +415,58 @@ def model_context(pid: str, request: Request):
             raise HTTPException(403, "Privémateriaal naar Gemini is uitgeschakeld")
         return {"context": p["context"]}
 
+
 @router.post("/example", status_code=201)
 def example(request: Request):
     """Explicitly requested fictional example, owned by the person creating it."""
-    p = create_project(ProjectIn(name="Voorbeeld · Personeelskosten Testzorg", context="Dit project bevat uitsluitend fictieve voorbeeldgegevens. Onderzoek de ontwikkeling van de personeelskosten. Benoem de bron, het jaar en de eenheid; maak onderscheid tussen feiten en mogelijke verklaringen. Geef geen advies zonder dat ik daarom vraag."), request)
+    p = create_project(
+        ProjectIn(
+            name="Voorbeeld · Personeelskosten Testzorg",
+            context="Dit project bevat uitsluitend fictieve voorbeeldgegevens. Onderzoek de ontwikkeling van de personeelskosten. Benoem de bron, het jaar en de eenheid; maak onderscheid tussen feiten en mogelijke verklaringen. Geef geen advies zonder dat ik daarom vraag.",
+        ),
+        request,
+    )
     pid = p["id"]
-    financial = add_note(pid, NoteIn(title="financiele-cijfers.md", text="Fictieve voorbeeldgegevens, geen echte zorgaanbieder.\n2024: omzet EUR 2.000.000; personeelskosten EUR 1.100.000.\n2025: omzet EUR 2.200.000; personeelskosten EUR 1.320.000.\nAlle bedragen zijn hele euro’s. De cijfers betreffen dezelfde enkelvoudige organisatie."), request)["id"]
-    interview = add_note(pid, NoteIn(title="gespreksnotitie.md", text="Fictief interview, 12 februari 2026.\nDe directie meldt dat in 2025 meer externe medewerkers zijn ingezet.\nDeze notitie bevat geen uitsplitsing van de personeelskosten. De financiële impact van externe inhuur is hiermee niet vastgesteld."), request)["id"]
+    financial = add_note(
+        pid,
+        NoteIn(
+            title="financiele-cijfers.md",
+            text="Fictieve voorbeeldgegevens, geen echte zorgaanbieder.\n2024: omzet EUR 2.000.000; personeelskosten EUR 1.100.000.\n2025: omzet EUR 2.200.000; personeelskosten EUR 1.320.000.\nAlle bedragen zijn hele euro’s. De cijfers betreffen dezelfde enkelvoudige organisatie.",
+        ),
+        request,
+    )["id"]
+    interview = add_note(
+        pid,
+        NoteIn(
+            title="gespreksnotitie.md",
+            text="Fictief interview, 12 februari 2026.\nDe directie meldt dat in 2025 meer externe medewerkers zijn ingezet.\nDeze notitie bevat geen uitsplitsing van de personeelskosten. De financiële impact van externe inhuur is hiermee niet vastgesteld.",
+        ),
+        request,
+    )["id"]
     first = uuid.uuid4().hex
-    answer = f'''De personeelskosten stegen van € 1.100.000 in 2024 naar € 1.320.000 in 2025: een stijging van € 220.000, oftewel 20%. [p. 1](/bron/project/{pid}/{financial}/1 "2025: omzet EUR 2.200.000; personeelskosten EUR 1.320.000.")
+    answer = f"""De personeelskosten stegen van € 1.100.000 in 2024 naar € 1.320.000 in 2025: een stijging van € 220.000, oftewel 20%. [p. 1](/bron/project/{pid}/{financial}/1 "2025: omzet EUR 2.200.000; personeelskosten EUR 1.320.000.")
 
 De omzet steeg met 10%. Het aandeel personeelskosten in de omzet nam daardoor toe van 55% naar 60%. Dit zijn berekeningen op basis van de fictieve cijfers. [p. 1](/bron/project/{pid}/{financial}/1 "2024: omzet EUR 2.000.000; personeelskosten EUR 1.100.000.")
 
 De directie noemt meer externe inzet. Dat is een mogelijke verklaring, maar de notitie kwantificeert de invloed daarvan niet. [p. 1](/bron/project/{pid}/{interview}/1 "De directie meldt dat in 2025 meer externe medewerkers zijn ingezet.")
 
-**Nog uit te zoeken:** de uitsplitsing tussen eigen personeel en externe inhuur. Dit voorbeeld is handmatig samengesteld om het gebruik van bronverwijzingen te tonen; het is geen modelanalyse van een echte organisatie.'''
-    messages = [{"id": first, "role": "user", "parts": [{"type": "text", "text": "Wat valt op aan de personeelskosten en wat weten we over de oorzaak?"}]},
-                {"id": uuid.uuid4().hex, "role": "assistant", "parts": [{"type": "text", "text": answer}]}]
+**Nog uit te zoeken:** de uitsplitsing tussen eigen personeel en externe inhuur. Dit voorbeeld is handmatig samengesteld om het gebruik van bronverwijzingen te tonen; het is geen modelanalyse van een echte organisatie."""
+    messages = [
+        {"id": first, "role": "user", "parts": [{"type": "text", "text": "Wat valt op aan de personeelskosten en wat weten we over de oorzaak?"}]},
+        {"id": uuid.uuid4().hex, "role": "assistant", "parts": [{"type": "text", "text": answer}]},
+    ]
     with database() as db:
-        db.execute("INSERT INTO chats(user,id,title,updated,messages,project_id) VALUES (?,?,?,?,?,?)", (owner(request), first, "Voorbeeldanalyse · personeelskosten", now(), json.dumps(messages), pid))
+        db.execute(
+            "INSERT INTO chats(user,id,title,updated,messages,project_id) VALUES (?,?,?,?,?,?)",
+            (owner(request), first, "Voorbeeldanalyse · personeelskosten", now(), json.dumps(messages), pid),
+        )
     return p
+
 
 @router.get("/{pid}/documents/{did}/original")
 def download_source(pid: str, did: str, request: Request):
     from urllib.parse import quote
+
     with database() as db:
         project(db, pid, owner(request))
         d = document(db, pid, did)
@@ -417,5 +474,8 @@ def download_source(pid: str, did: str, request: Request):
             return FileResponse(path_for(did), media_type="application/pdf", filename=d["filename"])
         text = db.execute("SELECT text FROM project_pages WHERE document_id=? AND page=1", (did,)).fetchone()[0]
         name = d["filename"] if d["kind"] == "markdown" else d["filename"] + ".txt"
-        return Response(text, media_type="text/markdown" if d["kind"] == "markdown" else "text/plain",
-                        headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(name)})
+        return Response(
+            text,
+            media_type="text/markdown" if d["kind"] == "markdown" else "text/plain",
+            headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(name)},
+        )

@@ -1,4 +1,5 @@
 """Saving chat source files, project ownership, offline reuse and citation checks."""
+
 import io
 import json
 import tempfile
@@ -22,7 +23,8 @@ class SavedFilesTest(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.data = patch.object(digimv, "DATA", self.root)
         self.pub = patch.object(documents, "PUB", self.root / "pub")
-        self.data.start(); self.pub.start()
+        self.data.start()
+        self.pub.start()
         self.client = TestClient(main.app)
         self.alice = {"cf-access-authenticated-user-email": "alice@example.test"}
         self.bob = {"cf-access-authenticated-user-email": "bob@example.test"}
@@ -33,12 +35,17 @@ class SavedFilesTest(unittest.TestCase):
         self.table_path = tables / self.tid
         self.body = b"AGB;Waarde\n0011;7\n0011;12\n0022;20\n"
         self.table_path.write_bytes(self.body)
-        self.table_path.with_suffix(".json").write_text(json.dumps({
-            "file_url": "https://example.test/services/file/get?key=expired", "content_type": "text/csv",
-            "fetched_at": "2026-11-13T10:00:00+00:00"}))
+        self.table_path.with_suffix(".json").write_text(
+            json.dumps(
+                {"file_url": "https://example.test/services/file/get?key=expired", "content_type": "text/csv", "fetched_at": "2026-11-13T10:00:00+00:00"}
+            )
+        )
 
     def tearDown(self):
-        self.client.close(); self.pub.stop(); self.data.stop(); self.tmp.cleanup()
+        self.client.close()
+        self.pub.stop()
+        self.data.stop()
+        self.tmp.cleanup()
 
     def call(self, method, path, **kw):
         return self.client.request(method, path, headers=kw.pop("headers", self.alice), **kw)
@@ -84,7 +91,7 @@ class SavedFilesTest(unittest.TestCase):
         self.assertEqual(self.save(headers={}).status_code, 401)
         self.assertEqual(self.save(headers=self.bob).status_code, 404)
         self.assertEqual(self.save(headers={**self.alice, "origin": "https://evil.test"}).status_code, 403)
-        for href in ("https://example.test/file.pdf", "/etc/passwd", "/bron/rij/../../etc/passwd/1", f"/bron/project/{self.pid}/{'b'*32}/1"):
+        for href in ("https://example.test/file.pdf", "/etc/passwd", "/bron/rij/../../etc/passwd/1", f"/bron/project/{self.pid}/{'b' * 32}/1"):
             self.assertEqual(self.save(href).status_code, 400, href)
         did = self.save().json()["id"]
         base = f"/projects/{self.pid}/documents/{did}"
@@ -129,9 +136,13 @@ class SavedFilesTest(unittest.TestCase):
         with pymupdf.open() as pdf:
             pdf.new_page().insert_text((72, 72), "Saved research evidence 125000")
             pdf.save(path)
-        with patch.object(documents, "document_meta", return_value={"title": "Report", "file_url": "https://example.test/report.pdf", "fetched_at": "2026-11-13"}), \
-                patch.object(documents, "document_pdf", return_value=path):
-            r = self.save(f"/bron/doc/{'b'*20}/1")
+        with (
+            patch.object(
+                documents, "document_meta", return_value={"title": "Report", "file_url": "https://example.test/report.pdf", "fetched_at": "2026-11-13"}
+            ),
+            patch.object(documents, "document_pdf", return_value=path),
+        ):
+            r = self.save(f"/bron/doc/{'b' * 20}/1")
         self.assertEqual(r.status_code, 201, r.text)
         did = r.json()["id"]
         path.unlink()

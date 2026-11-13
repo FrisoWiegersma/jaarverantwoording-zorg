@@ -109,15 +109,12 @@ def get_document(year: int, doc_id: int, pages: str = "1-5") -> dict:
         raise ToolError(e.args[0]) from e
     except (RuntimeError, ValueError, OSError) as e:
         raise ToolError(str(e)) from e
-    meta = {k: r[k] for k in ("year", "id", "org_id", "org_name", "type", "file_name", "published", "url",
-                              "page_count", "pdf_path", "md_path")}
-    return {**meta, "pages": [{"page": n, "source": r["page_sources"][n - 1], "markdown": r["pages"][n - 1]}
-                              for n in sel]}
+    meta = {k: r[k] for k in ("year", "id", "org_id", "org_name", "type", "file_name", "published", "url", "page_count", "pdf_path", "md_path")}
+    return {**meta, "pages": [{"page": n, "source": r["page_sources"][n - 1], "markdown": r["pages"][n - 1]} for n in sel]}
 
 
 @mcp.tool()
-def search_documents(query: str, org_id: str | None = None, year: int | None = None, doc_id: int | None = None,
-                     limit: int = 20) -> list[dict]:
+def search_documents(query: str, org_id: str | None = None, year: int | None = None, doc_id: int | None = None, limit: int = 20) -> list[dict]:
     """Full-text search (word prefixes) in documents already converted to Markdown, with page-level snippets.
 
     With year and org_id (or doc_id) it searches that organisation's documents of that year, opening them first if
@@ -170,8 +167,7 @@ def find_government_body(query: str, kind: str | None = None) -> dict:
 
 
 @mcp.tool()
-def get_government_finances(kind: str, year: int, code: str, taakveld: str | None = None,
-                            verslagsoort: str = "Jaarrekening") -> dict:
+def get_government_finances(kind: str, year: int, code: str, taakveld: str | None = None, verslagsoort: str = "Jaarrekening") -> dict:
     """A government body's own Iv3 report to CBS: amounts (x € 1.000) per policy area (taakveld) and category.
 
     taakveld narrows to a code prefix or words: "6.7" (Wmo and youth care in kind), "6.712" (Wmo begeleiding),
@@ -205,9 +201,17 @@ def get_ruling(ecli: str, part: int = 1) -> dict:
 
 # ---------------------------------------------------------------- public documents
 
+
 @mcp.tool()
-def search_woo(query: str, organisatie: str | None = None, documentsoort: str | None = None, since: str | None = None,
-               until: str | None = None, limit: int = 20, start: int = 0) -> dict:
+def search_woo(
+    query: str,
+    organisatie: str | None = None,
+    documentsoort: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 20,
+    start: int = 0,
+) -> dict:
     """Documents government bodies released under the Woo (open.overheid.nl): decision notes, reports, letters,
     advice, Woo decisions with their released files. The search matches word forms, not phrases. The result lists
     `organisations` and `document_types` with counts: pass one back as organisatie / documentsoort to narrow
@@ -217,8 +221,7 @@ def search_woo(query: str, organisatie: str | None = None, documentsoort: str | 
 
 
 @mcp.tool()
-def search_publications(query: str, creator: str | None = None, gazette: str | None = None, since: str | None = None,
-                        limit: int = 20, start: int = 1) -> dict:
+def search_publications(query: str, creator: str | None = None, gazette: str | None = None, since: str | None = None, limit: int = 20, start: int = 1) -> dict:
     """Official publications by full text: Gemeenteblad (gmb), Provinciaal blad (prb), Waterschapsblad (wsb), Blad
     gemeenschappelijke regeling (bgr), Staatscourant (stcrt, incl. NZa and ministry rules), Staatsblad (stb),
     Kamerstukken (kst, incl. letters to parliament and their attachments), Kamervragen (ah) and Handelingen (h).
@@ -236,8 +239,16 @@ def search_regulations(query: str, creator: str | None = None, limit: int = 20, 
 
 
 @mcp.tool()
-def search_tenders(query: str | None = None, buyer: str | None = None, cpv: str = "85000000", since: str | None = None,
-                   limit: int = 20, page: int = 1, place: str | None = None, awarded: bool = False) -> dict:
+def search_tenders(
+    query: str | None = None,
+    buyer: str | None = None,
+    cpv: str = "85000000",
+    since: str | None = None,
+    limit: int = 20,
+    page: int = 1,
+    place: str | None = None,
+    awarded: bool = False,
+) -> dict:
     """EU tender and award notices (TED) of Dutch buyers, newest first. cpv 85000000 (default) is health and social
     work with all its subcodes; query matches words in the notice, buyer the buyer's name. place: NUTS codes where
     the work is done, subregions included (a province takes both codes, e.g. "NL33 NL36" for Zuid-Holland, before
@@ -277,6 +288,7 @@ def search_public_documents(query: str, url: str | None = None, limit: int = 20)
 
 # ---------------------------------------------------------------- open data
 
+
 @mcp.tool()
 def search_datasets(query: str, limit: int = 20, start: int = 0) -> dict:
     """Datasets in the national catalogue data.overheid.nl (government bodies, CBS, DNB, ...) by words. Each hit has
@@ -291,9 +303,17 @@ def get_dataset(dataset_id: str) -> dict:
 
 
 @mcp.tool()
-def read_table(url: str, query: str | None = None, limit: int = 50, offset: int = 0, sheet: str | None = None,
-               header_row: int | None = None, filters: dict[str, list[str]] | None = None,
-               member: str | None = None, sort: str | None = None) -> dict:
+def read_table(
+    url: str,
+    query: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    sheet: str | None = None,
+    header_row: int | None = None,
+    filters: dict[str, list[str]] | None = None,
+    member: str | None = None,
+    sort: str | None = None,
+) -> dict:
     """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim, each with its row number. filters:
     {column: [values]}, exact match on that column (use it for codes such as a KvK number, AGB code or diagnosis code:
     query also matches amounts). ZIP and 7z archives are supported: member picks a file (listed in `members`).
@@ -303,8 +323,7 @@ def read_table(url: str, query: str | None = None, limit: int = 50, offset: int 
     in title_rows); header_row overrides it. sheet picks an Excel sheet (all are in `sheets`). rows_total and
     rows_matched say how much there is: page with offset before saying something is not in the file. sort: a column
     to order the matched rows by as numbers, '-COL' for the largest first (the most patients, the highest amount)."""
-    return _call(datasets.read_table, url, query, limit, offset, sheet, header_row, filters=filters, member=member,
-                 sort=sort)
+    return _call(datasets.read_table, url, query, limit, offset, sheet, header_row, filters=filters, member=member, sort=sort)
 
 
 @mcp.tool()
@@ -322,8 +341,7 @@ def describe_cbs_table(table_id: str, dimension: str | None = None, query: str |
 
 
 @mcp.tool()
-def get_cbs(table_id: str, filters: dict[str, list[str]] | None = None, topics: list[str] | None = None,
-            limit: int = 200) -> dict:
+def get_cbs(table_id: str, filters: dict[str, list[str]] | None = None, topics: list[str] | None = None, limit: int = 200) -> dict:
     """Values from a CBS table. filters: {dimension: [codes or exact titles]}, e.g. {"RegioS": ["GM0546"],
     "Perioden": ["2024JJ00"]}; a dimension left out means all its codes. topics: topic keys (all when empty).
     Refused at 10,000 rows or more: filter more. A value CBS left out comes as {value: null, symbol} (see
@@ -339,8 +357,9 @@ def search_swing(site: str, query: str, limit: int = 20) -> dict:
 
 
 @mcp.tool()
-def get_swing(site: str, indicator: str, geo_level: str | None = None, period: str | None = None,
-              geo_query: str | None = None, dimension_levels: str = "") -> dict:
+def get_swing(
+    site: str, indicator: str, geo_level: str | None = None, period: str | None = None, geo_query: str | None = None, dimension_levels: str = ""
+) -> dict:
     """Without geo_level and period: which area levels, periods and breakdowns an indicator has. With them: its
     values per area, each area named; geo_query keeps areas by name or code. A null value is missing, never 0.
     Cite source_url."""

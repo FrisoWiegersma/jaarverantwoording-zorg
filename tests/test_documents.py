@@ -57,8 +57,14 @@ def sevenzipped(files, **kwargs):
 # ---------------------------------------------------------------- private addresses are never fetched
 
 real_getaddrinfo = socket.getaddrinfo
-hosts = {"public.example": "93.184.216.34", "lan.example": "192.168.1.10", "api": "172.18.0.2",
-         "meta.example": "169.254.169.254", "tail.example": "100.114.142.121", "v6.example": "::1"}
+hosts = {
+    "public.example": "93.184.216.34",
+    "lan.example": "192.168.1.10",
+    "api": "172.18.0.2",
+    "meta.example": "169.254.169.254",
+    "tail.example": "100.114.142.121",
+    "v6.example": "::1",
+}
 socket.getaddrinfo = lambda host, port, *a, **k: [(None, None, None, "", (hosts.get(host, "127.0.0.1"), port))]
 d._check("https://public.example/x.pdf")
 for h in ("lan.example", "api", "meta.example", "tail.example", "v6.example", "localhost"):
@@ -69,6 +75,7 @@ socket.getaddrinfo = real_getaddrinfo
 
 
 # ---------------------------------------------------------------- robots.txt
+
 
 class Answer:
     def __init__(self, body=b"", code=200):
@@ -118,12 +125,13 @@ assert d.kind_of(b"  <!DOCTYPE html><html>", "application/octet-stream") == "htm
 assert d.kind_of(b"<?xml version='1.0'?><regeling/>") == "xml"
 assert d.kind_of(b"plain", "text/plain") == "text"
 raises(ValueError, d.kind_of, b"\x00\x01", "image/png")
-assert d._gazette_pdf("https://zoek.officielebekendmakingen.nl/gmb-2026-312503.html") == \
-    "https://zoek.officielebekendmakingen.nl/gmb-2026-312503.pdf"
+assert d._gazette_pdf("https://zoek.officielebekendmakingen.nl/gmb-2026-312503.html") == "https://zoek.officielebekendmakingen.nl/gmb-2026-312503.pdf"
 assert d._gazette_pdf("https://example.org/gmb-2026-1.html") is None
 
-page = d.markup_text("<html><head><style>p{}</style></head><body><nav>menu</nav><h2>Tarieven</h2>"
-                     "<p>Het tarief is <b>€&nbsp;72,40</b> per uur.</p><table><tr><td>A</td><td>1</td></tr></table></body></html>")
+page = d.markup_text(
+    "<html><head><style>p{}</style></head><body><nav>menu</nav><h2>Tarieven</h2>"
+    "<p>Het tarief is <b>€&nbsp;72,40</b> per uur.</p><table><tr><td>A</td><td>1</td></tr></table></body></html>"
+)
 assert page == "## Tarieven\nHet tarief is € 72,40 per uur.\nA\t1", page
 # Zorgcijfersdatabank writes each cell on its own source line: a row must still come out as one line
 zcd = """<table class="table hd"><thead><tr>
@@ -136,15 +144,21 @@ zcd = """<table class="table hd"><thead><tr>
   <td class="r data">.</td>
 </tr></tbody></table>"""
 assert d.markup_text(zcd) == "Kosten\t2024 *\t2025 *\nA Verzorgingsmiddelen\t€ 511.862.965\t.", d.markup_text(zcd)
-cvdr = ("<?xml version='1.0'?><cvdr><meta><title>Verordening jeugdhulp</title></meta><body><regeling-tekst>"
-        "<artikel><kop><label>Artikel</label><nr>1</nr><titel>Begrippen</titel></kop><al>In deze verordening:</al>"
-        "<lijst><li nr='a.'><al>jeugdhulp: hulp</al></li><li nr=\"b.\"><al>Wmo</al></li></lijst></artikel></regeling-tekst></body></cvdr>")
+cvdr = (
+    "<?xml version='1.0'?><cvdr><meta><title>Verordening jeugdhulp</title></meta><body><regeling-tekst>"
+    "<artikel><kop><label>Artikel</label><nr>1</nr><titel>Begrippen</titel></kop><al>In deze verordening:</al>"
+    "<lijst><li nr='a.'><al>jeugdhulp: hulp</al></li><li nr=\"b.\"><al>Wmo</al></li></lijst></artikel></regeling-tekst></body></cvdr>"
+)
 text = d.markup_text(cvdr, xml=True)
 assert text == "## Artikel 1 Begrippen\nIn deze verordening:\na. jeugdhulp: hulp\nb. Wmo", text  # no metadata, words apart
 assert d.parts("") == [] and d.parts("a\nb\nc\n", size=3) == ["a", "b", "c"]
 assert d.parts("x" * 5 + "\n" + "y" * 5, size=100) == ["xxxxx\nyyyyy"]
-docx = zipped({"word/document.xml": "<w:document><w:body><w:p><w:r><w:t>Zorginkoopbeleid</w:t></w:r><w:tab/>"
-                                    "<w:r><w:t>2027</w:t></w:r></w:p><w:p><w:r><w:t>Tweede alinea</w:t></w:r></w:p></w:body></w:document>"})
+docx = zipped(
+    {
+        "word/document.xml": "<w:document><w:body><w:p><w:r><w:t>Zorginkoopbeleid</w:t></w:r><w:tab/>"
+        "<w:r><w:t>2027</w:t></w:r></w:p><w:p><w:r><w:t>Tweede alinea</w:t></w:r></w:p></w:body></w:document>"
+    }
+)
 assert d._text_pages("docx", docx) == [{"markdown": "Zorginkoopbeleid\t2027\nTweede alinea", "source": "docx"}]
 
 
@@ -155,8 +169,7 @@ calls = []
 
 def fake_fetch(url, timeout=120):
     calls.append(url)
-    return (b"<html><body><h1>Inkoopbeleid wijkverpleging</h1><p>Het tarief per uur bedraagt 72,40.</p></body></html>",
-            "text/html", url)
+    return (b"<html><body><h1>Inkoopbeleid wijkverpleging</h1><p>Het tarief per uur bedraagt 72,40.</p></body></html>", "text/html", url)
 
 
 d.fetch = fake_fetch
@@ -200,21 +213,28 @@ title, found = d.page_links(
     b"<a href='/downloads/Beleid%202027.PDF#p2'>Zorginkoopbeleid <b>2027</b></a>"
     b"<a href=\"sub/page\">Wijkverpleging</a><a href='mailto:x@y.nl'>mail</a><a href='javascript:void(0)'>js</a>"
     b"<a href='/downloads/Beleid%202027.PDF'>again</a><a href='https://other.example/data.xlsx' title='Prognose'></a>"
-    b"</body></html>", "https://www.insurer.example/zorgaanbieders/")
+    b"</body></html>",
+    "https://www.insurer.example/zorgaanbieders/",
+)
 assert title == "Zorginkoop Menzis", title
 assert found == [
     {"text": "Zorginkoopbeleid 2027", "url": "https://www.insurer.example/downloads/Beleid%202027.PDF", "type": "pdf"},
     {"text": "Wijkverpleging", "url": "https://www.insurer.example/zorgaanbieders/sub/page", "type": "page"},
     {"text": "Prognose", "url": "https://other.example/data.xlsx", "type": "xlsx"},
 ], found  # absolute, each once, fragments and mailto/javascript dropped, extension case ignored
-d.fetch = lambda url, timeout=120: ((b"<html><a href='/a'>Visie</a><a href='/b.pdf'>Beleid GGZ 2027</a>"
-                                    b"<a href='/c.pdf'>Beleid wijk 2026</a></html>"), "text/html", url)
+d.fetch = lambda url, timeout=120: (
+    (b"<html><a href='/a'>Visie</a><a href='/b.pdf'>Beleid GGZ 2027</a><a href='/c.pdf'>Beleid wijk 2026</a></html>"),
+    "text/html",
+    url,
+)
 r = d.links("https://insurer.example/", query="beleid")
 assert [x["url"] for x in r["links"]] == ["https://insurer.example/b.pdf", "https://insurer.example/c.pdf"], r
 assert d.links("https://insurer.example/")["links"][0]["type"] == "pdf", "files come first"
 assert d._safe_url("https://www.vektis.nl/a b/Zorgthermometer 2026.pdf?v=1") == "https://www.vektis.nl/a%20b/Zorgthermometer%202026.pdf?v=1"
 assert d._safe_url("https://x.example/Beleid%202027.pdf") == "https://x.example/Beleid%202027.pdf"  # already encoded: unchanged
-assert d._safe_url("http://www.opendisdata.nl/download/csv/01_DBC.csv") == "https://opendisdata.nza.nl/download/csv/01_DBC.csv"  # moved host, and always https: its http redirect drops the path
+assert (
+    d._safe_url("http://www.opendisdata.nl/download/csv/01_DBC.csv") == "https://opendisdata.nza.nl/download/csv/01_DBC.csv"
+)  # moved host, and always https: its http redirect drops the path
 _, links = d.page_links(
     b"<a href='/services/file/get?key=abc'>Openbaar databestand Wijkverpleging verslagjaar 2024 Excel file 1.1 MB</a>"
     b"<a href='/services/file/get?key=def'>Rapport 2022 PDF file 157.7 KB</a>"
@@ -222,7 +242,8 @@ _, links = d.page_links(
     b"<a href='/data.7z'>Naleveringen</a>"
     b"<a href='/up/Zorgthermometer 2026.pdf'>Zorgthermometer</a>"
     b"<a href='/over'>Over de PDF</a>",
-    "https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging")
+    "https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging",
+)
 assert [(x["type"], x["url"]) for x in links] == [
     ("xlsx", "https://www.zorginzicht.nl/services/file/get?key=abc"),
     ("pdf", "https://www.zorginzicht.nl/services/file/get?key=def"),
@@ -236,11 +257,24 @@ assert [(x["type"], x["url"]) for x in links] == [
 # ---------------------------------------------------------------- Woo search
 
 seen = []
-woo = {"totaal": 1, "resultaten": [{
-    "document": {"id": "oep-0a1b_2", "titel": "Beslisnota jeugdzorg", "publisher": "ministerie van VWS",
-                 "openbaarmakingsdatum": "2026-03-01", "weblocatie": None},
-    "highlightedText": "de <b>jeugdzorg</b> &amp; Wmo", "bestandsType": "pdf", "aantalPaginas": 4}],
-    "filters": {"organisatie": [{"naam": "b", "aantal": 1}, {"naam": "a", "aantal": 9}], "documentsoort": []}}
+woo = {
+    "totaal": 1,
+    "resultaten": [
+        {
+            "document": {
+                "id": "oep-0a1b_2",
+                "titel": "Beslisnota jeugdzorg",
+                "publisher": "ministerie van VWS",
+                "openbaarmakingsdatum": "2026-03-01",
+                "weblocatie": None,
+            },
+            "highlightedText": "de <b>jeugdzorg</b> &amp; Wmo",
+            "bestandsType": "pdf",
+            "aantalPaginas": 4,
+        }
+    ],
+    "filters": {"organisatie": [{"naam": "b", "aantal": 1}, {"naam": "a", "aantal": 9}], "documentsoort": []},
+}
 d._get_json = lambda url, body=None: seen.append(url) or woo
 r = d.search_woo("jeugdzorg", organisatie="ministerie van Volksgezondheid, Welzijn en Sport", since="2026-01-31", limit=7)
 assert "organisatie=ministerie+van+Volksgezondheid%252C+Welzijn" in seen[0], seen  # a comma in a name: encoded twice
@@ -259,11 +293,23 @@ SRU = """<?xml version="1.0"?><sru:searchRetrieveResponse xmlns:sru="http://docs
 # TED: a region in one search; winners from winner-name (once each, not per lot), a direct award's contractor from its
 # tenderer, and never the losing tenderers of a result notice
 sent = []
-d._get_json = lambda url, body=None: sent.append(body) or {"totalNoticeCount": 3, "notices": [
-    {"publication-number": "1-2025", "notice-type": "can-social", "place-of-performance": ["NL366", "NLD"],
-     "winner-name": {"nld": ["Fort Jeugd B.V.", "Fort Jeugd B.V."]}, "organisation-name-tenderer": {"nld": ["Fort Jeugd B.V.", "Verliezer B.V."]}},
-    {"publication-number": "2-2025", "notice-type": "veat", "organisation-name-tenderer": {"nld": ["Zorggroep Katwijk"]}},
-    {"publication-number": "3-2025", "notice-type": "cn-social", "organisation-name-tenderer": {"nld": ["Nog niemand"]}}]}
+d._get_json = lambda url, body=None: (
+    sent.append(body)
+    or {
+        "totalNoticeCount": 3,
+        "notices": [
+            {
+                "publication-number": "1-2025",
+                "notice-type": "can-social",
+                "place-of-performance": ["NL366", "NLD"],
+                "winner-name": {"nld": ["Fort Jeugd B.V.", "Fort Jeugd B.V."]},
+                "organisation-name-tenderer": {"nld": ["Fort Jeugd B.V.", "Verliezer B.V."]},
+            },
+            {"publication-number": "2-2025", "notice-type": "veat", "organisation-name-tenderer": {"nld": ["Zorggroep Katwijk"]}},
+            {"publication-number": "3-2025", "notice-type": "cn-social", "organisation-name-tenderer": {"nld": ["Nog niemand"]}},
+        ],
+    }
+)
 r = d.search_tenders("jeugd", place="NL33 NL36", awarded=True)
 assert "place-of-performance IN (NL33 NL36)" in sent[0]["query"] and "notice-type IN (can-standard" in sent[0]["query"], sent
 assert [(h["winners"], h["winners_total"]) for h in r["results"]] == [(["Fort Jeugd B.V."], 1), (["Zorggroep Katwijk"], 1), ([], 0)], r
@@ -271,11 +317,13 @@ assert r["results"][0]["place"] == ["NL366"]
 assert "NUTS" in raises(ValueError, d.search_tenders, place="Zuid-Holland")
 
 rec = lambda body: f"<sru:record><sru:recordData><gzd:gzd>{body}</gzd:gzd></sru:recordData></sru:record>"
-pub = rec("<dcterms:identifier>gmb-2026-1</dcterms:identifier><dcterms:title>Beleidsregels jeugdhulp</dcterms:title>"
-          "<dcterms:creator>Leiden</dcterms:creator><dcterms:date>2026-02-01</dcterms:date>"
-          "<publicatienaam>Gemeenteblad</publicatienaam><preferredUrl>https://zoek.officielebekendmakingen.nl/gmb-2026-1.html</preferredUrl>"
-          "<itemUrl manifestation='xml'>https://repository.overheid.nl/x.xml</itemUrl>"
-          "<itemUrl manifestation='pdf'>https://zoek.officielebekendmakingen.nl/gmb-2026-1.pdf</itemUrl>")
+pub = rec(
+    "<dcterms:identifier>gmb-2026-1</dcterms:identifier><dcterms:title>Beleidsregels jeugdhulp</dcterms:title>"
+    "<dcterms:creator>Leiden</dcterms:creator><dcterms:date>2026-02-01</dcterms:date>"
+    "<publicatienaam>Gemeenteblad</publicatienaam><preferredUrl>https://zoek.officielebekendmakingen.nl/gmb-2026-1.html</preferredUrl>"
+    "<itemUrl manifestation='xml'>https://repository.overheid.nl/x.xml</itemUrl>"
+    "<itemUrl manifestation='pdf'>https://zoek.officielebekendmakingen.nl/gmb-2026-1.pdf</itemUrl>"
+)
 urls = []
 digimv._http = lambda url, **k: urls.append(url) or SRU.format(pub).encode()
 r = d.search_publications('"jeugdhulp"', creator="Leiden", gazette="gmb", since="2026-01-01", limit=1)
@@ -283,13 +331,15 @@ assert r["results"][0]["url"].endswith("gmb-2026-1.pdf") and r["results"][0]["ga
 assert r["total"] == 3 and r["truncated"], r
 assert "w.publicatienaam%3D%22Gemeenteblad%22" in urls[0] and "cql.textAndIndexes%3D%22jeugdhulp%22" in urls[0], urls
 assert d._text_cql('tarief "zorg in natura" Leiden') == ['cql.textAndIndexes="zorg in natura"', 'cql.textAndIndexes all "tarief Leiden"']
-assert d._text_cql('jeugdhulp "open') == ['cql.textAndIndexes all "jeugdhulp"'] and d._text_cql('a\\b') == ['cql.textAndIndexes all "a b"']
+assert d._text_cql('jeugdhulp "open') == ['cql.textAndIndexes all "jeugdhulp"'] and d._text_cql("a\\b") == ['cql.textAndIndexes all "a b"']
 raises(ValueError, d._text_cql, '"" ')
 raises(ValueError, d.search_publications, "x", gazette="nope")
-cv = lambda i, frm, until: rec(f"<dcterms:identifier>CVDR7001_{i}</dcterms:identifier><dcterms:title>Verordening</dcterms:title>"
-                               f"<inwerkingtredingDatum>{frm}</inwerkingtredingDatum>"
-                               + (f"<uitwerkingtredingDatum>{until}</uitwerkingtredingDatum>" if until else "")
-                               + f"<publicatieurl_xml>https://repository.overheid.nl/cvdr/{i}.xml</publicatieurl_xml>")
+cv = lambda i, frm, until: rec(
+    f"<dcterms:identifier>CVDR7001_{i}</dcterms:identifier><dcterms:title>Verordening</dcterms:title>"
+    f"<inwerkingtredingDatum>{frm}</inwerkingtredingDatum>"
+    + (f"<uitwerkingtredingDatum>{until}</uitwerkingtredingDatum>" if until else "")
+    + f"<publicatieurl_xml>https://repository.overheid.nl/cvdr/{i}.xml</publicatieurl_xml>"
+)
 digimv._http = lambda url, **k: SRU.format(cv(1, "2020-01-01", "2026-01-01") + cv(2, "2026-01-01", None) + cv(3, "2027-01-01", None)).encode()
 r = d.search_regulations("jeugdhulp", today="2026-11-12")
 assert [h["in_force"] for h in r["results"]] == [False, True, False], r  # expired, current, not yet in force
@@ -300,25 +350,29 @@ assert raises(ValueError, d.search_regulations, "x") == "bad query"
 
 # ---------------------------------------------------------------- data files
 
-xlsx = zipped({
-    "xl/workbook.xml": '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.'
-                       'openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Subsidies" r:id="rId1"/>'
-                       '<sheet name="Toelichting" r:id="rId2"/></sheets></workbook>',
-    "xl/_rels/workbook.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                                  '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="/xl/worksheets/sheet2.xml"/></Relationships>',
-    "xl/sharedStrings.xml": '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Subsidieregister 2025</t></si>'
-                            '<si><t>Ontvanger</t></si><si><t>Bedrag</t></si><si><r><t>St. </t></r><r><t>Overweeghuis</t></r></si></sst>',
-    "xl/worksheets/sheet1.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
-                                '<row r="1"><c r="A1" t="s"><v>0</v></c></row>'
-                                '<row r="3"><c r="A3" t="s"><v>1</v></c><c r="B3" t="s"><v>2</v></c><c r="C3" t="s"><v>1</v></c></row>'
-                                '<row r="4"><c r="A4" t="s"><v>3</v></c><c r="B4"><v>95000</v></c><c r="D4"><v>0.1</v></c></row>'
-                                '<row r="5"><c r="B5" t="inlineStr"><is><t>n.v.t.</t></is></c><c r="C5" t="b"><v>1</v></c></row></sheetData></worksheet>',
-    "xl/worksheets/sheet2.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
-                                '<row r="1"><c r="A1" t="str"><v>uitleg</v></c></row></sheetData></worksheet>'})
+xlsx = zipped(
+    {
+        "xl/workbook.xml": '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.'
+        'openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Subsidies" r:id="rId1"/>'
+        '<sheet name="Toelichting" r:id="rId2"/></sheets></workbook>',
+        "xl/_rels/workbook.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="/xl/worksheets/sheet2.xml"/></Relationships>',
+        "xl/sharedStrings.xml": '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Subsidieregister 2025</t></si>'
+        "<si><t>Ontvanger</t></si><si><t>Bedrag</t></si><si><r><t>St. </t></r><r><t>Overweeghuis</t></r></si></sst>",
+        "xl/worksheets/sheet1.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+        '<row r="1"><c r="A1" t="s"><v>0</v></c></row>'
+        '<row r="3"><c r="A3" t="s"><v>1</v></c><c r="B3" t="s"><v>2</v></c><c r="C3" t="s"><v>1</v></c></row>'
+        '<row r="4"><c r="A4" t="s"><v>3</v></c><c r="B4"><v>95000</v></c><c r="D4"><v>0.1</v></c></row>'
+        '<row r="5"><c r="B5" t="inlineStr"><is><t>n.v.t.</t></is></c><c r="C5" t="b"><v>1</v></c></row></sheetData></worksheet>',
+        "xl/worksheets/sheet2.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+        '<row r="1"><c r="A1" t="str"><v>uitleg</v></c></row></sheetData></worksheet>',
+    }
+)
 name, names, rows = datasets.xlsx_rows(xlsx)
 assert (name, names) == ("Subsidies", ["Subsidies", "Toelichting"])
-assert rows == [["Subsidieregister 2025"], [], ["Ontvanger", "Bedrag", "Ontvanger"], ["St. Overweeghuis", 95000, None, 0.1],
-                [None, "n.v.t.", True]], rows  # a gap keeps its column, rich text is joined, numbers are numbers
+assert rows == [["Subsidieregister 2025"], [], ["Ontvanger", "Bedrag", "Ontvanger"], ["St. Overweeghuis", 95000, None, 0.1], [None, "n.v.t.", True]], (
+    rows
+)  # a gap keeps its column, rich text is joined, numbers are numbers
 assert datasets.xlsx_rows(xlsx, "Toelichting")[2] == [["uitleg"]]  # a target with an absolute path
 raises(KeyError, datasets.xlsx_rows, xlsx, "Nope")
 assert datasets.xlsx_rows(xlsx, "toelichting")[0] == "Toelichting", "a sheet name matches ignoring case"
@@ -330,6 +384,7 @@ assert datasets.csv_rows(b"\xef\xbb\xbfa,b\n1,2\n") == [["a", "b"], ["1", "2"]] 
 assert datasets.csv_rows(b"a,b\n\x81,2\n")[1] == ["\x81", "2"]  # bytes no code page knows still read
 assert datasets.json_rows(b'{"value": [{"a": 1}, {"b": 2}]}') == [["a", "b"], [1, None], [None, 2]]
 raises(ValueError, datasets.json_rows, b'{"a": 1}')
+
 
 def serve(body, ctype="application/octet-stream"):
     """read_table reads its file from disk: write the fixture there and hand out its path."""
@@ -346,12 +401,19 @@ assert [x["row"] for x in datasets.read_table("https://gemeente.example/subsidie
 assert datasets.read_table("https://gemeente.example/subsidies.xlsx", header_row=1)["columns"][:2] == ["Subsidieregister 2025", "column 2"]
 # no sheet asked, and the first lacks the filter column: the sheet that has it (a cover or version history comes first)
 assert datasets.read_table("https://gemeente.example/subsidies.xlsx", filters={"uitleg": ["x"]})["sheet"] == "Toelichting"
-assert "uitleg" in raises(KeyError, datasets.read_table, "https://gemeente.example/subsidies.xlsx", sheet="Subsidies",
-                          filters={"uitleg": ["x"]}), "a sheet asked for is never swapped"
+assert "uitleg" in raises(KeyError, datasets.read_table, "https://gemeente.example/subsidies.xlsx", sheet="Subsidies", filters={"uitleg": ["x"]}), (
+    "a sheet asked for is never swapped"
+)
 assert "Nope" in raises(KeyError, datasets.read_table, "https://gemeente.example/subsidies.xlsx", filters={"Nope": ["x"]})
 z = zipfile.ZipFile(io.BytesIO(xlsx))
-serve(zipped({**{n: z.read(n).decode() for n in z.namelist()},
-              "xl/worksheets/sheet1.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>'}))
+serve(
+    zipped(
+        {
+            **{n: z.read(n).decode() for n in z.namelist()},
+            "xl/worksheets/sheet1.xml": '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>',
+        }
+    )
+)
 assert datasets.read_table("https://x.example/leeg-voorblad.xlsx")["sheet"] == "Toelichting", "an empty first sheet is passed over"
 serve(b"", "text/csv")
 assert "empty" in raises(KeyError, datasets.read_table, "https://x.example/leeg.csv")
@@ -365,8 +427,9 @@ serve(b"7z\xbc\xaf\x27\x1c rest")
 assert "7-Zip" in raises(ValueError, datasets.read_table, "https://x.example/a.7z")
 
 # A CSV is streamed: same rows and numbers as reading it whole, a non-utf-8 byte at the very end still read as cp1252
-big = ("Overzicht DBC\n\nJAAR;DIAGNOSE_CD;AANTAL\n" + "".join(f"{2024 if i % 3 == 0 else 2023};{i % 3000:04};{i}\n" for i in range(30000))
-       + "2024;1101;Zorg één\n").encode("cp1252")
+big = (
+    "Overzicht DBC\n\nJAAR;DIAGNOSE_CD;AANTAL\n" + "".join(f"{2024 if i % 3 == 0 else 2023};{i % 3000:04};{i}\n" for i in range(30000)) + "2024;1101;Zorg één\n"
+).encode("cp1252")
 serve(big, "text/csv")
 t = datasets.read_table("https://x.example/dbc.csv", filters={"jaar": "2024", "DIAGNOSE_CD": ["1101", "9999"]}, limit=2)
 whole = datasets.csv_rows(big)
@@ -376,8 +439,7 @@ assert [x["row"] for x in t["rows"]] == want[:2] and t["rows_matched"] == len(wa
 assert t["rows"][0]["DIAGNOSE_CD"] == "1101", "a code keeps its leading zeros and is never a number"
 t = datasets.read_table("https://x.example/dbc.csv", filters={"DIAGNOSE_CD": ["1101"]}, query="één")
 assert [x["row"] for x in t["rows"]] == [len(whole)] and t["rows"][0]["AANTAL"] == "Zorg één", t  # the cp1252 tail
-assert datasets.read_table("https://x.example/dbc.csv", query="1101")["rows_matched"] > len(want), \
-    "query hits amounts too: that is why filters exist"
+assert datasets.read_table("https://x.example/dbc.csv", query="1101")["rows_matched"] > len(want), "query hits amounts too: that is why filters exist"
 assert "AANTAL" in raises(KeyError, datasets.read_table, "https://x.example/dbc.csv", filters={"Nope": ["1"]})
 # sort: the most first over every matched row in one pass, text after numbers, paging the same order; ties keep file order
 rank = lambda **kw: [x["AANTAL"] for x in datasets.read_table("https://x.example/dbc.csv", filters={"JAAR": "2024"}, **kw)["rows"]]
@@ -452,8 +514,11 @@ def record_temp(*a, **kw):
     return f
 
 
-with patch.object(py7zr.SevenZipFile, "list", lambda z: [replace(f, uncompressed=1) for f in real_list(z)]), \
-        patch.object(datasets, "TABLE_MAX", 10), patch.object(tempfile, "NamedTemporaryFile", record_temp):
+with (
+    patch.object(py7zr.SevenZipFile, "list", lambda z: [replace(f, uncompressed=1) for f in real_list(z)]),
+    patch.object(datasets, "TABLE_MAX", 10),
+    patch.object(tempfile, "NamedTemporaryFile", record_temp),
+):
     assert "limit" in raises(ValueError, datasets.read_table, "https://x.example/bomb.7z")
 assert temporary_paths and all(not p.exists() for p in temporary_paths), "failed extraction removes its temporary file"
 serve(sevenzipped({"a.csv": "x\n1\n"}))
@@ -506,8 +571,7 @@ for n in (2, 3, len(whole) + 1):  # a blank row, the header, past the end
 sheet = datasets.xlsx_rows(xlsx)[0]
 cached("b" * 20, xlsx, "application/octet-stream", "https://gemeente.example/subsidies.xlsx")
 r = datasets.table_row("b" * 20, 4, [sheet])
-assert (r["row"]["Ontvanger"], r["row"]["Bedrag"], r["sheet"], r["member"], r["file_name"]) == \
-    ("St. Overweeghuis", 95000, sheet, None, "subsidies.xlsx"), r
+assert (r["row"]["Ontvanger"], r["row"]["Bedrag"], r["sheet"], r["member"], r["file_name"]) == ("St. Overweeghuis", 95000, sheet, None, "subsidies.xlsx"), r
 raises(KeyError, datasets.table_row, "b" * 20, 4, ["Nope"])
 cached("c" * 20, zipped({"a.csv": "x\n1\n", "b.json": '[{"x": 2}]'}), "application/zip", "https://x.example/two.zip")
 r = datasets.table_row("c" * 20, 1, ["b.json"])
@@ -515,8 +579,7 @@ assert (r["row"], r["member"], r["format"]) == ({"row": 1, "x": 2}, "b.json", "j
 raises(ValueError, datasets.table_row, "c" * 20, 1)  # two data files, the citation names none
 cached("d" * 20, sevenzipped({"data/Workbook.XLSX": xlsx}), "application/octet-stream", "https://x.example/services/file/get?key=abc")
 r = datasets.table_row("d" * 20, 4, ["data/Workbook.XLSX", "Subsidies"])
-assert (r["row"]["Bedrag"], r["member"], r["sheet"], r["file_name"]) == \
-    (95000, "data/Workbook.XLSX", "Subsidies", "x.example-dddddddd.7z"), r
+assert (r["row"]["Bedrag"], r["member"], r["sheet"], r["file_name"]) == (95000, "data/Workbook.XLSX", "Subsidies", "x.example-dddddddd.7z"), r
 cached("e" * 20, sevenzipped({"data/a.csv": "AGB;Waarde\n0011;7\n"}), "application/x-7z-compressed", "https://x.example/data.7z")
 assert datasets.table_row("e" * 20, 2, ["data/a.csv"])["row"] == {"row": 2, "AGB": "0011", "Waarde": "7"}
 for bad in ["../../etc/passwd", "0" * 20, "A" * 20]:
@@ -526,27 +589,48 @@ for bad in ["../../etc/passwd", "0" * 20, "A" * 20]:
 # ---------------------------------------------------------------- CBS: padded keys, the row cap, symbols
 
 table = {"id": "40100NED", "host": "https://dataderden.cbs.nl", "modified": "2026-10-01"}
-dims = {"title": "Wmo-cliënten", "description": "", "period": "2024-2025", "modified": "2026-10-01", "topics": [
-            {"key": "Clienten_1", "title": "Cliënten", "unit": "aantal", "group": "", "decimals": 0},
-            {"key": "Aandeel_2", "title": "Aandeel", "unit": "%", "group": "", "decimals": 1}],
-        "dims": [{"key": "RegioS", "title": "Regio's", "type": "GeoDimension",
-                  "codes": [{"key": "GM0546    ", "title": "Leiden"}, {"key": "GM0518    ", "title": "'s-Gravenhage"}]
-                           + [{"key": f"GM9{i:03}    ", "title": f"G{i}"} for i in range(400)]},
-                 {"key": "Perioden", "title": "Perioden", "type": "TimeDimension",
-                  "codes": [{"key": "2024JJ00", "title": "2024"}, {"key": "2025JJ00", "title": "2025*"}]},
-                 {"key": "Voorziening", "title": "Voorziening", "type": "Dimension",
-                  "codes": [{"key": f"V{i:02}", "title": f"v{i}"} for i in range(13)]}]}
+dims = {
+    "title": "Wmo-cliënten",
+    "description": "",
+    "period": "2024-2025",
+    "modified": "2026-10-01",
+    "topics": [
+        {"key": "Clienten_1", "title": "Cliënten", "unit": "aantal", "group": "", "decimals": 0},
+        {"key": "Aandeel_2", "title": "Aandeel", "unit": "%", "group": "", "decimals": 1},
+    ],
+    "dims": [
+        {
+            "key": "RegioS",
+            "title": "Regio's",
+            "type": "GeoDimension",
+            "codes": [{"key": "GM0546    ", "title": "Leiden"}, {"key": "GM0518    ", "title": "'s-Gravenhage"}]
+            + [{"key": f"GM9{i:03}    ", "title": f"G{i}"} for i in range(400)],
+        },
+        {
+            "key": "Perioden",
+            "title": "Perioden",
+            "type": "TimeDimension",
+            "codes": [{"key": "2024JJ00", "title": "2024"}, {"key": "2025JJ00", "title": "2025*"}],
+        },
+        {"key": "Voorziening", "title": "Voorziening", "type": "Dimension", "codes": [{"key": f"V{i:02}", "title": f"v{i}"} for i in range(13)]},
+    ],
+}
 datasets.cbs_catalog = lambda refresh=False, db=None: None
 datasets._cbs_table = lambda db, table_id: table
 datasets._cbs_dims = lambda db, t: dims
 asked = []
-sources._all = lambda url: asked.append(url) or [
-    {"RegioS": "GM0546    ", "Perioden": "2024JJ00", "Voorziening": "V00", "Clienten_1": "8575", "Aandeel_2": "  6.4"},
-    {"RegioS": "GM0546    ", "Perioden": "2025JJ00", "Voorziening": "V00", "Clienten_1": "x", "Aandeel_2": "."}]
+sources._all = lambda url: (
+    asked.append(url)
+    or [
+        {"RegioS": "GM0546    ", "Perioden": "2024JJ00", "Voorziening": "V00", "Clienten_1": "8575", "Aandeel_2": "  6.4"},
+        {"RegioS": "GM0546    ", "Perioden": "2025JJ00", "Voorziening": "V00", "Clienten_1": "x", "Aandeel_2": "."},
+    ]
+)
 r = datasets.get_cbs("40100NED", {"RegioS": ["leiden"], "perioden": "2024JJ00"}, ["Clienten_1", "aandeel_2"])
 assert "RegioS%20eq%20%27GM0546%20%20%20%20%27" in asked[0], asked  # the padded key as CBS has it, matched by title
-assert r["rows"][0] == {"RegioS": "GM0546 = Leiden", "Perioden": "2024JJ00 = 2024", "Voorziening": "V00 = v0",
-                        "Clienten_1": 8575, "Aandeel_2": 6.4}, r["rows"][0]
+assert r["rows"][0] == {"RegioS": "GM0546 = Leiden", "Perioden": "2024JJ00 = 2024", "Voorziening": "V00 = v0", "Clienten_1": 8575, "Aandeel_2": 6.4}, r["rows"][
+    0
+]
 assert r["rows"][1]["Clienten_1"] == {"value": None, "symbol": "x"} and set(r["symbols"]) == {".", "x"}, r
 assert r["source"] == asked[0] and r["topics"]["Clienten_1"] == "Cliënten (aantal)"
 assert "10,000" in raises(ValueError, datasets.get_cbs, "40100NED")  # 402 regions x 2 periods x 13 = 10,452 rows
@@ -561,8 +645,11 @@ assert datasets._cbs_value(" 12 ") == (12, None) and datasets._cbs_value("-") ==
 # A /bron/cbs/{table}/{code per dimension}/{topic} citation: the one value, read from CBS again, with its labels
 c = datasets.cbs_cell("40100NED", ["GM0546", "2024JJ00", "V00"], "Clienten_1")
 assert (c["value"], c["symbol"], c["topic"], c["unit"], c["page"]) == (8575, None, "Cliënten", "aantal", "https://dataderden.cbs.nl"), c
-assert c["dimensions"] == [{"title": "Regio's", "value": "GM0546 = Leiden"}, {"title": "Perioden", "value": "2024JJ00 = 2024"},
-                           {"title": "Voorziening", "value": "V00 = v0"}] and "%27GM0546%20%20%20%20%27" in c["source"], c
+assert (
+    c["dimensions"]
+    == [{"title": "Regio's", "value": "GM0546 = Leiden"}, {"title": "Perioden", "value": "2024JJ00 = 2024"}, {"title": "Voorziening", "value": "V00 = v0"}]
+    and "%27GM0546%20%20%20%20%27" in c["source"]
+), c
 sources._all = lambda url: [{"RegioS": "GM0546    ", "Perioden": "2025JJ00", "Voorziening": "V00", "Clienten_1": "x"}]
 c = datasets.cbs_cell("40100NED", ["GM0546", "2025JJ00", "V00"], "Clienten_1")
 assert c["value"] is None and c["symbol"] == "x" and c["symbol_meaning"], "a value CBS withholds is never 0"
@@ -577,18 +664,19 @@ assert "PMZW_API_KEY" in raises(RuntimeError, datasets.search_swing, "prognosemo
 raises(KeyError, datasets.search_swing, "nope", "tekort")
 os.environ["PMZW_API_KEY"] = "k"
 B = "https://prognosemodelzw.nl/ods/odata"
-ind = lambda code, name: {"Code": code, "Name": name, "Description": "", "Unit": "aantal", "Source": "abf",
-                          "StartPeriodCode": "2024", "EndPeriodCode": "2034"}
+ind = lambda code, name: {"Code": code, "Name": name, "Description": "", "Unit": "aantal", "Source": "abf", "StartPeriodCode": "2024", "EndPeriodCode": "2034"}
 cube = lambda p: {"Indicator": "pmzw_tekort", "Period": p, "GeoLevel": "regio", "DimensionLevels": "", "DimensionLevelNames": ""}
 swing = {
     f"{B}/Indicators": {"value": [ind("pmzw_tekort", "Tekort aan werknemers")], "@odata.nextLink": f"{B}/Indicators?$skip=1"},
     f"{B}/Indicators?$skip=1": {"value": [ind("pmzw_wn", "Werknemers in zorg en welzijn")]},
     f"{B}/Indicators/pmzw_tekort/DataCubes": {"value": [cube("year_2025"), cube("year_2026")]},
-    f"{B}/DataCubes(Dimensionlevels='',GeoLevel='regio',Indicator='pmzw_tekort',Period='year_2025')/Data": {"value": [
-        {"GeoItem": "regio_1", "Period": "year_2025", "Value": 1200, "ValueType": "Regular", "DimensionLevelMembers": ""},
-        {"GeoItem": "regio_2", "Period": "year_2025", "Value": None, "ValueType": "Missing", "DimensionLevelMembers": ""}]},
-    f"{B}/GeoLevels/regio/GeoLevelMembers": {"value": [{"Code": "regio_1", "Name": "Holland Rijnland"},
-                                                        {"Code": "regio_2", "Name": "Rijnmond"}]},
+    f"{B}/DataCubes(Dimensionlevels='',GeoLevel='regio',Indicator='pmzw_tekort',Period='year_2025')/Data": {
+        "value": [
+            {"GeoItem": "regio_1", "Period": "year_2025", "Value": 1200, "ValueType": "Regular", "DimensionLevelMembers": ""},
+            {"GeoItem": "regio_2", "Period": "year_2025", "Value": None, "ValueType": "Missing", "DimensionLevelMembers": ""},
+        ]
+    },
+    f"{B}/GeoLevels/regio/GeoLevelMembers": {"value": [{"Code": "regio_1", "Name": "Holland Rijnland"}, {"Code": "regio_2", "Name": "Rijnmond"}]},
     f"{B}/Leak": {"value": [], "@odata.nextLink": "https://other.example/steal"},
 }
 sent = []
@@ -599,12 +687,15 @@ assert all(h == {"apikey": "k"} for _, h in sent), sent
 r = datasets.get_swing("prognosemodelzw", "pmzw_tekort")
 assert r["combinations"] == [{"geo_level": "regio", "dimension_levels": "", "dimensions": "", "periods": ["year_2025", "year_2026"]}], r
 r = datasets.get_swing("prognosemodelzw", "pmzw_tekort", "regio", "year_2025")
-assert r["rows"] == [{"area": "regio_1 = Holland Rijnland", "period": "year_2025", "value": 1200, "value_type": "Regular"},
-                     {"area": "regio_2 = Rijnmond", "period": "year_2025", "value": None, "value_type": "Missing"}], r
+assert r["rows"] == [
+    {"area": "regio_1 = Holland Rijnland", "period": "year_2025", "value": 1200, "value_type": "Regular"},
+    {"area": "regio_2 = Rijnmond", "period": "year_2025", "value": None, "value_type": "Missing"},
+], r
 assert r["source_url"].endswith("Period='year_2025')/Data") and r["unit"] == "aantal"
 geo = lambda q: [x["area"] for x in datasets.get_swing("prognosemodelzw", "pmzw_tekort", "regio", "year_2025", q)["rows"]]
-assert geo("rijn") == ["regio_1 = Holland Rijnland", "regio_2 = Rijnmond"] and geo("mond") == [] and geo("2") == ["regio_2 = Rijnmond"], \
+assert geo("rijn") == ["regio_1 = Holland Rijnland", "regio_2 = Rijnmond"] and geo("mond") == [] and geo("2") == ["regio_2 = Rijnmond"], (
     "a word matches the start of a word, as 'assen' must find Assen and not Wassenaar"
+)
 assert "get_swing without" in raises(KeyError, datasets.get_swing, "prognosemodelzw", "pmzw_tekort", "regio", "year_1999")
 raises(KeyError, datasets.get_swing, "prognosemodelzw", "nope")
 sent.clear()

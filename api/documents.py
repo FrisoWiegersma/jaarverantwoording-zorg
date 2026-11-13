@@ -44,32 +44,41 @@ TEXT_V = 4  # the same for HTML, XML and Word; 4: HTML table rows on one line
 _v = lambda kind: PUB_V if kind == "pdf" else TEXT_V
 MAX_BYTES = 80 * 1024 * 1024
 PART = 6000  # characters per part of a text document (Word, HTML, XML)
-SCAN_PROMPT = digimv.SCAN_PROMPT.replace("a Dutch healthcare organisation's annual report (jaarverantwoording)",
-                                         "a Dutch public-sector document")
+SCAN_PROMPT = digimv.SCAN_PROMPT.replace("a Dutch healthcare organisation's annual report (jaarverantwoording)", "a Dutch public-sector document")
 assert SCAN_PROMPT != digimv.SCAN_PROMPT, "digimv.SCAN_PROMPT changed: update the public-document prompt"
 
 WOO = "https://open.overheid.nl/overheid/openbaarmakingen/api/v0"
 OB_SRU = "https://repository.overheid.nl/sru"
 CVDR_SRU = "https://zoekservice.overheid.nl/sru/Search"
 TED = "https://api.ted.europa.eu/v3/notices/search"
-IZA_PLANS = ("https://www.zorgakkoorden.nl/programmas/integraal-zorgakkoord/iza-onderdelen/regionale-samenwerking/"
-             "regiobeelden-en-plannen/")  # every region's IZA profile and plan, linked from one page
-GAZETTES = {"gmb": "Gemeenteblad", "prb": "Provinciaal blad", "wsb": "Waterschapsblad",
-            "bgr": "Blad gemeenschappelijke regeling", "stcrt": "Staatscourant", "stb": "Staatsblad",
-            "kst": "Kamerstuk", "ah": "Kamervragen (Aanhangsel)", "h": "Handelingen"}  # attachments are under kst
+IZA_PLANS = (
+    "https://www.zorgakkoorden.nl/programmas/integraal-zorgakkoord/iza-onderdelen/regionale-samenwerking/"
+    "regiobeelden-en-plannen/"
+)  # every region's IZA profile and plan, linked from one page
+GAZETTES = {
+    "gmb": "Gemeenteblad",
+    "prb": "Provinciaal blad",
+    "wsb": "Waterschapsblad",
+    "bgr": "Blad gemeenschappelijke regeling",
+    "stcrt": "Staatscourant",
+    "stb": "Staatsblad",
+    "kst": "Kamerstuk",
+    "ah": "Kamervragen (Aanhangsel)",
+    "h": "Handelingen",
+}  # attachments are under kst
 
 SCOPE = {
     "woo": "Documents government bodies published under the Woo on open.overheid.nl. Not every body publishes "
-           "there yet; many still use their own site. The search matches word forms, not exact phrases: check that "
-           "a hit is about your subject before relying on it.",
+    "there yet; many still use their own site. The search matches word forms, not exact phrases: check that "
+    "a hit is about your subject before relying on it.",
     "gazettes": "Official publications (officielebekendmakingen.nl): what was formally published, as published. "
-                "Results come by relevance, not date. A rule's current text is in CVDR (search_regulations).",
+    "Results come by relevance, not date. A rule's current text is in CVDR (search_regulations).",
     "cvdr": "Regulations of municipalities, provinces, water boards and joint arrangements (CVDR), one record per "
-            "version. in_force is computed from the version's own dates against today.",
+    "version. in_force is computed from the version's own dates against today.",
     "ted": "EU-wide tender and award notices (TED). Only contracts above the EU threshold (for social and health "
-           "services € 750.000 in 2026) have to be published here; smaller ones are on TenderNed or nowhere.",
+    "services € 750.000 in 2026) have to be published here; smaller ones are on TenderNed or nowhere.",
     "read": "The document as fetched from its URL. Each page says whether its text came from the PDF's text layer "
-            "('text', exact) or OCR (model name); for OCR pages check figures against totals on the page.",
+    "('text', exact) or OCR (model name); for OCR pages check figures against totals on the page.",
 }
 
 SCHEMA = """
@@ -87,6 +96,7 @@ def connect(path=None):
 
 
 # ---------------------------------------------------------------- fetching any public URL
+
 
 def _check(url):
     """The model picks these URLs, so it must not reach the API container, the homelab LAN or a cloud metadata
@@ -209,6 +219,7 @@ def fetch(url, timeout=120):
 
 # ---------------------------------------------------------------- reading
 
+
 def doc_id(url):
     return hashlib.sha1(url.encode()).hexdigest()[:20]
 
@@ -241,8 +252,10 @@ def kind_of(body, ctype=""):
     raise ValueError(f"cannot read a {ctype or 'file of unknown type'}")
 
 
-BLOCK = (r"p|div|li|tr|row|h[1-6]|br|table|section|article|al|lid|artikel|kop|tussenkop|intitule|hoofdstuk|"
-         r"paragraaf|afdeling|lijst|aanhef|preambule|regeling-tekst|w:p")
+BLOCK = (
+    r"p|div|li|tr|row|h[1-6]|br|table|section|article|al|lid|artikel|kop|tussenkop|intitule|hoofdstuk|"
+    r"paragraaf|afdeling|lijst|aanhef|preambule|regeling-tekst|w:p"
+)
 
 
 def markup_text(s, xml=False):
@@ -255,7 +268,7 @@ def markup_text(s, xml=False):
         s = re.sub(r"\s+", " ", s)
     if xml:
         if "<body" in s:  # CVDR and gazette XML: the metadata comes first, the text in <body>
-            s = s[s.index("<body"):]
+            s = s[s.index("<body") :]
         s = re.sub(r"(?is)<meta\b.*?</meta>", " ", s)
         s = re.sub(r"(?i)<kop\b[^>]*>", "\n## ", s)
         # '<li nr="a."><al>text' -> 'a. text': the number on the line of its own text
@@ -315,6 +328,7 @@ def _title(did, d):
     """A human title: the PDF's own title when it is a real one, else its first heading, else the file name."""
     if d["kind"] == "pdf" and (PUB / f"{did}.pdf").exists():
         import pymupdf
+
         with pymupdf.open(PUB / f"{did}.pdf") as pdf:
             t = (pdf.metadata or {}).get("title", "").strip()
         if len(t.split()) >= 2 and not re.match(r"(?i)microsoft|untitled|\w+\.(docx?|pdf)$", t):
@@ -339,10 +353,17 @@ def _cached(did):
 def document_meta(did):
     """What a /bron/doc/ citation shows: the document's title, where it came from and when, and its size."""
     d = _cached(did)
-    return {"id": did, "title": _title(did, d) if d["kind"] == "html" else d.get("title") or _title(did, d), "url": d["url"], "file_url": d["file_url"],
-            "host": urllib.parse.urlsplit(d["file_url"]).hostname.removeprefix("www."), "kind": d["kind"], "page_count": len(d["pages"]),
-            "fetched_at": d["fetched_at"],
-            "file_name": urllib.parse.unquote(urllib.parse.urlsplit(d["file_url"]).path.rsplit("/", 1)[-1]) or f"{did}.pdf"}
+    return {
+        "id": did,
+        "title": _title(did, d) if d["kind"] == "html" else d.get("title") or _title(did, d),
+        "url": d["url"],
+        "file_url": d["file_url"],
+        "host": urllib.parse.urlsplit(d["file_url"]).hostname.removeprefix("www."),
+        "kind": d["kind"],
+        "page_count": len(d["pages"]),
+        "fetched_at": d["fetched_at"],
+        "file_name": urllib.parse.unquote(urllib.parse.urlsplit(d["file_url"]).path.rsplit("/", 1)[-1]) or f"{did}.pdf",
+    }
 
 
 def document_part(did, n):
@@ -364,8 +385,10 @@ def _index(db, did, d, texts):
     with db:
         db.execute("DELETE FROM pub_pages_fts WHERE doc=?", (did,))
         db.executemany("INSERT INTO pub_pages_fts VALUES (?,?,?)", [(t, did, i) for i, t in enumerate(texts, 1)])
-        db.execute("INSERT OR REPLACE INTO pub_docs VALUES (?,?,?,?,?,?,?,?,?)",
-                   (did, d["url"], d["file_url"], d["kind"], d["size"], d["sha256"], d["fetched_at"], len(texts), _v(d["kind"])))
+        db.execute(
+            "INSERT OR REPLACE INTO pub_docs VALUES (?,?,?,?,?,?,?,?,?)",
+            (did, d["url"], d["file_url"], d["kind"], d["size"], d["sha256"], d["fetched_at"], len(texts), _v(d["kind"])),
+        )
 
 
 def read(url, pages="1-5", refresh=False, db=None):
@@ -384,8 +407,15 @@ def read(url, pages="1-5", refresh=False, db=None):
                 body, ctype, final = fetch(pdf)
             kind = kind_of(body, ctype)
             PUB.mkdir(parents=True, exist_ok=True)
-            d = {"url": url, "file_url": final, "kind": kind, "size": len(body), "v": _v(kind),
-                 "sha256": hashlib.sha256(body).hexdigest(), "fetched_at": datetime.now(UTC).isoformat(timespec="seconds")}
+            d = {
+                "url": url,
+                "file_url": final,
+                "kind": kind,
+                "size": len(body),
+                "v": _v(kind),
+                "sha256": hashlib.sha256(body).hexdigest(),
+                "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
             if kind == "pdf":
                 pdf_file = PUB / f"{did}.pdf"
                 tmp = pdf_file.with_suffix(".part")
@@ -412,12 +442,18 @@ def read(url, pages="1-5", refresh=False, db=None):
             with db:
                 db.executemany("UPDATE pub_pages_fts SET md=? WHERE doc=? AND page=?", [(texts[n - 1], did, n) for n in todo])
     sel = digimv.parse_pages(pages, len(texts))
-    return {"id": did, "title": _title(did, d) if d["kind"] == "html" else d.get("title") or _title(did, d), "url": url, "file_url": d["file_url"],
-            "kind": d["kind"], "fetched_at": d["fetched_at"],
-            "page_count": len(texts), "unit": "page" if d["kind"] == "pdf" else f"part of ~{PART} characters",
-            "pages": [{"page": n, "source": d["pages"][n - 1]["source"], "href": _href(did, d, n), "cite": _cite(d, n),
-                       "markdown": texts[n - 1]} for n in sel],
-            "scope": SCOPE["read"]}
+    return {
+        "id": did,
+        "title": _title(did, d) if d["kind"] == "html" else d.get("title") or _title(did, d),
+        "url": url,
+        "file_url": d["file_url"],
+        "kind": d["kind"],
+        "fetched_at": d["fetched_at"],
+        "page_count": len(texts),
+        "unit": "page" if d["kind"] == "pdf" else f"part of ~{PART} characters",
+        "pages": [{"page": n, "source": d["pages"][n - 1]["source"], "href": _href(did, d, n), "cite": _cite(d, n), "markdown": texts[n - 1]} for n in sel],
+        "scope": SCOPE["read"],
+    }
 
 
 FILE_TYPES = {"pdf", "doc", "docx", "odt", "xls", "xlsx", "ods", "csv", "json", "xml", "zip", "7z", "ppt", "pptx"}
@@ -469,7 +505,11 @@ def page_links(body, base):
         else:
             # portals like zorginzicht.nl serve files at query endpoints without an extension, typing them in the link text
             m = re.search(r"(?i)\b(PDF|Excel|CSV|ZIP|7-Zip|7z|Word)[ -](file|bestand|archive|archief)\b", text)
-            kind = {"pdf": "pdf", "excel": "xlsx", "csv": "csv", "zip": "zip", "7-zip": "7z", "7z": "7z", "word": "docx"}.get(m.group(1).lower(), "page") if m else "page"
+            kind = (
+                {"pdf": "pdf", "excel": "xlsx", "csv": "csv", "zip": "zip", "7-zip": "7z", "7z": "7z", "word": "docx"}.get(m.group(1).lower(), "page")
+                if m
+                else "page"
+            )
         out.append({"text": text, "url": url, "type": kind})
     return " ".join(p.title.split()), out
 
@@ -484,10 +524,18 @@ def links(url, query=None, limit=100):
     words = [sources._fold(w) for w in (query or "").split()]
     hits = [x for x in found if all(w in sources._fold(f"{x['text']} {x['url']}") for w in words)]
     hits.sort(key=lambda x: x["type"] == "page")  # stable: files first, each group in page order
-    return {"url": url, "page_url": final, "title": title, "links_total": len(found), "matched": len(hits),
-            "returned": min(len(hits), limit), "truncated": len(hits) > limit, "links": hits[:limit],
-            "scope": "Links as the page has them when fetched without running its scripts: a site that builds its "
-                     "menus in the browser shows few. A link without a file extension can still be a file."}
+    return {
+        "url": url,
+        "page_url": final,
+        "title": title,
+        "links_total": len(found),
+        "matched": len(hits),
+        "returned": min(len(hits), limit),
+        "truncated": len(hits) > limit,
+        "links": hits[:limit],
+        "scope": "Links as the page has them when fetched without running its scripts: a site that builds its "
+        "menus in the browser shows few. A link without a file extension can still be a file.",
+    }
 
 
 def search_text(q, url=None, limit=20, db=None):
@@ -507,19 +555,28 @@ def search_text(q, url=None, limit=20, db=None):
     out = []
     for r in db.execute(sql + " ORDER BY rank LIMIT ?", (*args, limit)):
         r = dict(r)
-        out.append({"url": r["url"], "page": r["page"], "href": _href(r["id"], r, r["page"]), "cite": _cite(r, r["page"]),
-                    "heading": digimv.page_heading(r.pop("md")), "snippet": r["snippet"]})
-    return {"query": q, "results": out,
-            "scope": "Only documents read before are searched; pass url to search one document." if not url else SCOPE["read"]}
+        out.append(
+            {
+                "url": r["url"],
+                "page": r["page"],
+                "href": _href(r["id"], r, r["page"]),
+                "cite": _cite(r, r["page"]),
+                "heading": digimv.page_heading(r.pop("md")),
+                "snippet": r["snippet"],
+            }
+        )
+    return {"query": q, "results": out, "scope": "Only documents read before are searched; pass url to search one document." if not url else SCOPE["read"]}
 
 
 # ---------------------------------------------------------------- finders
 
+
 def _get_json(url, body=None):
     """JSON from a portal; a 4xx answer becomes a ValueError carrying the portal's own explanation."""
     try:
-        raw = digimv._http(url, data=json.dumps(body).encode() if body is not None else None,
-                           headers={"Content-Type": "application/json", "Accept": "application/json"})
+        raw = digimv._http(
+            url, data=json.dumps(body).encode() if body is not None else None, headers={"Content-Type": "application/json", "Accept": "application/json"}
+        )
     except urllib.error.HTTPError as e:
         if 400 <= e.code < 500:
             try:
@@ -547,8 +604,15 @@ def search_woo(q, organisatie=None, documentsoort=None, since=None, until=None, 
     # a comma separates organisations, so one inside a name ("ministerie van Volksgezondheid, Welzijn en Sport") is
     # sent encoded twice; checked live: the filter then matches the facet's count exactly
     org = organisatie.replace(",", "%2C") if organisatie else None
-    params = {"zoektekst": q, "start": start, "aantalResultaten": rows, "organisatie": org,
-              "documentsoort": documentsoort, "publicatiedatumVan": _dmy(since), "publicatiedatumTot": _dmy(until)}
+    params = {
+        "zoektekst": q,
+        "start": start,
+        "aantalResultaten": rows,
+        "organisatie": org,
+        "documentsoort": documentsoort,
+        "publicatiedatumVan": _dmy(since),
+        "publicatiedatumTot": _dmy(until),
+    }
     try:
         d = _get_json(f"{WOO}/zoek?" + urllib.parse.urlencode({k: v for k, v in params.items() if v not in (None, "")}))
     except OSError as e:
@@ -561,15 +625,33 @@ def search_woo(q, organisatie=None, documentsoort=None, since=None, until=None, 
         # most archive hits carry no pid; it is the id without its version suffix (checked: it serves the file)
         url = doc.get("pid") or "https://open.overheid.nl/documenten/" + re.sub(r"_\d+$", "", doc["id"])
         snippet = r.get("highlightedText") or ""
-        hits.append({"title": doc.get("titel"), "description": doc.get("omschrijving"), "publisher": doc.get("publisher"),
-                     "date": doc.get("openbaarmakingsdatum"), "url": url, "file_type": r.get("bestandsType"),
-                     "pages": r.get("aantalPaginas"), "size": r.get("bestandsgrootte"), "web_page": doc.get("weblocatie"),
-                     "snippet": html.unescape(re.sub(r"</?b>", lambda m: "»" if m[0][1] == "/" else "«", snippet))[:300]})
+        hits.append(
+            {
+                "title": doc.get("titel"),
+                "description": doc.get("omschrijving"),
+                "publisher": doc.get("publisher"),
+                "date": doc.get("openbaarmakingsdatum"),
+                "url": url,
+                "file_type": r.get("bestandsType"),
+                "pages": r.get("aantalPaginas"),
+                "size": r.get("bestandsgrootte"),
+                "web_page": doc.get("weblocatie"),
+                "snippet": html.unescape(re.sub(r"</?b>", lambda m: "»" if m[0][1] == "/" else "«", snippet))[:300],
+            }
+        )
     facets = d.get("filters") or {}
     top = lambda k: [f"{x['naam']} ({x['aantal']})" for x in sorted(facets.get(k, []), key=lambda x: -x["aantal"])[:15]]
-    return {"query": q, "total": d["totaal"], "returned": len(hits), "truncated": d["totaal"] > start + len(hits),
-            "results": hits, "organisations": top("organisatie"), "document_types": top("documentsoort"),
-            "source": "https://open.overheid.nl", "scope": SCOPE["woo"]}
+    return {
+        "query": q,
+        "total": d["totaal"],
+        "returned": len(hits),
+        "truncated": d["totaal"] > start + len(hits),
+        "results": hits,
+        "organisations": top("organisatie"),
+        "document_types": top("documentsoort"),
+        "source": "https://open.overheid.nl",
+        "scope": SCOPE["woo"],
+    }
 
 
 def _records(xml):
@@ -619,29 +701,56 @@ def search_publications(q, creator=None, gazette=None, since=None, limit=20, sta
     if since:
         date.fromisoformat(since)
         cql.append(f'dt.date>="{since}"')
-    url = OB_SRU + "?" + urllib.parse.urlencode({"query": " AND ".join(cql), "maximumRecords": min(limit, 50),
-                                                 "startRecord": start})
+    url = OB_SRU + "?" + urllib.parse.urlencode({"query": " AND ".join(cql), "maximumRecords": min(limit, 50), "startRecord": start})
     try:
         total, recs, diag = _records(digimv._http(url))
     except (OSError, ET.ParseError) as e:
         raise RuntimeError(f"officielebekendmakingen.nl search failed: {e}") from e
     if diag:
         raise ValueError("; ".join(diag))
-    hits = [{"id": _first(f, "identifier"), "title": _first(f, "title"), "type": _first(f, "type"),
-             "creator": _first(f, "creator"), "date": _first(f, "date"), "gazette": _first(f, "publicatienaam"),
-             "url": _first(f, "item_pdf") or _first(f, "preferredUrl"), "web_page": _first(f, "preferredUrl"),
-             "regulation": _first(f, "betreftRegeling")} for f in recs]
-    return {"query": q, "total": total, "returned": len(hits), "truncated": total > start - 1 + len(hits),
-            "results": hits, "source": "https://www.officielebekendmakingen.nl", "scope": SCOPE["gazettes"]}
+    hits = [
+        {
+            "id": _first(f, "identifier"),
+            "title": _first(f, "title"),
+            "type": _first(f, "type"),
+            "creator": _first(f, "creator"),
+            "date": _first(f, "date"),
+            "gazette": _first(f, "publicatienaam"),
+            "url": _first(f, "item_pdf") or _first(f, "preferredUrl"),
+            "web_page": _first(f, "preferredUrl"),
+            "regulation": _first(f, "betreftRegeling"),
+        }
+        for f in recs
+    ]
+    return {
+        "query": q,
+        "total": total,
+        "returned": len(hits),
+        "truncated": total > start - 1 + len(hits),
+        "results": hits,
+        "source": "https://www.officielebekendmakingen.nl",
+        "scope": SCOPE["gazettes"],
+    }
 
 
 def search_regulations(q, creator=None, limit=20, start=1, today=None):
     """Regulations (CVDR) containing every word (no phrase search: checked live, "natura in zorg" finds what "zorg in
     natura" finds), optionally of one body ('Leiden'), with in_force per version."""
     cql = [f'keyword="{_cql(q)}"'] + ([f'creator="{_cql(creator)}"'] if creator else [])
-    url = CVDR_SRU + "?" + urllib.parse.urlencode({"x-connection": "cvdr", "operation": "searchRetrieve", "version": "1.2",
-                                                   "query": " and ".join(cql), "maximumRecords": min(limit, 50),
-                                                   "startRecord": start})
+    url = (
+        CVDR_SRU
+        + "?"
+        + urllib.parse.urlencode(
+            {
+                "x-connection": "cvdr",
+                "operation": "searchRetrieve",
+                "version": "1.2",
+                "query": " and ".join(cql),
+                "maximumRecords": min(limit, 50),
+                "startRecord": start,
+            }
+        )
+    )
     try:
         total, recs, diag = _records(digimv._http(url))
     except (OSError, ET.ParseError) as e:
@@ -654,13 +763,28 @@ def search_regulations(q, creator=None, limit=20, start=1, today=None):
         start_d, end_d = _first(f, "inwerkingtredingDatum"), _first(f, "uitwerkingtredingDatum")
         rid = _first(f, "identifier") or ""
         m = re.match(r"CVDR(\d+)_(\d+)$", rid)
-        hits.append({"id": rid, "title": _first(f, "title"), "creator": _first(f, "creator"),
-                     "in_force_from": start_d, "in_force_until": end_d,
-                     "in_force": bool(start_d and start_d <= today and (not end_d or end_d > today)),
-                     "url": _first(f, "publicatieurl_xml"), "gazette": _first(f, "isFormatOf"),
-                     "web_page": f"https://lokaleregelgeving.overheid.nl/CVDR{m[1]}/{m[2]}" if m else None})
-    return {"query": q, "total": total, "returned": len(hits), "truncated": total > start - 1 + len(hits),
-            "results": hits, "source": "https://lokaleregelgeving.overheid.nl", "scope": SCOPE["cvdr"]}
+        hits.append(
+            {
+                "id": rid,
+                "title": _first(f, "title"),
+                "creator": _first(f, "creator"),
+                "in_force_from": start_d,
+                "in_force_until": end_d,
+                "in_force": bool(start_d and start_d <= today and (not end_d or end_d > today)),
+                "url": _first(f, "publicatieurl_xml"),
+                "gazette": _first(f, "isFormatOf"),
+                "web_page": f"https://lokaleregelgeving.overheid.nl/CVDR{m[1]}/{m[2]}" if m else None,
+            }
+        )
+    return {
+        "query": q,
+        "total": total,
+        "returned": len(hits),
+        "truncated": total > start - 1 + len(hits),
+        "results": hits,
+        "source": "https://lokaleregelgeving.overheid.nl",
+        "scope": SCOPE["cvdr"],
+    }
 
 
 def _lang(v):
@@ -673,8 +797,7 @@ def _lang(v):
 AWARDS = "can-standard can-social can-desg can-tran can-modif veat"  # eForms result notices, and direct awards
 
 
-def search_tenders(q=None, buyer=None, cpv="85000000", country="NLD", since=None, limit=20, page=1, place=None,
-                   awarded=False):
+def search_tenders(q=None, buyer=None, cpv="85000000", country="NLD", since=None, limit=20, page=1, place=None, awarded=False):
     """Tender and award notices on TED. cpv: a CPV code; a top code matches its subcodes (85000000 = health and
     social work). q: words in the notice text. since: YYYY-MM-DD. place: NUTS codes where the work is done, each
     matching its subregions (Zuid-Holland is NL33 before NUTS 2024, NL36 after). awarded: only award notices."""
@@ -696,9 +819,22 @@ def search_tenders(q=None, buyer=None, cpv="85000000", country="NLD", since=None
         query.append(f'buyer-name~"{_cql(buyer)}"')
     if since:
         query.append(f"publication-date>={date.fromisoformat(since).strftime('%Y%m%d')}")
-    body = {"query": " AND ".join(query) + " SORT BY publication-date DESC", "limit": min(limit, 50), "page": page,
-            "fields": ["publication-number", "notice-title", "buyer-name", "publication-date", "notice-type",
-                       "classification-cpv", "winner-name", "organisation-name-tenderer", "place-of-performance"]}
+    body = {
+        "query": " AND ".join(query) + " SORT BY publication-date DESC",
+        "limit": min(limit, 50),
+        "page": page,
+        "fields": [
+            "publication-number",
+            "notice-title",
+            "buyer-name",
+            "publication-date",
+            "notice-type",
+            "classification-cpv",
+            "winner-name",
+            "organisation-name-tenderer",
+            "place-of-performance",
+        ],
+    }
     try:
         d = _get_json(TED, body)
     except OSError as e:
@@ -713,19 +849,35 @@ def search_tenders(q=None, buyer=None, cpv="85000000", country="NLD", since=None
         # result notice also include those who lost, so they are never read as winners.
         names = lambda field, n=n: list(dict.fromkeys(x for v in (n.get(field) or {}).values() for x in v))
         winners = names("winner-name") or (names("organisation-name-tenderer") if n.get("notice-type") == "veat" else [])
-        hits.append({"id": num, "title": _lang(n.get("notice-title")), "buyer": _lang(n.get("buyer-name")),
-                     "date": (n.get("publication-date") or "")[:10], "type": n.get("notice-type"),
-                     "cpv": list(dict.fromkeys(cpvs)), "url": f"https://ted.europa.eu/nl/notice/{num}/pdf",
-                     "web_page": f"https://ted.europa.eu/nl/notice/-/detail/{num}",
-                     "place": [c for c in dict.fromkeys(n.get("place-of-performance") or []) if len(c) > 3],
-                     "winners": winners[:25], "winners_total": len(winners)})
+        hits.append(
+            {
+                "id": num,
+                "title": _lang(n.get("notice-title")),
+                "buyer": _lang(n.get("buyer-name")),
+                "date": (n.get("publication-date") or "")[:10],
+                "type": n.get("notice-type"),
+                "cpv": list(dict.fromkeys(cpvs)),
+                "url": f"https://ted.europa.eu/nl/notice/{num}/pdf",
+                "web_page": f"https://ted.europa.eu/nl/notice/-/detail/{num}",
+                "place": [c for c in dict.fromkeys(n.get("place-of-performance") or []) if len(c) > 3],
+                "winners": winners[:25],
+                "winners_total": len(winners),
+            }
+        )
     total = d.get("totalNoticeCount", len(hits))
-    return {"query": body["query"], "total": total, "returned": len(hits),
-            "truncated": total > (page - 1) * body["limit"] + len(hits), "results": hits,
-            "source": "https://ted.europa.eu", "scope": SCOPE["ted"]}
+    return {
+        "query": body["query"],
+        "total": total,
+        "returned": len(hits),
+        "truncated": total > (page - 1) * body["limit"] + len(hits),
+        "results": hits,
+        "source": "https://ted.europa.eu",
+        "scope": SCOPE["ted"],
+    }
 
 
 # ---------------------------------------------------------------- CLI
+
 
 def check():
     """One live call per finder plus one read: the services' shapes still match what this module expects."""
@@ -735,18 +887,25 @@ def check():
         "cvdr": lambda: any(h["in_force"] for h in search_regulations("jeugdhulp", creator="Leiden", limit=50)["results"]),
         "ted": lambda: search_tenders("jeugdhulp", since="2025-01-01")["total"] > 0,
         "links": lambda: sum(x["type"] == "pdf" for x in links(IZA_PLANS, limit=500)["links"]) > 50,
-        "read pdf": lambda: read(search_publications("jeugdhulp", creator="Leiden", gazette="gmb")["results"][0]["url"],
-                                 pages="1")["pages"][0]["markdown"] != "",
+        "read pdf": lambda: (
+            read(search_publications("jeugdhulp", creator="Leiden", gazette="gmb")["results"][0]["url"], pages="1")["pages"][0]["markdown"] != ""
+        ),
         # a link with spaces (Vektis) must still be readable
-        "pdf link with spaces": lambda: read(next(x["url"] for x in links(
-            "https://www.vektis.nl/zorgprisma/zorgkosten-en-aantallen/publicatie-zorgthermometer", "pdf")["links"]),
-            pages="1")["page_count"] > 1,
+        "pdf link with spaces": lambda: (
+            read(
+                next(x["url"] for x in links("https://www.vektis.nl/zorgprisma/zorgkosten-en-aantallen/publicatie-zorgthermometer", "pdf")["links"]), pages="1"
+            )["page_count"]
+            > 1
+        ),
         # an HTML table keeps its rows: a row label and its amounts on one line
-        "html table rows": lambda: any(ln.startswith("Gehandicaptenzorg\t€ ") for p in read(
-            "https://www.zorgcijfersdatabank.nl/databank?infotype=wlz&label=00-totaal&tabel=B_basis&geg=ko&item=",
-            pages="all", refresh=True)["pages"] for ln in p["markdown"].splitlines()),
-        "file type from link text": lambda: any(x["type"] == "xlsx" for x in links(
-            "https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging")["links"]),
+        "html table rows": lambda: any(
+            ln.startswith("Gehandicaptenzorg\t€ ")
+            for p in read("https://www.zorgcijfersdatabank.nl/databank?infotype=wlz&label=00-totaal&tabel=B_basis&geg=ko&item=", pages="all", refresh=True)[
+                "pages"
+            ]
+            for ln in p["markdown"].splitlines()
+        ),
+        "file type from link text": lambda: any(x["type"] == "xlsx" for x in links("https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging")["links"]),
     }
     ok = True
     for name, probe in probes.items():
@@ -761,21 +920,41 @@ def check():
 
 def main(argv=None):
     import argparse
+
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("woo"); s.add_argument("q"); s.add_argument("--org")
-    s = sub.add_parser("gazettes"); s.add_argument("q"); s.add_argument("--creator"); s.add_argument("--gazette")
-    s = sub.add_parser("regulations"); s.add_argument("q"); s.add_argument("--creator")
-    s = sub.add_parser("tenders"); s.add_argument("q", nargs="?"); s.add_argument("--buyer"); s.add_argument("--since")
-    s = sub.add_parser("read"); s.add_argument("url"); s.add_argument("--pages", default="1-3")
-    s = sub.add_parser("search"); s.add_argument("q"); s.add_argument("--url")
+    s = sub.add_parser("woo")
+    s.add_argument("q")
+    s.add_argument("--org")
+    s = sub.add_parser("gazettes")
+    s.add_argument("q")
+    s.add_argument("--creator")
+    s.add_argument("--gazette")
+    s = sub.add_parser("regulations")
+    s.add_argument("q")
+    s.add_argument("--creator")
+    s = sub.add_parser("tenders")
+    s.add_argument("q", nargs="?")
+    s.add_argument("--buyer")
+    s.add_argument("--since")
+    s = sub.add_parser("read")
+    s.add_argument("url")
+    s.add_argument("--pages", default="1-3")
+    s = sub.add_parser("search")
+    s.add_argument("q")
+    s.add_argument("--url")
     sub.add_parser("check")
     a = p.parse_args(argv)
     if a.cmd == "check":
         sys.exit(0 if check() else 1)
-    r = {"woo": lambda: search_woo(a.q, a.org), "gazettes": lambda: search_publications(a.q, a.creator, a.gazette),
-         "regulations": lambda: search_regulations(a.q, a.creator), "tenders": lambda: search_tenders(a.q, a.buyer, since=a.since),
-         "read": lambda: read(a.url, a.pages), "search": lambda: search_text(a.q, a.url)}[a.cmd]()
+    r = {
+        "woo": lambda: search_woo(a.q, a.org),
+        "gazettes": lambda: search_publications(a.q, a.creator, a.gazette),
+        "regulations": lambda: search_regulations(a.q, a.creator),
+        "tenders": lambda: search_tenders(a.q, a.buyer, since=a.since),
+        "read": lambda: read(a.url, a.pages),
+        "search": lambda: search_text(a.q, a.url),
+    }[a.cmd]()
     print(json.dumps(r, ensure_ascii=False, indent=1))
 
 

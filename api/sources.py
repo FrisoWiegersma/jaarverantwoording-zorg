@@ -88,9 +88,11 @@ def _fold(s):
 LRZA = "https://zoeken.zorgaanbiedersportaal.nl"
 LRZA_TTL = timedelta(days=7)  # the register follows the Handelsregister; a week old is recent enough to cite
 LRZA_MISSING_TTL = timedelta(days=1)
-LRZA_SCOPE = ("Landelijk Register Zorgaanbieders (CIBG), as the public portal shows it. Legal facts come from the "
-              "Handelsregister, AGB codes from Vektis. A provider that is not listed may still exist: only "
-              "organisations that registered as a care provider are in it.")
+LRZA_SCOPE = (
+    "Landelijk Register Zorgaanbieders (CIBG), as the public portal shows it. Legal facts come from the "
+    "Handelsregister, AGB codes from Vektis. A provider that is not listed may still exist: only "
+    "organisations that registered as a care provider are in it."
+)
 
 
 def _kvk(kvk):
@@ -138,9 +140,11 @@ def _permit(code, registered):
         return "ja"
     if code == 2:
         if not registered or int(registered[:4]) < 2025:  # portal: unknown registration date counts as before 2025
-            return ("nee volgens het register; de Wtza is per 1 januari 2025 gewijzigd en voor organisaties van voor "
-                    "2025 geldt overgangsrecht (zie toetredingzorgaanbieders.nl), dus dit is geen bewijs dat een "
-                    "vergunning ontbreekt")
+            return (
+                "nee volgens het register; de Wtza is per 1 januari 2025 gewijzigd en voor organisaties van voor "
+                "2025 geldt overgangsrecht (zie toetredingzorgaanbieders.nl), dus dit is geen bewijs dat een "
+                "vergunning ontbreekt"
+            )
         return "nee (niet alle zorgaanbieders zijn vergunningplichtig)"
     return "onbekend: het register kon de vergunningsgegevens niet ophalen"
 
@@ -149,8 +153,7 @@ def _notification(melding):
     if not melding:
         return "niet gemeld onder de Wtza (niet alle zorgaanbieders hebben meldplicht)"
     yes = lambda v: "ja" if v is True else "nee"
-    return (f"gemeld onder de Wtza; als zorgaanbieder: {yes(melding.get('isZorgaanbieder'))}, "
-            f"als jeugdhulpaanbieder: {yes(melding.get('isJeugdhulpaanbieder'))}")
+    return f"gemeld onder de Wtza; als zorgaanbieder: {yes(melding.get('isZorgaanbieder'))}, als jeugdhulpaanbieder: {yes(melding.get('isJeugdhulpaanbieder'))}"
 
 
 def normalise_register(raw):
@@ -168,19 +171,21 @@ def normalise_register(raw):
         "agb": _agb(raw.get("agbregistraties")),
         "wtza_melding": _notification(raw.get("melding")),
         "toelatingsvergunning": _permit(raw.get("toelatingsvergunning"), registered),
-        "vestigingen": [{
-            "naam": v.get("naam"),
-            "handelsnamen": v.get("handelsnamen") or [],
-            "vestigingsnummer": v.get("vestigingsnummer"),
-            "hoofdvestiging": bool(v.get("isHoofdvestiging")),
-            "adres": _lrza_address(v.get("adres")),
-            "ingeschreven": _lrza_date(v.get("datumInschrijving")),
-            "uitgeschreven": _lrza_date(v.get("datumUitschrijving")),
-            "sbi": v.get("sbicodes") or [],
-            "agb": _agb(v.get("agbregistraties")),
-        } for v in raw.get("vestigingen") or []],
-        "locaties_wzd_wvggz": "onbekend: het locatieregister was niet beschikbaar"
-                              if raw.get("isLocatieregisterOnbeschikbaar") else raw.get("locaties") or [],
+        "vestigingen": [
+            {
+                "naam": v.get("naam"),
+                "handelsnamen": v.get("handelsnamen") or [],
+                "vestigingsnummer": v.get("vestigingsnummer"),
+                "hoofdvestiging": bool(v.get("isHoofdvestiging")),
+                "adres": _lrza_address(v.get("adres")),
+                "ingeschreven": _lrza_date(v.get("datumInschrijving")),
+                "uitgeschreven": _lrza_date(v.get("datumUitschrijving")),
+                "sbi": v.get("sbicodes") or [],
+                "agb": _agb(v.get("agbregistraties")),
+            }
+            for v in raw.get("vestigingen") or []
+        ],
+        "locaties_wzd_wvggz": "onbekend: het locatieregister was niet beschikbaar" if raw.get("isLocatieregisterOnbeschikbaar") else raw.get("locaties") or [],
         "verantwoordingen": [{"tekst": x.get("tekst"), "url": x.get("url")} for x in raw.get("verantwoordingen") or []],
         "source": register_url(raw["kvknummer"], raw.get("naam") or ""),
     }
@@ -206,8 +211,7 @@ def register(kvk, refresh=False, db=None):
         row = {"fetched_at": stamp, "found": found, "raw": json.dumps(raw)}
     base = {"found": bool(row["found"]), "fetched": row["fetched_at"], "scope": LRZA_SCOPE}
     if not row["found"]:
-        return {**base, "kvk": kvk, "source": f"{LRZA}/",
-                "note": "Deze KvK staat niet in het LRZa. Dat zegt niet dat de organisatie geen zorg levert."}
+        return {**base, "kvk": kvk, "source": f"{LRZA}/", "note": "Deze KvK staat niet in het LRZa. Dat zegt niet dat de organisatie geen zorg levert."}
     return {**base, **normalise_register(json.loads(row["raw"]))}
 
 
@@ -227,11 +231,9 @@ def search_register(naam=None, postcode=None, kvk=None):
         if e.code == 400:
             raise ValueError(f"LRZa refused the search: {e.read()[:300].decode(errors='replace')}") from e
         raise RuntimeError(f"LRZa search answered HTTP {e.code}") from e
-    hits = [{"kvk": z["kvknummer"], "naam": z["naam"], "source": register_url(z["kvknummer"], z["naam"] or "")}
-            for z in d.get("zorgaanbieders") or []]
+    hits = [{"kvk": z["kvknummer"], "naam": z["naam"], "source": register_url(z["kvknummer"], z["naam"] or "")} for z in d.get("zorgaanbieders") or []]
     total = d.get("aantal", len(hits))
-    return {"total": total, "returned": len(hits), "truncated": total > len(hits), "results": hits,
-            "source": LRZA, "scope": LRZA_SCOPE}
+    return {"total": total, "returned": len(hits), "truncated": total > len(hits), "results": hits, "source": LRZA, "scope": LRZA_SCOPE}
 
 
 # ---------------------------------------------------------------- KVK Handelsregister open data (HVD)
@@ -239,10 +241,12 @@ def search_register(naam=None, postcode=None, kvk=None):
 KVK_OPEN = "https://opendata.kvk.nl/api/v1/hvds/basisbedrijfsgegevens/kvknummer"
 KVK_TTL = timedelta(days=7)
 KVK_SPACING = 61  # seconds; KVK allows one request per minute per IP address
-KVK_SCOPE = ("KVK Handelsregister Open Dataset Basis Bedrijfsgegevens (CC BY 4.0). It holds only BV's and NV's, and by "
-             "design no name or address: only the first two digits of the visiting address's postcode. actief J/N; "
-             "datumAanvang null is an unknown date; activiteiten are SBI codes (CBS), the main one marked Hoofdactiviteit. "
-             "For the name and address, open kvk_search: KVK's own search page.")
+KVK_SCOPE = (
+    "KVK Handelsregister Open Dataset Basis Bedrijfsgegevens (CC BY 4.0). It holds only BV's and NV's, and by "
+    "design no name or address: only the first two digits of the visiting address's postcode. actief J/N; "
+    "datumAanvang null is an unknown date; activiteiten are SBI codes (CBS), the main one marked Hoofdactiviteit. "
+    "For the name and address, open kvk_search: KVK's own search page."
+)
 INSOLVENCY = {"FAIL": "faillissement", "SSAN": "schuldsanering", "SURS": "surseance van betaling"}
 _kvk_slot = threading.Lock()
 _kvk_last = [float("-inf")]
@@ -276,41 +280,59 @@ def kvk_basics(kvk, refresh=False, db=None):
     if refresh or not row or _older(row["fetched_at"], KVK_TTL if json.loads(row["parsed"])["found"] else LRZA_MISSING_TTL):
         raw = _kvk_get(kvk)
         if raw is None:
-            parsed = {"found": False, "note": "Niet in de open KVK-data. Die bevat alleen BV's en NV's: een stichting, "
-                      "vereniging, coöperatie of eenmanszaak staat er nooit in. Zoek het nummer op kvk.nl via kvk_search."}
+            parsed = {
+                "found": False,
+                "note": "Niet in de open KVK-data. Die bevat alleen BV's en NV's: een stichting, "
+                "vereniging, coöperatie of eenmanszaak staat er nooit in. Zoek het nummer op kvk.nl via kvk_search.",
+            }
         else:
             start = raw.get("datumAanvang") or ""
-            parsed = {"found": True, **raw,
-                      "datumAanvang": f"{start[:4]}-{start[4:6]}-{start[6:]}" if re.fullmatch(r"\d{8}", start) and start != "0" * 8 else None}
+            parsed = {
+                "found": True,
+                **raw,
+                "datumAanvang": f"{start[:4]}-{start[4:6]}-{start[6:]}" if re.fullmatch(r"\d{8}", start) and start != "0" * 8 else None,
+            }
             if raw.get("insolventieCode"):
                 parsed["insolventie"] = INSOLVENCY.get(raw["insolventieCode"], raw["insolventieCode"])
         stamp = _iso(_now())
         with db:
             db.execute("INSERT OR REPLACE INTO kvk_open VALUES (?,?,?)", (kvk, stamp, json.dumps(parsed, ensure_ascii=False)))
         row = {"fetched_at": stamp, "parsed": json.dumps(parsed)}
-    return {**json.loads(row["parsed"]), "kvk": kvk, "fetched": row["fetched_at"], "source": f"{KVK_OPEN}/{kvk}",
-            "kvk_search": f"https://www.kvk.nl/zoeken/?source=all&q={kvk}", "scope": KVK_SCOPE}
+    return {
+        **json.loads(row["parsed"]),
+        "kvk": kvk,
+        "fetched": row["fetched_at"],
+        "source": f"{KVK_OPEN}/{kvk}",
+        "kvk_search": f"https://www.kvk.nl/zoeken/?source=all&q={kvk}",
+        "scope": KVK_SCOPE,
+    }
 
 
 # ---------------------------------------------------------------- CBS Iv3 (Informatie voor derden)
 
 CBS = "https://dataderden.cbs.nl"
-IV3_KINDS = {"Gemeenten": "gemeenten", "Gemeenschappelijke regelingen": "gemeenschappelijke-regelingen",
-             "Provincies": "provincies", "Waterschappen": "waterschappen"}
+IV3_KINDS = {
+    "Gemeenten": "gemeenten",
+    "Gemeenschappelijke regelingen": "gemeenschappelijke-regelingen",
+    "Provincies": "provincies",
+    "Waterschappen": "waterschappen",
+}
 IV3_TITLE = re.compile(r"^(.+?) (\d{4}) onbewerkte Iv3-data\s*$")
 IV3_CAP = 10_000  # CBS refuses a query that would return this many rows
 IV3_DIMS_V = 2  # bump when the cached dimension layout changes
 IV3_UNIT = "x € 1.000"
-IV3_SCOPE = ("Onbewerkte Iv3-data: what the body itself reported to CBS, not checked by CBS. Amounts are x € 1.000. "
-             "Lasten (charges) and baten (income) are separate categories and are never added together. "
-             "The table holds every combination of area and category; a cell without a value ('.', waarde null) "
-             "had nothing entered, often because the combination does not apply: it is not 0 and not a figure. "
-             "delivered=false: the whole report is empty. On a balance-sheet post (Balanspost) the lasten and baten "
-             "categories are mutations (a charge raises an asset, lowers a liability) and Standen are the opening "
-             "(Primo) and closing (Ultimo) positions. Water boards report no split by function to CBS: only "
-             "operating totals (Expl), result appropriation (Result), extra information (Info) and the balance "
-             "sheet. plaatsing: the 2nd publication includes corrections sent up to two months after the deadline; "
-             "the 1st is used until the 2nd is out.")
+IV3_SCOPE = (
+    "Onbewerkte Iv3-data: what the body itself reported to CBS, not checked by CBS. Amounts are x € 1.000. "
+    "Lasten (charges) and baten (income) are separate categories and are never added together. "
+    "The table holds every combination of area and category; a cell without a value ('.', waarde null) "
+    "had nothing entered, often because the combination does not apply: it is not 0 and not a figure. "
+    "delivered=false: the whole report is empty. On a balance-sheet post (Balanspost) the lasten and baten "
+    "categories are mutations (a charge raises an asset, lowers a liability) and Standen are the opening "
+    "(Primo) and closing (Ultimo) positions. Water boards report no split by function to CBS: only "
+    "operating totals (Expl), result appropriation (Result), extra information (Info) and the balance "
+    "sheet. plaatsing: the 2nd publication includes corrections sent up to two months after the deadline; "
+    "the 1st is used until the 2nd is out."
+)
 
 
 def parse_catalog(tables):
@@ -335,8 +357,7 @@ def iv3_tables(refresh=False, db=None):
     last = db.execute("SELECT fetched_at FROM sources_log WHERE name='iv3_catalog'").fetchone()
     if refresh or not last or _older(last[0], timedelta(days=1)):
         try:
-            q = urllib.parse.urlencode({"$format": "json", "$filter": "substringof('onbewerkte Iv3',Title)",
-                                        "$select": "Identifier,Title,Modified"})
+            q = urllib.parse.urlencode({"$format": "json", "$filter": "substringof('onbewerkte Iv3',Title)", "$select": "Identifier,Title,Modified"})
             rows = parse_catalog(_json(f"{CBS}/ODataCatalog/Tables?{q}")["value"])
             if not rows:
                 raise RuntimeError("the CBS catalog lists no Iv3 tables")
@@ -362,7 +383,7 @@ def _table(db, kind=None, year=None, table_id=None):
         raise ValueError(f"kind is one of: {', '.join(IV3_KINDS.values())}")
     r = db.execute("SELECT * FROM iv3_tables WHERE kind=? AND year=?", (kind, int(year))).fetchone()
     if not r:
-        years = [y for y, in db.execute("SELECT year FROM iv3_tables WHERE kind=? ORDER BY year", (kind,))]
+        years = [y for (y,) in db.execute("SELECT year FROM iv3_tables WHERE kind=? ORDER BY year", (kind,))]
         raise KeyError(f"CBS has no Iv3 table for {kind} {year}" + (f" (available {years[0]}-{years[-1]})" if years else ""))
     return dict(r)
 
@@ -403,17 +424,23 @@ def _dims(db, table):
     geo = [n for n in names if n not in ("Categorie", "Verslagsoort", *area)]
     first = [p["Key"] for p in props if p["Type"] == "Topic" and p["Title"].strip().startswith("1")]
     second = [p["Key"] for p in props if p["Type"] == "Topic" and p["Title"].strip().startswith("2")]
-    if len(area) != 1 or len(geo) != 1 or len(first) != 1 or len(second) != 1 or \
-            not {"Categorie", "Verslagsoort"} <= set(names):
+    if len(area) != 1 or len(geo) != 1 or len(first) != 1 or len(second) != 1 or not {"Categorie", "Verslagsoort"} <= set(names):
         raise RuntimeError(f"{table['id']}: unexpected Iv3 layout {sorted(p['Key'] for p in props)}")
 
     def items(name):
-        return [{"key": x["Key"], "title": x["Title"].strip(), "description": (x.get("Description") or "").strip()}
-                for x in _all(f"{base}/{name}")]
+        return [{"key": x["Key"], "title": x["Title"].strip(), "description": (x.get("Description") or "").strip()} for x in _all(f"{base}/{name}")]
 
-    dims = {"v": IV3_DIMS_V, "area_dim": area[0], "geo_dim": geo[0], "v1": first[0], "v2": second[0],
-            "area": items(area[0]), "categorie": items("Categorie"), "report": items("Verslagsoort"),
-            "bodies": items(geo[0])}
+    dims = {
+        "v": IV3_DIMS_V,
+        "area_dim": area[0],
+        "geo_dim": geo[0],
+        "v1": first[0],
+        "v2": second[0],
+        "area": items(area[0]),
+        "categorie": items("Categorie"),
+        "report": items("Verslagsoort"),
+        "bodies": items(geo[0]),
+    }
     with db:
         db.execute("INSERT OR REPLACE INTO iv3_dims VALUES (?,?,?)", (table["id"], table["modified"], json.dumps(dims)))
     return dims
@@ -433,7 +460,7 @@ def iv3_chunks(keys, per_key, cap=IV3_CAP):
             return [prefix]
         subs = {}
         for k in group:
-            subs.setdefault(k[:len(prefix) + 1], []).append(k)
+            subs.setdefault(k[: len(prefix) + 1], []).append(k)
         return [p for sub, g in subs.items() for p in plan(sub, g)]
 
     groups = {}
@@ -461,8 +488,7 @@ def _fetch_rows(db, table, dims, body_key, report_key):
     per_key = len(dims["categorie"])
     rows = []
     for prefix in iv3_chunks(keys, per_key):
-        flt = (f"{dims['geo_dim']} eq '{_quote(body_key)}' and Verslagsoort eq '{_quote(report_key)}' "
-               f"and startswith({dims['area_dim']},'{_quote(prefix)}')")
+        flt = f"{dims['geo_dim']} eq '{_quote(body_key)}' and Verslagsoort eq '{_quote(report_key)}' and startswith({dims['area_dim']},'{_quote(prefix)}')"
         q = urllib.parse.urlencode({"$filter": flt, "$select": f"{dims['area_dim']},Categorie,{dims['v1']},{dims['v2']}"})
         got = _all(f"{feed}?{q}")
         want = sum(1 for k in keys if k.strip().startswith(prefix)) * per_key
@@ -473,10 +499,8 @@ def _fetch_rows(db, table, dims, body_key, report_key):
         raise RuntimeError(f"{table['id']} {body_key.strip()}: duplicate cells in the CBS response")
     with db:
         db.execute("DELETE FROM iv3_rows WHERE tbl=? AND body=? AND report=?", (table["id"], body_key, report_key))
-        db.executemany("INSERT INTO iv3_rows VALUES (?,?,?,?,?,?,?)",
-                       [(table["id"], body_key, report_key, *r) for r in rows])
-        db.execute("INSERT OR REPLACE INTO iv3_log VALUES (?,?,?,?,?)",
-                   (table["id"], body_key, report_key, table["modified"], len(rows)))
+        db.executemany("INSERT INTO iv3_rows VALUES (?,?,?,?,?,?,?)", [(table["id"], body_key, report_key, *r) for r in rows])
+        db.execute("INSERT OR REPLACE INTO iv3_log VALUES (?,?,?,?,?)", (table["id"], body_key, report_key, table["modified"], len(rows)))
 
 
 def _pick(dim_items, wanted, what):
@@ -502,21 +526,26 @@ def _cell(table, body, report, tv, cat, v1, v2):
     value, placement = (v2, "2e plaatsing") if v2 is not None else (v1, "1e plaatsing") if v1 is not None else (None, None)
     code = body["key"].strip()
     return {
-        "taakveld": tv["key"].strip(), "taakveld_naam": tv_name,
-        "categorie": cat["key"].strip(), "categorie_naam": cat_name, "soort": soort,
-        "waarde": _amount(value), "eenheid": IV3_UNIT, "plaatsing": placement,
-        "href": "/bron/iv3/" + "/".join(urllib.parse.quote(p, safe="") for p in
-                                        (table["id"], code, report["key"].strip(), tv["key"].strip(), cat["key"].strip())),
+        "taakveld": tv["key"].strip(),
+        "taakveld_naam": tv_name,
+        "categorie": cat["key"].strip(),
+        "categorie_naam": cat_name,
+        "soort": soort,
+        "waarde": _amount(value),
+        "eenheid": IV3_UNIT,
+        "plaatsing": placement,
+        "href": "/bron/iv3/"
+        + "/".join(urllib.parse.quote(p, safe="") for p in (table["id"], code, report["key"].strip(), tv["key"].strip(), cat["key"].strip())),
     }
 
 
 def _report(db, table, dims, body, report):
-    log = db.execute("SELECT modified FROM iv3_log WHERE tbl=? AND body=? AND report=?",
-                     (table["id"], body["key"], report["key"])).fetchone()
+    log = db.execute("SELECT modified FROM iv3_log WHERE tbl=? AND body=? AND report=?", (table["id"], body["key"], report["key"])).fetchone()
     if not log or log[0] != table["modified"]:
         _fetch_rows(db, table, dims, body["key"], report["key"])
-    return db.execute("SELECT taakveld, categorie, v1, v2 FROM iv3_rows WHERE tbl=? AND body=? AND report=?",
-                      (table["id"], body["key"], report["key"])).fetchall()
+    return db.execute(
+        "SELECT taakveld, categorie, v1, v2 FROM iv3_rows WHERE tbl=? AND body=? AND report=?", (table["id"], body["key"], report["key"])
+    ).fetchall()
 
 
 def iv3(kind, year, code, taakveld=None, verslagsoort="Jaarrekening", include_zero=False, db=None):
@@ -544,8 +573,10 @@ def iv3(kind, year, code, taakveld=None, verslagsoort="Jaarrekening", include_ze
             continue  # the feed is dense, but a position (primo/ultimo) only exists for a balance-sheet post
         if c["soort"] in ("Lasten", "Baten") and not balance:  # on a balance post they are mutations, not a total
             # None = no cell of that soort has a value: unknown, which is not 0
-            t = totals.setdefault(c["taakveld"], {"taakveld": c["taakveld"], "taakveld_naam": c["taakveld_naam"],
-                                                  "lasten": None, "baten": None, "lasten_empty": 0, "baten_empty": 0})
+            t = totals.setdefault(
+                c["taakveld"],
+                {"taakveld": c["taakveld"], "taakveld_naam": c["taakveld_naam"], "lasten": None, "baten": None, "lasten_empty": 0, "baten_empty": 0},
+            )
             k = c["soort"].lower()
             if c["waarde"] is None:
                 t[k + "_empty"] += 1
@@ -558,13 +589,21 @@ def iv3(kind, year, code, taakveld=None, verslagsoort="Jaarrekening", include_ze
         else:
             cells.append(c)
     return {
-        "kind": kind, "year": int(year), "code": body["key"].strip(), "naam": body_name(body),
-        "verslagsoort": report["title"], "table": table["id"], "table_modified": table["modified"],
+        "kind": kind,
+        "year": int(year),
+        "code": body["key"].strip(),
+        "naam": body_name(body),
+        "verslagsoort": report["title"],
+        "table": table["id"],
+        "table_modified": table["modified"],
         # every cell '.' (null) in the whole report: the body did not deliver it (small municipalities skip quarters)
         "delivered": any(v1 is not None or v2 is not None for _, _, v1, v2 in rows),
-        "cells": cells, "zero_cells_left_out": zeros, "empty_cells": empty,
+        "cells": cells,
+        "zero_cells_left_out": zeros,
+        "empty_cells": empty,
         "totals_computed": list(totals.values()),
-        "unit": IV3_UNIT, "scope": IV3_SCOPE,
+        "unit": IV3_UNIT,
+        "scope": IV3_SCOPE,
         "source": f"{CBS}/ODataApi/OData/{table['id']}",
     }
 
@@ -580,9 +619,15 @@ def iv3_value(table_id, code, report, taakveld, categorie, db=None):
     cat = _pick(dims["categorie"], categorie, "category")
     for t, c, v1, v2 in _report(db, table, dims, body, rep):
         if t == tv["key"] and c == cat["key"]:
-            return {"kind": table["kind"], "year": table["year"], "code": code, "naam": body_name(body),
-                    "verslagsoort": rep["title"], **_cell(table, body, rep, tv, cat, v1, v2),
-                    "source": f"{CBS}/ODataApi/OData/{table['id']}"}
+            return {
+                "kind": table["kind"],
+                "year": table["year"],
+                "code": code,
+                "naam": body_name(body),
+                "verslagsoort": rep["title"],
+                **_cell(table, body, rep, tv, cat, v1, v2),
+                "source": f"{CBS}/ODataApi/OData/{table['id']}",
+            }
     raise KeyError("cell not in the CBS table")
 
 
@@ -606,8 +651,7 @@ def find_body(q, kind=None, year=None, db=None):
     found, unavailable = {}, []
     for k in kinds:
         try:
-            tables = [_table(db, k, year)] if year else [dict(r) for r in db.execute(
-                "SELECT * FROM iv3_tables WHERE kind=? ORDER BY year DESC LIMIT 2", (k,))]
+            tables = [_table(db, k, year)] if year else [dict(r) for r in db.execute("SELECT * FROM iv3_tables WHERE kind=? ORDER BY year DESC LIMIT 2", (k,))]
             for table in tables:
                 for x in _dims(db, table)["bodies"]:
                     name, code = body_name(x), x["key"].strip()
@@ -629,11 +673,12 @@ ECLI = re.compile(r"ECLI:[A-Z]{2}:[A-Z0-9]{1,7}:\d{4}:[A-Z0-9.]{1,25}")
 RULING_V = 1  # bump when parsing changes: cached rulings are fetched again
 RULING_TTL = timedelta(days=30)  # rulings are corrected now and then
 RULING_PART = 8000  # characters per part
-RULINGS_SCOPE = ("Published Dutch court rulings (rechtspraak.nl, open data CC0). Not every ruling is published, "
-                 "natural persons are pseudonymised, and a name in a ruling does not make that organisation a party: "
-                 "read the ruling before saying what it was about.")
-NS = {"dcterms": "http://purl.org/dc/terms/", "psi": "http://psi.rechtspraak.nl/",
-      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"}
+RULINGS_SCOPE = (
+    "Published Dutch court rulings (rechtspraak.nl, open data CC0). Not every ruling is published, "
+    "natural persons are pseudonymised, and a name in a ruling does not make that organisation a party: "
+    "read the ruling before saying what it was about."
+)
+NS = {"dcterms": "http://purl.org/dc/terms/", "psi": "http://psi.rechtspraak.nl/", "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"}
 
 
 def _dmy(s):
@@ -647,24 +692,45 @@ def search_rulings(q, limit=10, exact=True):
     q = " ".join(q.replace('"', " ").split())
     if len(q) < 3:
         raise ValueError("give at least 3 characters")
-    body = {"StartRow": 0, "PageSize": max(1, min(int(limit), 50)), "ShouldReturnHighlights": False,
-            "ShouldCountFacets": False, "SortOrder": "Relevance",
-            "SearchTerms": [{"Term": f'"{q}"' if exact else q, "Field": "AlleVelden"}],
-            "Contentsoorten": [], "Rechtsgebieden": [], "Instanties": [], "DatumPublicatie": [], "DatumUitspraak": [],
-            "Advanced": {"PublicatieStatus": "AlleenGepubliceerd"}, "CorrelationId": "jaarverantwoording-zorg",
-            "Proceduresoorten": []}
+    body = {
+        "StartRow": 0,
+        "PageSize": max(1, min(int(limit), 50)),
+        "ShouldReturnHighlights": False,
+        "ShouldCountFacets": False,
+        "SortOrder": "Relevance",
+        "SearchTerms": [{"Term": f'"{q}"' if exact else q, "Field": "AlleVelden"}],
+        "Contentsoorten": [],
+        "Rechtsgebieden": [],
+        "Instanties": [],
+        "DatumPublicatie": [],
+        "DatumUitspraak": [],
+        "Advanced": {"PublicatieStatus": "AlleenGepubliceerd"},
+        "CorrelationId": "jaarverantwoording-zorg",
+        "Proceduresoorten": [],
+    }
     try:
         d = _json(RS_SEARCH, body)
         results, total = d["Results"], d["ResultCount"]
     except (OSError, ValueError, KeyError, TypeError) as e:
-        raise RuntimeError(f"the rechtspraak.nl search did not answer as expected ({type(e).__name__}: {e}). It is the "
-                           "site's own search and may have changed; get_ruling still reads a ruling by ECLI.") from e
-    hits = [{"ecli": r["TitelEmphasis"], "titel": r["Titel"], "type": r.get("GerechtelijkProductType"),
-             "uitspraakdatum": _dmy(r.get("Uitspraakdatum")), "publicatiedatum": _dmy(r.get("Publicatiedatum")),
-             "rechtsgebieden": r.get("Rechtsgebieden") or [], "procedures": r.get("Proceduresoorten") or [],
-             "fragment": r.get("Tekstfragment"), "source": r.get("DeeplinkUrl")} for r in results]
-    return {"query": q, "exact": exact, "total": total, "returned": len(hits), "truncated": total > len(hits),
-            "results": hits, "scope": RULINGS_SCOPE}
+        raise RuntimeError(
+            f"the rechtspraak.nl search did not answer as expected ({type(e).__name__}: {e}). It is the "
+            "site's own search and may have changed; get_ruling still reads a ruling by ECLI."
+        ) from e
+    hits = [
+        {
+            "ecli": r["TitelEmphasis"],
+            "titel": r["Titel"],
+            "type": r.get("GerechtelijkProductType"),
+            "uitspraakdatum": _dmy(r.get("Uitspraakdatum")),
+            "publicatiedatum": _dmy(r.get("Publicatiedatum")),
+            "rechtsgebieden": r.get("Rechtsgebieden") or [],
+            "procedures": r.get("Proceduresoorten") or [],
+            "fragment": r.get("Tekstfragment"),
+            "source": r.get("DeeplinkUrl"),
+        }
+        for r in results
+    ]
+    return {"query": q, "exact": exact, "total": total, "returned": len(hits), "truncated": total > len(hits), "results": hits, "scope": RULINGS_SCOPE}
 
 
 def _local(e):
@@ -711,10 +777,15 @@ def parse_ruling(xml):
     body = next((c for c in root if _local(c) in ("uitspraak", "conclusie")), None)
     summary = next((c for c in root if _local(c) == "inhoudsindicatie"), None)
     return {
-        "ecli": one("dcterms:identifier"), "modified": one("dcterms:modified"),
-        "instantie": one("dcterms:creator"), "uitspraakdatum": one("dcterms:date"),
-        "publicatiedatum": one("dcterms:issued"), "zaaknummer": one("psi:zaaknummer"),
-        "type": one("dcterms:type"), "procedure": one("psi:procedure"), "zittingsplaats": one("dcterms:spatial"),
+        "ecli": one("dcterms:identifier"),
+        "modified": one("dcterms:modified"),
+        "instantie": one("dcterms:creator"),
+        "uitspraakdatum": one("dcterms:date"),
+        "publicatiedatum": one("dcterms:issued"),
+        "zaaknummer": one("psi:zaaknummer"),
+        "type": one("dcterms:type"),
+        "procedure": one("psi:procedure"),
+        "zittingsplaats": one("dcterms:spatial"),
         "rechtsgebieden": [e.text.strip() for e in desc.findall("dcterms:subject", NS) if e.text],
         "inhoudsindicatie": " ".join(_blocks(summary)) if summary is not None else None,
         "paragraphs": _blocks(body) if body is not None else [],
@@ -751,17 +822,22 @@ def get_ruling(ecli, part=1, db=None):
         if parsed["ecli"] != ecli:
             raise RuntimeError(f"Rechtspraak returned {parsed['ecli']!r} when asked for {ecli}")
         with db:
-            db.execute("INSERT OR REPLACE INTO rulings VALUES (?,?,?,?)",
-                       (ecli, _iso(_now()), RULING_V, json.dumps(parsed, ensure_ascii=False)))
+            db.execute("INSERT OR REPLACE INTO rulings VALUES (?,?,?,?)", (ecli, _iso(_now()), RULING_V, json.dumps(parsed, ensure_ascii=False)))
         row = {"parsed": json.dumps(parsed)}
     r = json.loads(row["parsed"])
     parts = ruling_parts(r.pop("paragraphs"))
     n = int(part)
     if parts and not 1 <= n <= len(parts):
         raise ValueError(f"part is 1-{len(parts)}")
-    return {**r, "part": n if parts else 0, "parts": len(parts), "text": parts[n - 1] if parts else None,
-            "text_available": bool(parts), "source": f"https://deeplink.rechtspraak.nl/uitspraak?id={ecli}",
-            "scope": RULINGS_SCOPE}
+    return {
+        **r,
+        "part": n if parts else 0,
+        "parts": len(parts),
+        "text": parts[n - 1] if parts else None,
+        "text_available": bool(parts),
+        "source": f"https://deeplink.rechtspraak.nl/uitspraak?id={ecli}",
+        "scope": RULINGS_SCOPE,
+    }
 
 
 # ---------------------------------------------------------------- GLEIF (Legal Entity Identifiers)
@@ -769,10 +845,12 @@ def get_ruling(ecli, part=1, db=None):
 GLEIF = "https://api.gleif.org/api/v1"
 GLEIF_TTL = timedelta(days=1)  # the golden copy is published three times a day
 KVK_RA = "RA000463"  # GLEIF's code for the Dutch Handelsregister
-GLEIF_SCOPE = ("Legal Entity Identifier records (GLEIF, open data CC0), as the entity registered them with its LEI issuer. "
-               "Parents are the accounting-consolidation parents the entity reported: not its owners, members or ultimate "
-               "beneficial owners (UBO). A LAPSED registration was not renewed, so its data may be out of date. Many Dutch "
-               "foundations and care providers have no LEI: no record is not a finding about the organisation.")
+GLEIF_SCOPE = (
+    "Legal Entity Identifier records (GLEIF, open data CC0), as the entity registered them with its LEI issuer. "
+    "Parents are the accounting-consolidation parents the entity reported: not its owners, members or ultimate "
+    "beneficial owners (UBO). A LAPSED registration was not renewed, so its data may be out of date. Many Dutch "
+    "foundations and care providers have no LEI: no record is not a finding about the organisation."
+)
 # Why a parent is not reported (GLEIF's reporting-exception reasons).
 PARENT_EXCEPTIONS = {
     "NO_KNOWN_PERSON": "no known person or entity controls it",
@@ -808,19 +886,23 @@ def _gleif(url):
 
 
 def _address(a):
-    return ", ".join(x for x in [*(a.get("addressLines") or []), " ".join(filter(None, [a.get("postalCode"), a.get("city")])),
-                                 a.get("country")] if x)
+    return ", ".join(x for x in [*(a.get("addressLines") or []), " ".join(filter(None, [a.get("postalCode"), a.get("city")])), a.get("country")] if x)
 
 
 def gleif_brief(rec):
     """Who an LEI record is: enough to tell entities apart in a list."""
     a = rec["attributes"]
     e = a["entity"]
-    return {"lei": a["lei"], "name": e["legalName"]["name"],
-            "kvk": e["registeredAs"] if (e.get("registeredAt") or {}).get("id") == KVK_RA else None,
-            "city": e["legalAddress"].get("city"), "country": e["legalAddress"].get("country"),
-            "entity_status": e["status"], "registration_status": a["registration"]["status"],
-            "source": f"https://search.gleif.org/#/record/{a['lei']}"}
+    return {
+        "lei": a["lei"],
+        "name": e["legalName"]["name"],
+        "kvk": e["registeredAs"] if (e.get("registeredAt") or {}).get("id") == KVK_RA else None,
+        "city": e["legalAddress"].get("city"),
+        "country": e["legalAddress"].get("country"),
+        "entity_status": e["status"],
+        "registration_status": a["registration"]["status"],
+        "source": f"https://search.gleif.org/#/record/{a['lei']}",
+    }
 
 
 def gleif_entity(rec):
@@ -828,14 +910,21 @@ def gleif_entity(rec):
     a = rec["attributes"]
     e, r = a["entity"], a["registration"]
     day = lambda s: s and s[:10]
-    return {**gleif_brief(rec),
-            "other_names": [n["name"] for n in e.get("otherNames") or []],
-            "registered_at": (e.get("registeredAt") or {}).get("id"), "registered_as": e.get("registeredAs"),
-            "legal_form_code": (e.get("legalForm") or {}).get("id"), "jurisdiction": e.get("jurisdiction"),
-            "legal_address": _address(e["legalAddress"]), "headquarters_address": _address(e["headquartersAddress"]),
-            "created": day(e.get("creationDate")), "registered": day(r.get("initialRegistrationDate")),
-            "last_update": day(r.get("lastUpdateDate")), "next_renewal": day(r.get("nextRenewalDate")),
-            "corroboration": r.get("corroborationLevel")}
+    return {
+        **gleif_brief(rec),
+        "other_names": [n["name"] for n in e.get("otherNames") or []],
+        "registered_at": (e.get("registeredAt") or {}).get("id"),
+        "registered_as": e.get("registeredAs"),
+        "legal_form_code": (e.get("legalForm") or {}).get("id"),
+        "jurisdiction": e.get("jurisdiction"),
+        "legal_address": _address(e["legalAddress"]),
+        "headquarters_address": _address(e["headquartersAddress"]),
+        "created": day(e.get("creationDate")),
+        "registered": day(r.get("initialRegistrationDate")),
+        "last_update": day(r.get("lastUpdateDate")),
+        "next_renewal": day(r.get("nextRenewalDate")),
+        "corroboration": r.get("corroborationLevel"),
+    }
 
 
 def _parent(rec, which):
@@ -846,9 +935,12 @@ def _parent(rec, which):
         rel = _gleif(links["relationship-record"]) if links.get("relationship-record") else None
         rel = ((rel or {}).get("data") or {}).get("attributes", {}).get("relationship") or {}
         if parent:
-            return {"entity": gleif_brief(parent["data"]), "relationship": rel.get("type"),
-                    "relationship_status": rel.get("status"),
-                    "periods": [{k: (v[:10] if k.endswith("Date") else v) for k, v in p.items()} for p in rel.get("periods") or []]}
+            return {
+                "entity": gleif_brief(parent["data"]),
+                "relationship": rel.get("type"),
+                "relationship_status": rel.get("status"),
+                "periods": [{k: (v[:10] if k.endswith("Date") else v) for k, v in p.items()} for p in rel.get("periods") or []],
+            }
     if links.get("reporting-exception"):
         exc = _gleif(links["reporting-exception"])
         reason = ((exc or {}).get("data") or {}).get("attributes", {}).get("reason")
@@ -866,8 +958,10 @@ def lei_record(kvk=None, lei=None, refresh=False, db=None):
     row = db.execute("SELECT fetched_at, parsed FROM gleif WHERE key=?", (key,)).fetchone()
     if refresh or not row or _older(row["fetched_at"], GLEIF_TTL):
         if kvk:
-            found = _gleif(f"{GLEIF}/lei-records?" + urllib.parse.urlencode(
-                {"filter[entity.registeredAs]": key[4:], "filter[entity.legalAddress.country]": "NL", "page[size]": 10}))
+            found = _gleif(
+                f"{GLEIF}/lei-records?"
+                + urllib.parse.urlencode({"filter[entity.registeredAs]": key[4:], "filter[entity.legalAddress.country]": "NL", "page[size]": 10})
+            )
             recs = [r for r in found["data"] if (r["attributes"]["entity"].get("registeredAt") or {}).get("id") == KVK_RA]
         else:
             one = _gleif(f"{GLEIF}/lei-records/{key[4:]}")
@@ -878,11 +972,19 @@ def lei_record(kvk=None, lei=None, refresh=False, db=None):
             main = recs[0]
             kids = _gleif(f"{GLEIF}/lei-records/{main['id']}/direct-children?page[size]=100") or {"data": [], "meta": {}}
             total = ((kids.get("meta") or {}).get("pagination") or {}).get("total", len(kids["data"]))
-            parsed = {"found": True, "entity": gleif_entity(main),
-                      "other_records": [gleif_brief(r) for r in recs[1:]],
-                      "direct_parent": _parent(main, "direct"), "ultimate_parent": _parent(main, "ultimate"),
-                      "direct_children": {"total": total, "returned": len(kids["data"]), "truncated": total > len(kids["data"]),
-                                          "results": [gleif_brief(r) for r in kids["data"]]}}
+            parsed = {
+                "found": True,
+                "entity": gleif_entity(main),
+                "other_records": [gleif_brief(r) for r in recs[1:]],
+                "direct_parent": _parent(main, "direct"),
+                "ultimate_parent": _parent(main, "ultimate"),
+                "direct_children": {
+                    "total": total,
+                    "returned": len(kids["data"]),
+                    "truncated": total > len(kids["data"]),
+                    "results": [gleif_brief(r) for r in kids["data"]],
+                },
+            }
         else:
             parsed = {"found": False, "note": "No LEI record for this " + ("KvK number." if kvk else "LEI.")}
         stamp = _iso(_now())
@@ -901,20 +1003,30 @@ def search_lei(name, country="NL", limit=20):
         q["filter[entity.legalAddress.country]"] = country.upper()
     d = _gleif(f"{GLEIF}/lei-records?" + urllib.parse.urlencode(q))
     total = d["meta"]["pagination"]["total"]
-    return {"total": total, "returned": len(d["data"]), "truncated": total > len(d["data"]),
-            "results": [gleif_brief(r) for r in d["data"]], "source": "https://search.gleif.org/", "scope": GLEIF_SCOPE}
+    return {
+        "total": total,
+        "returned": len(d["data"]),
+        "truncated": total > len(d["data"]),
+        "results": [gleif_brief(r) for r in d["data"]],
+        "source": "https://search.gleif.org/",
+        "scope": GLEIF_SCOPE,
+    }
 
 
 # ---------------------------------------------------------------- EU financial sanctions
 
-EU_SANCTIONS = ("https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList_1_1/content"
-                "?token=dG9rZW4tMjAxNw")  # the public token the EU's own download page uses
+EU_SANCTIONS = (
+    "https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList_1_1/content"
+    "?token=dG9rZW4tMjAxNw"
+)  # the public token the EU's own download page uses
 SANCTIONS_TTL = timedelta(days=1)
-SANCTIONS_SCOPE = ("Consolidated list of persons, groups and entities subject to EU financial sanctions (European "
-                   "Commission, FSF). A name match is a possible match, never an identification: compare birth date, "
-                   "nationality, address and registration numbers. Matching is on whole words of every name and alias, so "
-                   "spellings and transliterations not on the list are missed. Not on this list says nothing about the "
-                   "Dutch national terrorism list, the UN, US (OFAC) or UK lists.")
+SANCTIONS_SCOPE = (
+    "Consolidated list of persons, groups and entities subject to EU financial sanctions (European "
+    "Commission, FSF). A name match is a possible match, never an identification: compare birth date, "
+    "nationality, address and registration numbers. Matching is on whole words of every name and alias, so "
+    "spellings and transliterations not on the list are missed. Not on this list says nothing about the "
+    "Dutch national terrorism list, the UN, US (OFAC) or UK lists."
+)
 _sanctions_lock = threading.Lock()
 
 
@@ -925,13 +1037,26 @@ def parse_sanctions(text):
     add = lambda xs, v: v and v not in xs and xs.append(v)
     for r in rows:
         list_date = list_date or r.get("fileGenerationDate")
-        e = out.setdefault(r["Entity_LogicalId"], {
-            "id": r["Entity_LogicalId"], "eu_reference": r["Entity_EU_ReferenceNumber"] or None,
-            "un_id": r["Entity_UnitedNationId"] or None, "type": r["Entity_SubjectType_ClassificationCode"],
-            "designated": r["Entity_DesignationDate"] or None, "programme": r["Entity_Regulation_Programme"],
-            "regulation": r["Entity_Regulation_NumberTitle"], "regulation_url": r["Entity_Regulation_PublicationUrl"] or None,
-            "remark": r["Entity_Remark"] or None, "names": [], "functions": [], "birth_dates": [], "citizenships": [],
-            "address_countries": [], "identifications": []})
+        e = out.setdefault(
+            r["Entity_LogicalId"],
+            {
+                "id": r["Entity_LogicalId"],
+                "eu_reference": r["Entity_EU_ReferenceNumber"] or None,
+                "un_id": r["Entity_UnitedNationId"] or None,
+                "type": r["Entity_SubjectType_ClassificationCode"],
+                "designated": r["Entity_DesignationDate"] or None,
+                "programme": r["Entity_Regulation_Programme"],
+                "regulation": r["Entity_Regulation_NumberTitle"],
+                "regulation_url": r["Entity_Regulation_PublicationUrl"] or None,
+                "remark": r["Entity_Remark"] or None,
+                "names": [],
+                "functions": [],
+                "birth_dates": [],
+                "citizenships": [],
+                "address_countries": [],
+                "identifications": [],
+            },
+        )
         add(e["names"], r["NameAlias_WholeName"].strip())
         add(e["functions"], r["NameAlias_Function"].strip())
         add(e["birth_dates"], r["BirthDate_BirthDate"])
@@ -987,45 +1112,52 @@ def search_sanctions(name, kind=None, limit=20, db=None):
     meta, warning = _sanctions(db)
     where = " AND ".join("n.words LIKE ?" for _ in words)
     ids = [r[0] for r in db.execute(f"SELECT DISTINCT n.entity FROM sanction_names n WHERE {where}", [f"% {w} %" for w in words])]
-    hits = [json.loads(r[0]) for r in db.execute(
-        f"SELECT data FROM sanctions WHERE entity IN ({','.join('?' * len(ids))})", ids)] if ids else []
+    hits = [json.loads(r[0]) for r in db.execute(f"SELECT data FROM sanctions WHERE entity IN ({','.join('?' * len(ids))})", ids)] if ids else []
     hits = [h for h in hits if not kind or h["type"] == kind]
     hits.sort(key=lambda h: (h["type"], h["names"][0] if h["names"] else ""))
     for h in hits:
         h["matched_names"] = [n for n in h["names"] if all(f" {w} " in _words(n) for w in words)]
         h["names_total"], h["names"] = len(h["names"]), h["names"][:12]
         h["remark"] = h["remark"] and h["remark"][:400]
-    return {"query": name, "total": len(hits), "returned": min(len(hits), limit), "truncated": len(hits) > limit,
-            "results": hits[:limit], "list_date": meta["list_date"], "entities_on_list": meta["entities"],
-            "fetched": meta["fetched_at"], **({"warning": warning} if warning else {}),
-            "source": "https://data.europa.eu/data/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions",
-            "scope": SANCTIONS_SCOPE}
+    return {
+        "query": name,
+        "total": len(hits),
+        "returned": min(len(hits), limit),
+        "truncated": len(hits) > limit,
+        "results": hits[:limit],
+        "list_date": meta["list_date"],
+        "entities_on_list": meta["entities"],
+        "fetched": meta["fetched_at"],
+        **({"warning": warning} if warning else {}),
+        "source": "https://data.europa.eu/data/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions",
+        "scope": SANCTIONS_SCOPE,
+    }
 
 
 # ---------------------------------------------------------------- live check + CLI
+
 
 def check():
     """One live call per source with a known answer. Run by hand: it needs the network."""
     tests = {
         "lrza": lambda: register("28099814", refresh=True)["naam"] == "Stichting Basalt",
         "lrza search": lambda: any(h["kvk"] == "28099814" for h in search_register(naam="Basalt")["results"]),
-        "iv3 bodies": lambda: (lambda r: not r["unavailable"] and any(b["code"] == "GM0546" for b in r["results"]))(
-            find_body("Leiden")),
-        "iv3 water board": lambda: iv3("waterschappen", 2025, find_body("Rijnland", "waterschappen")["results"][0]["code"],
-                                       include_zero=True)["delivered"],
-        "iv3 joint arr.": lambda: any(b["kind"] == "gemeenschappelijke-regelingen" and 2025 in b["years"]
-                                      for b in find_body("Jeugdhulp Rijnmond")["results"]),
-        "iv3 cells": lambda: (lambda r: r["naam"] == "Leiden" and r["cells"] and all(
-            c["eenheid"] == IV3_UNIT for c in r["cells"]))(iv3("gemeenten", 2025, "GM0546", "6.7")),
+        "iv3 bodies": lambda: (lambda r: not r["unavailable"] and any(b["code"] == "GM0546" for b in r["results"]))(find_body("Leiden")),
+        "iv3 water board": lambda: iv3("waterschappen", 2025, find_body("Rijnland", "waterschappen")["results"][0]["code"], include_zero=True)["delivered"],
+        "iv3 joint arr.": lambda: any(b["kind"] == "gemeenschappelijke-regelingen" and 2025 in b["years"] for b in find_body("Jeugdhulp Rijnmond")["results"]),
+        "iv3 cells": lambda: (lambda r: r["naam"] == "Leiden" and r["cells"] and all(c["eenheid"] == IV3_UNIT for c in r["cells"]))(
+            iv3("gemeenten", 2025, "GM0546", "6.7")
+        ),
         "rulings search": lambda: search_rulings("Stichting Basalt")["total"] >= 1,
         "ruling text": lambda: get_ruling("ECLI:NL:RBAMS:2019:441")["text_available"],
-        "lei by kvk": lambda: (lambda r: r["entity"]["lei"] == "724500Y6DUVHQD6OXN27" and r["direct_children"]["total"] > 0
-                               and r["direct_parent"]["exception"])(lei_record(kvk="17085815", refresh=True)),
-        "lei parent": lambda: lei_record(lei="724500LOHLW87RGDPK21", refresh=True)["direct_parent"]["entity"]["lei"]
-                              == "724500Y6DUVHQD6OXN27",
+        "lei by kvk": lambda: (
+            lambda r: r["entity"]["lei"] == "724500Y6DUVHQD6OXN27" and r["direct_children"]["total"] > 0 and r["direct_parent"]["exception"]
+        )(lei_record(kvk="17085815", refresh=True)),
+        "lei parent": lambda: lei_record(lei="724500LOHLW87RGDPK21", refresh=True)["direct_parent"]["entity"]["lei"] == "724500Y6DUVHQD6OXN27",
         "lei search": lambda: any(h["kvk"] == "62375644" for h in search_lei("Zuyderland Medisch Centrum")["results"]),
-        "eu sanctions": lambda: (lambda r: r["entities_on_list"] > 1000 and any(
-            h["eu_reference"] == "EU.1338.4" for h in r["results"]))(search_sanctions("Al-Haramain Netherlands")),
+        "eu sanctions": lambda: (lambda r: r["entities_on_list"] > 1000 and any(h["eu_reference"] == "EU.1338.4" for h in r["results"]))(
+            search_sanctions("Al-Haramain Netherlands")
+        ),
     }
     ok = True
     for name, t in tests.items():

@@ -58,6 +58,7 @@ async def private_boundary(request: Request, call_next):
     import os
 
     from fastapi.responses import JSONResponse
+
     private = request.url.path.startswith(("/projects", "/chats"))
     if private and request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("origin")
@@ -113,8 +114,10 @@ def document(year: int, doc_id: int, pages: str | None = None):
         raise HTTPException(400, "pages must look like 1-5,8 or all")
     r = _doc_or_404(digimv.get_document, year, doc_id, pages)
     sel = digimv.parse_pages(pages, r["page_count"])
-    return {**{k: v for k, v in r.items() if k != "pages"},
-            "pages": [{"page": n, "source": r["page_sources"][n - 1], "markdown": r["pages"][n - 1]} for n in sel]}
+    return {
+        **{k: v for k, v in r.items() if k != "pages"},
+        "pages": [{"page": n, "source": r["page_sources"][n - 1], "markdown": r["pages"][n - 1]} for n in sel],
+    }
 
 
 @app.get("/documents/{year}/{doc_id}/meta")
@@ -140,8 +143,9 @@ def page_png(year: int, doc_id: int, page: int, quote: list[str] = Query([])):
     """
     path = _doc_or_404(digimv.get_pdf, year, doc_id)
     png, mark, found = _doc_or_404(digimv.render_page, path, page, quote)
-    return Response(png, media_type="image/png", headers={
-        "X-Mark": ",".join(f"{v:.4f}" for v in mark or ()), "X-Found": found, "Cache-Control": "max-age=3600"})
+    return Response(
+        png, media_type="image/png", headers={"X-Mark": ",".join(f"{v:.4f}" for v in mark or ()), "X-Found": found, "Cache-Control": "max-age=3600"}
+    )
 
 
 @app.get("/kb/search")
@@ -243,8 +247,7 @@ def iv3_value(table: str, code: str, report: str, taakveld: str, categorie: str)
 
 
 @app.get("/iv3/{kind}/{year}/{code}")
-def iv3(kind: str, year: int, code: str, taakveld: str | None = None, verslagsoort: str = "Jaarrekening",
-        include_zero: bool = False):
+def iv3(kind: str, year: int, code: str, taakveld: str | None = None, verslagsoort: str = "Jaarrekening", include_zero: bool = False):
     """A body's Iv3 cells (x € 1.000) per policy area and category, with each cell's /bron/iv3/ citation."""
     return _source(sources.iv3, kind, year, code, taakveld, verslagsoort, include_zero)
 
@@ -264,16 +267,23 @@ def ruling(ecli: str, part: int = 1):
 # ---------------------------------------------------------------- public documents and open data
 # Under /public, not /docs: that is FastAPI's own API documentation.
 
+
 @app.get("/public/woo")
-def public_woo(q: str, organisatie: str | None = None, documentsoort: str | None = None, since: str | None = None,
-               until: str | None = None, limit: int = 20, start: int = 0):
+def public_woo(
+    q: str,
+    organisatie: str | None = None,
+    documentsoort: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 20,
+    start: int = 0,
+):
     """Woo documents on open.overheid.nl, with the organisation and document-type facets to narrow on."""
     return _source(documents.search_woo, q, organisatie, documentsoort, since, until, limit, start)
 
 
 @app.get("/public/publications")
-def public_publications(q: str, creator: str | None = None, gazette: str | None = None, since: str | None = None,
-                        limit: int = 20, start: int = 1):
+def public_publications(q: str, creator: str | None = None, gazette: str | None = None, since: str | None = None, limit: int = 20, start: int = 1):
     """Official publications (gazettes, parliamentary papers) by full text, each with its PDF."""
     return _source(documents.search_publications, q, creator, gazette, since, limit, start)
 
@@ -285,8 +295,16 @@ def public_regulations(q: str, creator: str | None = None, limit: int = 20, star
 
 
 @app.get("/public/tenders")
-def public_tenders(q: str | None = None, buyer: str | None = None, cpv: str = "85000000", since: str | None = None,
-                   limit: int = 20, page: int = 1, place: str | None = None, awarded: bool = False):
+def public_tenders(
+    q: str | None = None,
+    buyer: str | None = None,
+    cpv: str = "85000000",
+    since: str | None = None,
+    limit: int = 20,
+    page: int = 1,
+    place: str | None = None,
+    awarded: bool = False,
+):
     """EU tender and award notices (TED) of Dutch buyers, newest first."""
     return _source(documents.search_tenders, q, buyer, cpv, "NLD", since, limit, page, place, awarded)
 
@@ -315,8 +333,9 @@ def public_pdf(doc_id: str):
 def public_page_png(doc_id: str, page: int, quote: list[str] = Query([])):
     """A public PDF's page as a PNG with the quotes highlighted; X-Mark and X-Found as for DigiMV pages."""
     png, mark, found = _source(digimv.render_page, _source(documents.document_pdf, doc_id), page, quote)
-    return Response(png, media_type="image/png", headers={
-        "X-Mark": ",".join(f"{v:.4f}" for v in mark or ()), "X-Found": found, "Cache-Control": "max-age=3600"})
+    return Response(
+        png, media_type="image/png", headers={"X-Mark": ",".join(f"{v:.4f}" for v in mark or ()), "X-Found": found, "Cache-Control": "max-age=3600"}
+    )
 
 
 @app.get("/public/documents/{doc_id}/parts/{page}")
@@ -357,9 +376,18 @@ def datasets_search(q: str, limit: int = 20, start: int = 0):
 
 
 @app.get("/datasets/table")
-def datasets_table(url: str, q: str | None = None, limit: int = 50, offset: int = 0, sheet: str | None = None,
-                   header_row: int | None = None, refresh: bool = False, filters: str | None = None,
-                   member: str | None = None, sort: str | None = None):
+def datasets_table(
+    url: str,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    sheet: str | None = None,
+    header_row: int | None = None,
+    refresh: bool = False,
+    filters: str | None = None,
+    member: str | None = None,
+    sort: str | None = None,
+):
     """Rows of a CSV, Excel (.xlsx) or JSON file by URL, including ZIP/7z members, values verbatim."""
     try:
         flt = json.loads(filters) if filters else None
@@ -367,8 +395,7 @@ def datasets_table(url: str, q: str | None = None, limit: int = 50, offset: int 
         raise HTTPException(400, 'filters must be JSON, e.g. {"KvkNummer":["61354740"]}')
     if flt is not None and not isinstance(flt, dict):
         raise HTTPException(400, 'filters must be a JSON object, e.g. {"KvkNummer":["61354740"]}')
-    return _source(datasets.read_table, url, q, limit, offset, sheet, header_row, refresh, filters=flt, member=member,
-                   sort=sort)
+    return _source(datasets.read_table, url, q, limit, offset, sheet, header_row, refresh, filters=flt, member=member, sort=sort)
 
 
 @app.get("/datasets/{dataset_id}")
@@ -417,14 +444,16 @@ def swing_search(site: str, q: str, limit: int = 20):
 
 
 @app.get("/swing/{site}/{indicator}")
-def swing_values(site: str, indicator: str, geo_level: str | None = None, period: str | None = None,
-                 q: str | None = None, dimension_levels: str = "", limit: int = 500):
+def swing_values(
+    site: str, indicator: str, geo_level: str | None = None, period: str | None = None, q: str | None = None, dimension_levels: str = "", limit: int = 500
+):
     """Values for an indicator on a Swing site per area and period; or area levels and periods when omitted."""
     return _source(datasets.get_swing, site, indicator, geo_level, period, q, dimension_levels, limit)
 
 
 # ---------------------------------------------------------------- saved conversations
 # Their own file: a re-seeded digimv.db must not take anyone's conversations with it.
+
 
 def _chats():
     # Initialise the shared private schema before the legacy chat connection opens.
@@ -454,16 +483,16 @@ def chats(request: Request, project_id: str | None = None):
         with projects.database() as db:
             projects.project(db, project_id, projects.owner(request))
     with closing(_chats()) as db:
-        rows = db.execute("SELECT id, title, updated FROM chats WHERE user=? AND project_id IS ? ORDER BY updated DESC LIMIT 100",
-                          (_user(request), project_id)).fetchall()
+        rows = db.execute(
+            "SELECT id, title, updated FROM chats WHERE user=? AND project_id IS ? ORDER BY updated DESC LIMIT 100", (_user(request), project_id)
+        ).fetchall()
     return [{"id": i, "title": t, "updated": u} for i, t, u in rows]
 
 
 @app.get("/chats/{chat_id}")
 def chat(request: Request, chat_id: ChatId):
     with closing(_chats()) as db:
-        row = db.execute("SELECT title, updated, messages, project_id FROM chats WHERE user=? AND id=?",
-                         (_user(request), chat_id)).fetchone()
+        row = db.execute("SELECT title, updated, messages, project_id FROM chats WHERE user=? AND id=?", (_user(request), chat_id)).fetchone()
     if not row:
         raise HTTPException(404, "conversation not found")
     if row[3]:
@@ -485,8 +514,10 @@ def save_chat(body: ChatIn, request: Request, chat_id: ChatId):
         old = db.execute("SELECT project_id FROM chats WHERE user=? AND id=?", (_user(request), chat_id)).fetchone()
         if old and old[0] != body.project_id:
             raise HTTPException(409, "Dit gesprek hoort bij een andere werkruimte")
-        db.execute("INSERT OR REPLACE INTO chats(user,id,title,updated,messages,project_id) VALUES (?,?,?,?,?,?)",
-                   (_user(request), chat_id, body.title, updated, messages, body.project_id))
+        db.execute(
+            "INSERT OR REPLACE INTO chats(user,id,title,updated,messages,project_id) VALUES (?,?,?,?,?,?)",
+            (_user(request), chat_id, body.title, updated, messages, body.project_id),
+        )
         if body.project_id:
             db.execute("UPDATE projects SET updated=? WHERE id=? AND owner=?", (updated, body.project_id, _user(request)))
     return {"id": chat_id, "updated": updated}

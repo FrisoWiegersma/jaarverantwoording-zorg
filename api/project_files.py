@@ -1,4 +1,5 @@
 """Save public research files as owner-scoped project copies, readable without the upstream URL."""
+
 import json
 import re
 import shutil
@@ -41,13 +42,11 @@ def public_file(href):
         return path, name, "table", f"table/{m[1]}", meta["file_url"], meta["fetched_at"], ctype
     if m := re.fullmatch(r"/bron/doc/([a-f0-9]{20})/[1-9]\d*", href):
         meta = documents.document_meta(m[1])
-        return (documents.document_pdf(m[1]), meta["title"] + ".pdf", "pdf", f"public/{m[1]}",
-                meta["file_url"], meta["fetched_at"], "application/pdf")
+        return (documents.document_pdf(m[1]), meta["title"] + ".pdf", "pdf", f"public/{m[1]}", meta["file_url"], meta["fetched_at"], "application/pdf")
     if m := re.fullmatch(r"/bron/(\d{4})/(\d+)/[1-9]\d*", href):
         year, did = map(int, m.groups())
         meta = digimv.get_doc(year, did)
-        return (digimv.get_pdf(year, did), meta["file_name"], "pdf", f"digimv/{year}/{did}",
-                meta["url"], projects.now(), "application/pdf")
+        return (digimv.get_pdf(year, did), meta["file_name"], "pdf", f"digimv/{year}/{did}", meta["url"], projects.now(), "application/pdf")
     raise ValueError("Kies een PDF of databestand uit de bronnen van het gesprek.")
 
 
@@ -63,6 +62,7 @@ def save_file(pid: str, body: SaveFile, request: Request):
         pages = 1
         if kind == "pdf":
             import pymupdf
+
             with pymupdf.open(path) as pdf:
                 if pdf.needs_pass or not 1 <= pdf.page_count <= 200:
                     raise ValueError("Gebruik een PDF zonder wachtwoord, met maximaal 200 pagina’s.")
@@ -83,12 +83,20 @@ def save_file(pid: str, body: SaveFile, request: Request):
                 return {"id": existing[0], "existing": True}
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(path, target)
-            db.execute("INSERT INTO project_documents(id,project_id,filename,kind,pages,status,created) VALUES (?,?,?,?,?,?,?)",
-                       (did, pid, name, kind, pages, "queued" if kind == "pdf" else "ready", projects.now()))
+            db.execute(
+                "INSERT INTO project_documents(id,project_id,filename,kind,pages,status,created) VALUES (?,?,?,?,?,?,?)",
+                (did, pid, name, kind, pages, "queued" if kind == "pdf" else "ready", projects.now()),
+            )
             db.execute("INSERT INTO project_saved_files VALUES (?,?,?,?,?,?)", (did, pid, key, url, fetched, ctype))
             if kind == "table":
-                projects.store_page(db, did, 1, f"Databestand: {name}\nBron: {url}\nOpgehaald: {fetched}\n"
-                                    "De gegevens staan in het opgeslagen bestand. Een archief kan meerdere databestanden bevatten.", "table")
+                projects.store_page(
+                    db,
+                    did,
+                    1,
+                    f"Databestand: {name}\nBron: {url}\nOpgehaald: {fetched}\n"
+                    "De gegevens staan in het opgeslagen bestand. Een archief kan meerdere databestanden bevatten.",
+                    "table",
+                )
             db.execute("UPDATE projects SET updated=? WHERE id=?", (projects.now(), pid))
     except sqlite3.IntegrityError:
         target.unlink(missing_ok=True)
@@ -123,14 +131,14 @@ def original_file(pid: str, did: str, request: Request):
     return FileResponse(projects.path_for(did), filename=d["filename"], media_type=meta["media_type"])
 
 
-def read_table(pid, did, request, query=None, limit=40, offset=0, sheet=None, header_row=None, filters=None,
-               member=None, sort=None, row=None, for_model=False):
+def read_table(pid, did, request, query=None, limit=40, offset=0, sheet=None, header_row=None, filters=None, member=None, sort=None, row=None, for_model=False):
     d, meta = saved_file(pid, did, request, for_model)
     if d["kind"] != "table":
         raise HTTPException(400, "Dit is geen databestand")
     try:
         fmt, out, sheet, sheets, member, members = datasets._read(
-            projects.path_for(did), meta["media_type"], query, limit, offset, sheet, header_row, filters, member, row, sort)
+            projects.path_for(did), meta["media_type"], query, limit, offset, sheet, header_row, filters, member, row, sort
+        )
     except KeyError as e:
         raise HTTPException(404, str(e.args[0])) from e
     except (ValueError, RuntimeError, OSError) as e:
@@ -138,30 +146,49 @@ def read_table(pid, did, request, query=None, limit=40, offset=0, sheet=None, he
     prefix = f"/bron/project/{pid}/{did}/rij/"
     member = member if members is not None else None
     cite_parts = [x for x in (member, sheet if fmt == "xlsx" else None) if x]
-    return {"id": did, "file_name": d["filename"], "file_url": meta["url"], "fetched_at": meta["fetched_at"],
-            "format": fmt, "sheet": sheet, "sheets": sheets, "member": member, "members": members,
-            "row_cite": prefix + "".join(quote(x, safe="") + "/" for x in cite_parts), **out, "scope": datasets.TABLE_SCOPE}
+    return {
+        "id": did,
+        "file_name": d["filename"],
+        "file_url": meta["url"],
+        "fetched_at": meta["fetched_at"],
+        "format": fmt,
+        "sheet": sheet,
+        "sheets": sheets,
+        "member": member,
+        "members": members,
+        "row_cite": prefix + "".join(quote(x, safe="") + "/" for x in cite_parts),
+        **out,
+        "scope": datasets.TABLE_SCOPE,
+    }
 
 
 @router.get("/{pid}/documents/{did}/table")
-def table(pid: str, did: str, request: Request, q: str | None = None, offset: int = Query(0, ge=0),
-          sheet: str | None = None, header_row: int | None = Query(None, ge=1), filters: str | None = None,
-          member: str | None = None, sort: str | None = None, for_model: bool = False):
+def table(
+    pid: str,
+    did: str,
+    request: Request,
+    q: str | None = None,
+    offset: int = Query(0, ge=0),
+    sheet: str | None = None,
+    header_row: int | None = Query(None, ge=1),
+    filters: str | None = None,
+    member: str | None = None,
+    sort: str | None = None,
+    for_model: bool = False,
+):
     try:
         flt = json.loads(filters) if filters else None
         if flt is not None and not isinstance(flt, dict):
             raise ValueError()
     except ValueError:
         raise HTTPException(400, "filters moet een JSON-object zijn")
-    return read_table(pid, did, request, query=q, offset=offset, sheet=sheet, header_row=header_row,
-                      filters=flt, member=member, sort=sort, for_model=for_model)
+    return read_table(pid, did, request, query=q, offset=offset, sheet=sheet, header_row=header_row, filters=flt, member=member, sort=sort, for_model=for_model)
 
 
 @router.get("/{pid}/documents/{did}/rows/{row}")
 def table_row(pid: str, did: str, row: int, request: Request, part: list[str] = Query([])):
     parts = part[:2]
-    data = read_table(pid, did, request, limit=1, sheet=parts[-1] if parts else None,
-                      member=parts[0] if parts else None, row=row)
+    data = read_table(pid, did, request, limit=1, sheet=parts[-1] if parts else None, member=parts[0] if parts else None, row=row)
     if not data["rows"]:
         raise HTTPException(404, "Rij niet gevonden")
     return {**data, "row": data["rows"][0]}

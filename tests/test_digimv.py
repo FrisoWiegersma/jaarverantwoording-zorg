@@ -6,24 +6,50 @@ import digimv
 
 
 def doc(i, name, type_="Jaarrekening", size=1000):
-    return {"name": name, "type": type_, "id": i, "fileName": f"{name} {type_}.pdf", "fileSize": size,
-            "publishedDate": "2025-06-01T10:00:00Z", "description": None, "locationSummary": None}
+    return {
+        "name": name,
+        "type": type_,
+        "id": i,
+        "fileName": f"{name} {type_}.pdf",
+        "fileSize": size,
+        "publishedDate": "2025-06-01T10:00:00Z",
+        "description": None,
+        "locationSummary": None,
+    }
 
 
 def org(oid, name, town, docs=(), locations=(), desaveu=()):
-    return {"externalOrganizationId": oid, "name": name, "town": town, "concernId": f"C-{oid}",
-            "documents": list(docs), "locations": list(locations), "desaveuElements": list(desaveu)}
+    return {
+        "externalOrganizationId": oid,
+        "name": name,
+        "town": town,
+        "concernId": f"C-{oid}",
+        "documents": list(docs),
+        "locations": list(locations),
+        "desaveuElements": list(desaveu),
+    }
 
 
 Y2023 = [
     org("82905347", "Zorggroep Exact B.V.", "Arnhem", [doc(1, "Zorggroep Exact B.V.")]),
-    org("11111111", "Stichting Thuiszorg Één", "Zwolle", [],
-        locations=[{"externalOrganizationId": "11111111", "name": "Stichting Thuiszorg Één", "town": "Zwolle",
-                    "documents": [doc(2, "Stichting Thuiszorg Één")]},  # location reusing the parent's KvK
-                   {"externalOrganizationId": "22222222", "name": "Thuiszorg Één Noord", "town": "Assen",
-                    "documents": [doc(3, "Thuiszorg Één Noord", "Overig")]}],
-        desaveu=[{"title": "Désaveuverklaring, gedeponeerd op 30 mei 2025", "order": 0,
-                  "documents": [doc(4, "Notulen AvA", "Désaveu (zelf): bestuursverslag")]}]),
+    org(
+        "11111111",
+        "Stichting Thuiszorg Één",
+        "Zwolle",
+        [],
+        locations=[
+            {
+                "externalOrganizationId": "11111111",
+                "name": "Stichting Thuiszorg Één",
+                "town": "Zwolle",
+                "documents": [doc(2, "Stichting Thuiszorg Één")],
+            },  # location reusing the parent's KvK
+            {"externalOrganizationId": "22222222", "name": "Thuiszorg Één Noord", "town": "Assen", "documents": [doc(3, "Thuiszorg Één Noord", "Overig")]},
+        ],
+        desaveu=[
+            {"title": "Désaveuverklaring, gedeponeerd op 30 mei 2025", "order": 0, "documents": [doc(4, "Notulen AvA", "Désaveu (zelf): bestuursverslag")]}
+        ],
+    ),
     org("GeenKvK012", "Praktijk Zonder Stukken", "Utrecht"),  # listed, no documents, non-KvK id
 ]
 Y2024 = [org("11111111", "Stichting Thuiszorg Één", "Zwolle", [doc(1, "Stichting Thuiszorg Één")])]  # id 1 again
@@ -73,7 +99,7 @@ def run():
     d = digimv.get_doc(2023, 1, db)
     pages = ["# Jaarrekening 2023", "## Balans\n| Eigen vermogen | 1.234 |"]
     md = digimv.build_md(d, pages)
-    assert md.startswith("---\norg: \"Zorggroep Exact B.V.\"\n") and "<!-- page 2 -->\n## Balans" in md
+    assert md.startswith('---\norg: "Zorggroep Exact B.V."\n') and "<!-- page 2 -->\n## Balans" in md
     digimv.index_pages(db, d, pages)
     digimv.index_pages(db, d, pages)  # re-index must not duplicate
     hits = digimv.search_text("eigen vermogen", db=db)
@@ -89,6 +115,7 @@ def run():
     from pathlib import Path
 
     import pymupdf
+
     pdf = pymupdf.open()
     pdf.new_page().insert_text((72, 72), "Balans per 31 december 2023, eigen vermogen 108.256")
     pdf.new_page()
@@ -150,45 +177,55 @@ def run():
 
     # structured figures: labels show every template branch, never a guessed one; HTML stripped
     r = digimv.render_label
-    assert r("${isTrue(q.isRp) ? 'Som der bedrijfsopbrengsten' : 'Som der bedrijfsbaten'}") == \
-        "Som der bedrijfsopbrengsten / Som der bedrijfsbaten"
+    assert r("${isTrue(q.isRp) ? 'Som der bedrijfsopbrengsten' : 'Som der bedrijfsbaten'}") == "Som der bedrijfsopbrengsten / Som der bedrijfsbaten"
     assert r("Totaal activa${isTrue(q.isGroepshoofd) ? ' - enkelvoudig' : ''}") == "Totaal activa [- enkelvoudig]"
     # nested ternary as in the real 'WMG - ...' menus; a brace inside a quoted branch doesn't end the block
-    assert r("WMG - ${isTrue(a) ? (isTrue(b) ? 'Beperkte W&V' : 'W&V') : 'Staat {x}'} na") == \
-        "WMG - Beperkte W&V / W&V / Staat {x} na"
+    assert r("WMG - ${isTrue(a) ? (isTrue(b) ? 'Beperkte W&V' : 'W&V') : 'Staat {x}'} na") == "WMG - Beperkte W&V / W&V / Staat {x} na"
     assert r("Aantal fte's <br/>in <strong>boekjaar</strong> &amp; meer") == "Aantal fte's in boekjaar & meer"
 
     def node(i, parent, text, var, cats=(), hidden=False, unit=None):
-        return {"id": i, "parentId": parent, "text": text, "typescriptVariable": var,
-                "categories": [{"id": c, "text": t} for c, t in cats],
-                "reportSettings": {"archiveHidden": "1"} if hidden else None,
-                "frontendSettings": {"prefix": unit} if unit else {}}
+        return {
+            "id": i,
+            "parentId": parent,
+            "text": text,
+            "typescriptVariable": var,
+            "categories": [{"id": c, "text": t} for c, t in cats],
+            "reportSettings": {"archiveHidden": "1"} if hidden else None,
+            "frontendSettings": {"prefix": unit} if unit else {},
+        }
 
     def answer(cat, value, visible=True, rgi=None):
         return {"categoryId": cat, "value": value, "isVisible": visible, "repeatingGroupIndexes": rgi}
 
-    arch = {"sampleCandidateModel": {"name": "Stichting Basalt", "dateFinished": "2026-05-29T12:00:00Z"},
-            "nodes": [node(1, None, "Winst- en verliesrekening", "mnu"),
-                      node(2, 1, "${isTrue(x) ? 'Som der bedrijfsopbrengsten' : 'Som der bedrijfsbaten'}", "grpSom"),
-                      node(3, 2, "Bedrag in euro's boekjaar", "qSom_0", [(10, None)], unit="€ "),
-                      node(4, 1, "Contactpersoon", "qContact", [(11, None)], hidden=True),
-                      node(5, 1, "WNT topfunctionaris", "qWnt", [(12, None)])],
-            "responses": [answer(10, "108179322"), answer(10, "999", visible=False, rgi=[1]),  # stale branch
-                          answer(11, "J. Jansen"), answer(12, "Bestuurder A", rgi=[0]), answer(12, "Bestuurder B", rgi=[1]),
-                          answer(99, "42"), answer(12, None)]}
+    arch = {
+        "sampleCandidateModel": {"name": "Stichting Basalt", "dateFinished": "2026-05-29T12:00:00Z"},
+        "nodes": [
+            node(1, None, "Winst- en verliesrekening", "mnu"),
+            node(2, 1, "${isTrue(x) ? 'Som der bedrijfsopbrengsten' : 'Som der bedrijfsbaten'}", "grpSom"),
+            node(3, 2, "Bedrag in euro's boekjaar", "qSom_0", [(10, None)], unit="€ "),
+            node(4, 1, "Contactpersoon", "qContact", [(11, None)], hidden=True),
+            node(5, 1, "WNT topfunctionaris", "qWnt", [(12, None)]),
+        ],
+        "responses": [
+            answer(10, "108179322"),
+            answer(10, "999", visible=False, rgi=[1]),  # stale branch
+            answer(11, "J. Jansen"),
+            answer(12, "Bestuurder A", rgi=[0]),
+            answer(12, "Bestuurder B", rgi=[1]),
+            answer(99, "42"),
+            answer(12, None),
+        ],
+    }
     rows = digimv.figure_rows(arch)
-    assert [(c, g, v) for c, g, _, _, _, v in rows] == [(10, "", "108179322"), (12, "0", "Bestuurder A"),
-                                                       (12, "1", "Bestuurder B"), (99, "", "42")], rows
-    assert rows[0][3] == "Winst- en verliesrekening › Som der bedrijfsopbrengsten / Som der bedrijfsbaten › " \
-                         "Bedrag in euro's boekjaar" and rows[0][4] == "€"
+    assert [(c, g, v) for c, g, _, _, _, v in rows] == [(10, "", "108179322"), (12, "0", "Bestuurder A"), (12, "1", "Bestuurder B"), (99, "", "42")], rows
+    assert rows[0][3] == "Winst- en verliesrekening › Som der bedrijfsopbrengsten / Som der bedrijfsbaten › Bedrag in euro's boekjaar" and rows[0][4] == "€"
     assert rows[3][3] == "(unlabelled field 99)"  # never dropped silently
 
     calls = []
     real_http = digimv._http
     digimv._http = lambda url, **kw: calls.append(url) or json.dumps(arch).encode()
     try:
-        db.execute("INSERT INTO docs VALUES (2025, 50, '28099814', '', 'Jaarrekening', 'j.pdf', 1, "
-                   "'2026-05-29T12:00:00Z', NULL, NULL, NULL)")
+        db.execute("INSERT INTO docs VALUES (2025, 50, '28099814', '', 'Jaarrekening', 'j.pdf', 1, '2026-05-29T12:00:00Z', NULL, NULL, NULL)")
         f = digimv.get_figures("28099814", 2025, "bedrijfsopbr", db=db)
         assert (f["found"], f["matched"], f["figures"][0]["value"]) == (True, 1, "108179322")
         assert f["filed"] == "2026-05-29T12:00:00Z" and len(calls) == 1 and f["consolidated"] is False
@@ -216,20 +253,29 @@ def run():
     # organisation page: groups show the group, older and micro forms their own names, empty staff tables nothing
     def row(var, value):
         return {"label": var, "value": value, "unit": "€", "var": var}
-    filed = [row("qSomBedrijfsopbrengsten_0", "59720000"), row("qSomBedrijfsopbrengsten_0Cons", "533923000"),
-             row("qResultaatNaBelastingen_0", "-205000"), row("qPersTotTotAantalFte", "0.00"),
-             row("jeu09700MicroJeu09700Micro", "9342"), row("qPersTotTotGemiddeldPers", "6350.50")]
+
+    filed = [
+        row("qSomBedrijfsopbrengsten_0", "59720000"),
+        row("qSomBedrijfsopbrengsten_0Cons", "533923000"),
+        row("qResultaatNaBelastingen_0", "-205000"),
+        row("qPersTotTotAantalFte", "0.00"),
+        row("jeu09700MicroJeu09700Micro", "9342"),
+        row("qPersTotTotGemiddeldPers", "6350.50"),
+    ]
     key = {k: r["value"] for k, r in digimv.pick_key_figures(filed, True).items()}
     assert key == {"omzet": "533923000", "resultaat": "-205000", "eigen_vermogen": "9342", "personen": "6350.50"}, key
     assert digimv.pick_key_figures(filed, False)["omzet"]["value"] == "59720000"
-    assert digimv.pick_key_figures([row("qSomBedrijfsopbrengsten_0", "0"), row("jeu10800Jeu10800", "504577000")],
-                                   False)["omzet"]["value"] == "504577000"  # a micro filer leaves the new field at 0
-    assert digimv.pick_key_figures([row("jeu10800Jeu10800", "0"), row("jeu10800MicroJeu10800Micro", "532058")],
-                                   False)["omzet"]["value"] == "532058"  # 2020-2021 micro form
+    assert (
+        digimv.pick_key_figures([row("qSomBedrijfsopbrengsten_0", "0"), row("jeu10800Jeu10800", "504577000")], False)["omzet"]["value"] == "504577000"
+    )  # a micro filer leaves the new field at 0
+    assert (
+        digimv.pick_key_figures([row("jeu10800Jeu10800", "0"), row("jeu10800MicroJeu10800Micro", "532058")], False)["omzet"]["value"] == "532058"
+    )  # 2020-2021 micro form
 
     # saved conversations: per Cloudflare Access user, never another's
     import main
     from fastapi.testclient import TestClient
+
     with tempfile.TemporaryDirectory() as tmp:
         digimv.DATA, data = Path(tmp), digimv.DATA
         try:

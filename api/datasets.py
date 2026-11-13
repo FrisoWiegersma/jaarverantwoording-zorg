@@ -40,26 +40,31 @@ import py7zr
 import sources
 
 CKAN = "https://data.overheid.nl/data/api/3/action"
-CATALOGUE_SCOPE = ("data.overheid.nl describes datasets held elsewhere. Its dates are the description's, not the "
-                   "data's: check the period inside the file before calling anything current. A resource URL is "
-                   "often a web page that links to the file rather than the file itself.")
+CATALOGUE_SCOPE = (
+    "data.overheid.nl describes datasets held elsewhere. Its dates are the description's, not the "
+    "data's: check the period inside the file before calling anything current. A resource URL is "
+    "often a web page that links to the file rather than the file itself."
+)
 TABLE_TTL = timedelta(days=1)  # a data file is fetched again after a day
 TABLE_MAX = 1 << 30  # a CSV is streamed from disk, so it can be large: NZa's Open DIS activity file is 757 MB
 TABLE_EXTENSIONS = (".csv", ".txt", ".tsv", ".xlsx", ".json")
 SEVENZIP_MAGIC = b"7z\xbc\xaf\x27\x1c"
-TABLE_SCOPE = ("Rows as they are in the file, values verbatim. Excel dates show as day numbers (45658 = 1 Jan 2025). "
-               "row = the row's number in the file as a spreadsheet program shows it (JSON: the record's number), "
-               "to cite with the file URL. query matches a word in any cell, so a code can also hit an amount; "
-               "filters on a named column is exact.")
+TABLE_SCOPE = (
+    "Rows as they are in the file, values verbatim. Excel dates show as day numbers (45658 = 1 Jan 2025). "
+    "row = the row's number in the file as a spreadsheet program shows it (JSON: the record's number), "
+    "to cite with the file URL. query matches a word in any cell, so a code can also hit an amount; "
+    "filters on a named column is exact."
+)
 
 CBS_HOSTS = ("https://opendata.cbs.nl", "https://dataderden.cbs.nl")
 CBS_CAP = 10_000
 CBS_DIMS_V = 1
-CBS_SYMBOLS = {".": "unknown, or not applicable", "x": "secret (left out to protect respondents)",
-               "-": "nil (none)", "": "cannot occur", "?": "unreliable"}
-CBS_SCOPE = ("CBS StatLine, values as CBS publishes them. A period ending in * is provisional and can still change. "
-             "value null with a symbol is CBS's own mark (see `symbols`), never 0 unless the symbol says nil. "
-             "Check each topic's unit, and the table's own description for definitions.")
+CBS_SYMBOLS = {".": "unknown, or not applicable", "x": "secret (left out to protect respondents)", "-": "nil (none)", "": "cannot occur", "?": "unreliable"}
+CBS_SCOPE = (
+    "CBS StatLine, values as CBS publishes them. A period ending in * is provisional and can still change. "
+    "value null with a symbol is CBS's own mark (see `symbols`), never 0 unless the symbol says nil. "
+    "Check each topic's unit, and the table's own description for definitions."
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cbs_catalog(id TEXT PRIMARY KEY, host TEXT, title TEXT, summary TEXT, period TEXT,
@@ -76,6 +81,7 @@ def connect(path=None):
 
 # ---------------------------------------------------------------- data.overheid.nl catalogue
 
+
 def _format(r):
     return (r.get("format") or "").rsplit("/", 1)[-1] or None
 
@@ -83,11 +89,17 @@ def _format(r):
 def _dataset(p, brief):
     res = p.get("resources") or []
     notes = p.get("notes") or ""
-    return {"id": p["name"], "title": p.get("title"), "catalogue": (p.get("organization") or {}).get("title"),
-            "modified": p.get("modified") or p.get("metadata_modified"), "license": p.get("license_title") or p.get("license_id"),
-            "description": notes[:300] + ("…" if brief and len(notes) > 300 else "") if brief else notes,
-            "resource_count": len(res), "page": f"https://data.overheid.nl/dataset/{p['name']}",
-            "resources": [{"name": r.get("name"), "format": _format(r), "url": r.get("url")} for r in res[:5 if brief else 200]]}
+    return {
+        "id": p["name"],
+        "title": p.get("title"),
+        "catalogue": (p.get("organization") or {}).get("title"),
+        "modified": p.get("modified") or p.get("metadata_modified"),
+        "license": p.get("license_title") or p.get("license_id"),
+        "description": notes[:300] + ("…" if brief and len(notes) > 300 else "") if brief else notes,
+        "resource_count": len(res),
+        "page": f"https://data.overheid.nl/dataset/{p['name']}",
+        "resources": [{"name": r.get("name"), "format": _format(r), "url": r.get("url")} for r in res[: 5 if brief else 200]],
+    }
 
 
 def search_datasets(q, limit=20, start=0):
@@ -98,8 +110,15 @@ def search_datasets(q, limit=20, start=0):
     except (OSError, KeyError) as e:
         raise RuntimeError(f"data.overheid.nl search failed: {e}") from e
     hits = [_dataset(p, brief=True) for p in r["results"]]
-    return {"query": q, "total": r["count"], "returned": len(hits), "truncated": r["count"] > start + len(hits),
-            "results": hits, "source": "https://data.overheid.nl", "scope": CATALOGUE_SCOPE}
+    return {
+        "query": q,
+        "total": r["count"],
+        "returned": len(hits),
+        "truncated": r["count"] > start + len(hits),
+        "results": hits,
+        "source": "https://data.overheid.nl",
+        "scope": CATALOGUE_SCOPE,
+    }
 
 
 def get_dataset(dataset_id):
@@ -114,6 +133,7 @@ def get_dataset(dataset_id):
 
 
 # ---------------------------------------------------------------- reading a data file
+
 
 def _number(v):
     """Excel stores numbers as text ('16646', '0.1', '1E-3'): a number when it is one, else the text as stored."""
@@ -141,12 +161,14 @@ def xlsx_rows(body, sheet=None):
     targets = {r.get("Id"): r.get("Target") for r in ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))}
     shared = []
     if "xl/sharedStrings.xml" in z.namelist():
-        shared = ["".join(t.text or "" for t in si.iter(f"{m}t"))
-                  for si in ET.fromstring(z.read("xl/sharedStrings.xml")).iter(f"{m}si")]
+        shared = ["".join(t.text or "" for t in si.iter(f"{m}t")) for si in ET.fromstring(z.read("xl/sharedStrings.xml")).iter(f"{m}si")]
     names = [s[0] for s in sheets]
     # exact, else ignoring case: 'MSZ vj2025' is what a model writes for 'MSZ VJ2025'
-    pick = (next((s for s in sheets if s[0] == sheet), None)
-            or next((s for s in sheets if s[0].casefold() == sheet.strip().casefold()), None)) if sheet else sheets[0]
+    pick = (
+        (next((s for s in sheets if s[0] == sheet), None) or next((s for s in sheets if s[0].casefold() == sheet.strip().casefold()), None))
+        if sheet
+        else sheets[0]
+    )
     if not pick:
         raise KeyError(f"no sheet {sheet!r}; the sheets are {names}")
     target = targets[pick[1]]
@@ -269,8 +291,7 @@ def _file(url, refresh=False):
     cache = documents.PUB / "tables" / did
     meta = cache.with_suffix(".json")
     with documents._lock(did):  # two chats asking for the same 700 MB file download it once
-        if not refresh and meta.exists() and cache.exists() \
-                and not sources._older(json.loads(meta.read_text())["fetched_at"], TABLE_TTL):
+        if not refresh and meta.exists() and cache.exists() and not sources._older(json.loads(meta.read_text())["fetched_at"], TABLE_TTL):
             m = json.loads(meta.read_text())
             return cache, m["content_type"], m["file_url"], m["fetched_at"]
         cache.parent.mkdir(parents=True, exist_ok=True)
@@ -291,8 +312,7 @@ def _file(url, refresh=False):
 
 def _in_memory(size, what):
     if size > documents.MAX_BYTES:
-        raise ValueError(f"this {what} is larger than {documents.MAX_BYTES // 2**20} MB, too large to read here; "
-                         "look for a CSV version of it")
+        raise ValueError(f"this {what} is larger than {documents.MAX_BYTES // 2**20} MB, too large to read here; look for a CSV version of it")
 
 
 def _sort_key(v):
@@ -321,14 +341,16 @@ def _scan(rows, header_row, filters, words, offset, limit, shift, row=None, sort
     if not 1 <= h <= len(first):
         raise ValueError(f"header_row must be between 1 and {len(first)}")
     header = first[h - 1]
-    width = max(map(len, first[h - 1:]))
+    width = max(map(len, first[h - 1 :]))
     cols = _columns(header + [None] * (width - len(header)))
+
     def index(k):
         i = next((i for i, c in enumerate(cols) if c == k), None)
         i = i if i is not None else next((i for i, c in enumerate(cols) if c.casefold() == str(k).strip().casefold()), None)
         if i is None:
             raise KeyError(f"no column {k!r}; the columns are {cols}")
         return i
+
     want = {index(k): {str(x).strip().casefold() for x in (v if isinstance(v, list) else [v])} for k, v in (filters or {}).items()}
     desc, si = (sort or "").startswith("-"), sort and index(sort.lstrip("-"))
     top = []  # with sort: a min-heap of the offset + limit best rows; on a tie the earlier row stays
@@ -362,17 +384,25 @@ def _scan(rows, header_row, filters, words, offset, limit, shift, row=None, sort
         page = [(n, r) for *_, n, r in sorted(top, reverse=True)][offset:]
     # a value right of the last header cell still gets a column, never dropped
     cols = _columns(header + [None] * (width - len(header)))
-    return {"header_row": h, "title_rows": [t for r in first[:h - 1] if (t := [v for v in r if v not in (None, "")])][:5],
-            "columns": cols, "rows_total": total, "rows_matched": matched, "returned": len(page),
-            "truncated": matched > offset + len(page),
-            "rows": [{"row": n, **{c: (r[i] if i < len(r) else None) for i, c in enumerate(cols)}} for n, r in page]}
+    return {
+        "header_row": h,
+        "title_rows": [t for r in first[: h - 1] if (t := [v for v in r if v not in (None, "")])][:5],
+        "columns": cols,
+        "rows_total": total,
+        "rows_matched": matched,
+        "returned": len(page),
+        "truncated": matched > offset + len(page),
+        "rows": [{"row": n, **{c: (r[i] if i < len(r) else None) for i, c in enumerate(cols)}} for n, r in page],
+    }
 
 
 def _pick_member(names, member, kind):
     members = [n for n in names if n.lower().endswith(TABLE_EXTENSIONS)]
     if member is None and len(members) != 1:
-        raise ValueError(f"a {kind} with {len(members)} data files: pick one with member; they are {members[:50]}; "
-                         + (f"archive files: {names[:50]}" if not members else "read each member to summarize the archive"))
+        raise ValueError(
+            f"a {kind} with {len(members)} data files: pick one with member; they are {members[:50]}; "
+            + (f"archive files: {names[:50]}" if not members else "read each member to summarize the archive")
+        )
     member = member if member is not None else members[0]
     if member not in names:
         raise KeyError(f"no file {member!r} in this {kind}; the data files are {members[:50]}")
@@ -401,6 +431,7 @@ def _scan_member(open_bin, member, size, sheet, scan):
 
 class _TableWriter(py7zr.io.WriterFactory, py7zr.io.Py7zIO):
     """7z output goes to one bounded temporary file, never an archive-supplied path."""
+
     def __init__(self, file, limit):
         self.file, self.limit = file, limit
 
@@ -428,19 +459,28 @@ class _TableWriter(py7zr.io.WriterFactory, py7zr.io.Py7zIO):
         return size
 
 
-def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None, refresh=False, filters=None, member=None,
-               sort=None):
+def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None, refresh=False, filters=None, member=None, sort=None):
     """Rows of a CSV, Excel (.xlsx) or JSON file, also inside ZIP or 7z. query keeps rows containing every word (accents
     ignored), e.g. an AGB code, a municipality or 'begeleiding'. filters {column: [values]} keeps rows whose cell in
     that column is one of the values (exact, case ignored): how to match a code without hitting amounts. header_row
     (1-based) overrides the detected header. member picks a file inside an archive. sort 'COL' or '-COL' orders the matched
     rows by that column as numbers (descending with -): the largest first, e.g. the most patients."""
     path, ctype, final, fetched = _file(url.strip(), refresh)
-    fmt, out, sheet, sheets, member, members = _read(path, ctype, query, limit, offset, sheet, header_row, filters, member,
-                                                     sort=sort)
+    fmt, out, sheet, sheets, member, members = _read(path, ctype, query, limit, offset, sheet, header_row, filters, member, sort=sort)
     # id: our cached copy, which a /bron/rij/{id}/.../{row} citation opens (the site's link may expire, as Zorginzicht's do)
-    return {"id": path.name, "url": url, "file_url": final, "format": fmt, "sheet": sheet, "sheets": sheets,
-            "member": member, "members": members, "fetched_at": fetched, **out, "scope": TABLE_SCOPE}
+    return {
+        "id": path.name,
+        "url": url,
+        "file_url": final,
+        "format": fmt,
+        "sheet": sheet,
+        "sheets": sheets,
+        "member": member,
+        "members": members,
+        "fetched_at": fetched,
+        **out,
+        "scope": TABLE_SCOPE,
+    }
 
 
 def _read(path, ctype, query, limit, offset, sheet, header_row, filters, member, row=None, sort=None):
@@ -481,8 +521,7 @@ def _read_file(path, ctype, query, limit, offset, sheet, header_row, filters, me
                     fmt, out, sheet, sheets = _scan_member(lambda: open(tmp.name, "rb"), member, writer.size(), sheet, scan)
         except py7zr.exceptions.PasswordRequired as e:
             raise ValueError("encrypted 7-Zip archive: use an unencrypted CSV, XLSX or JSON version") from e
-        except (py7zr.exceptions.ArchiveError, py7zr.exceptions.AbsolutePathError, EOFError, lzma.LZMAError,
-                struct.error, NotImplementedError) as e:
+        except (py7zr.exceptions.ArchiveError, py7zr.exceptions.AbsolutePathError, EOFError, lzma.LZMAError, struct.error, NotImplementedError) as e:
             raise ValueError(f"cannot read this 7-Zip archive (corrupt, unsupported, or extraction limit exceeded): {e}") from e
     elif head[:2] == b"PK":
         with zipfile.ZipFile(path) as z:
@@ -526,13 +565,24 @@ def table_row(did, row, parts=()):
     """One row of a table read before, from our cached copy, as a /bron/rij/ citation shows it: the header and that
     row. parts: the archive member and/or Excel sheet the citation names, member first."""
     path, meta = _cached_table(did)
-    fmt, out, sheet, _, member, members = _read(path, meta["content_type"], None, 1, 0, parts[-1] if parts else None,
-                                                None, None, parts[0] if parts else None, row)
+    fmt, out, sheet, _, member, members = _read(
+        path, meta["content_type"], None, 1, 0, parts[-1] if parts else None, None, None, parts[0] if parts else None, row
+    )
     if not out["rows"]:
         raise KeyError(f"row {row} is not in this table: a blank row, the header, or past the end")
-    return {"id": did, "file_url": meta["file_url"], "fetched_at": meta["fetched_at"], "format": fmt, "sheet": sheet,
-            "member": member if members is not None else None, "file_name": table_file(did)[1],
-            "header_row": out["header_row"], "title_rows": out["title_rows"], "columns": out["columns"], "row": out["rows"][0]}
+    return {
+        "id": did,
+        "file_url": meta["file_url"],
+        "fetched_at": meta["fetched_at"],
+        "format": fmt,
+        "sheet": sheet,
+        "member": member if members is not None else None,
+        "file_name": table_file(did)[1],
+        "header_row": out["header_row"],
+        "title_rows": out["title_rows"],
+        "columns": out["columns"],
+        "row": out["rows"][0],
+    }
 
 
 def table_file(did):
@@ -542,13 +592,21 @@ def table_file(did):
     if "." not in name:  # Zorginzicht serves its files as /services/file/get?key=...
         with open(path, "rb") as f:
             head = f.read(2048)
-        ext = ("xlsx" if "xl/workbook.xml" in zipfile.ZipFile(path).namelist() else "zip") if head[:2] == b"PK" \
-            else "7z" if head.startswith(SEVENZIP_MAGIC) else "json" if head.lstrip()[:1] in (b"[", b"{") else "csv"
+        ext = (
+            ("xlsx" if "xl/workbook.xml" in zipfile.ZipFile(path).namelist() else "zip")
+            if head[:2] == b"PK"
+            else "7z"
+            if head.startswith(SEVENZIP_MAGIC)
+            else "json"
+            if head.lstrip()[:1] in (b"[", b"{")
+            else "csv"
+        )
         name = f"{urllib.parse.urlsplit(meta['file_url']).hostname or 'bestand'}-{did[:8]}.{ext}"
     return path, name, meta["content_type"]
 
 
 # ---------------------------------------------------------------- CBS StatLine (opendata + dataderden)
+
 
 def cbs_catalog(refresh=False, db=None):
     """Both CBS catalogues, refreshed daily; a failed refresh keeps the list it had."""
@@ -560,8 +618,18 @@ def cbs_catalog(refresh=False, db=None):
             for host in CBS_HOSTS:
                 sel = "Identifier,Title,ShortDescription,Period,Modified,Frequency,OutputStatus"
                 for t in sources._all(f"{host}/ODataCatalog/Tables?$select={sel}&$format=json"):
-                    rows.append((t["Identifier"], host, (t.get("Title") or "").strip(), (t.get("ShortDescription") or "")[:2000],
-                                 t.get("Period"), t.get("Modified"), t.get("Frequency"), t.get("OutputStatus")))
+                    rows.append(
+                        (
+                            t["Identifier"],
+                            host,
+                            (t.get("Title") or "").strip(),
+                            (t.get("ShortDescription") or "")[:2000],
+                            t.get("Period"),
+                            t.get("Modified"),
+                            t.get("Frequency"),
+                            t.get("OutputStatus"),
+                        )
+                    )
             if len({r[0] for r in rows}) != len(rows):
                 raise ValueError("a CBS table id is in both catalogues")
             with db:
@@ -578,13 +646,32 @@ def search_cbs(q, limit=20, db=None):
     """CBS tables whose id, title or summary contains every word (accents ignored); newest first."""
     db = cbs_catalog(db=db)
     words = [sources._fold(w) for w in q.split()]
-    hits = [dict(r) for r in db.execute("SELECT * FROM cbs_catalog ORDER BY modified DESC")
-            if all(w in sources._fold(f"{r['id']} {r['title']} {r['summary']}") for w in words)]
-    out = [{"id": h["id"], "title": h["title"], "period": h["period"], "modified": h["modified"],
-            "status": h["status"], "frequency": h["frequency"], "summary": h["summary"].strip()[:300],
-            "catalogue": h["host"].split("//")[1]} for h in hits[:limit]]
-    return {"query": q, "total": len(hits), "returned": len(out), "truncated": len(hits) > len(out), "results": out,
-            "scope": "Table titles and summaries only; describe_cbs_table shows what a table holds."}
+    hits = [
+        dict(r)
+        for r in db.execute("SELECT * FROM cbs_catalog ORDER BY modified DESC")
+        if all(w in sources._fold(f"{r['id']} {r['title']} {r['summary']}") for w in words)
+    ]
+    out = [
+        {
+            "id": h["id"],
+            "title": h["title"],
+            "period": h["period"],
+            "modified": h["modified"],
+            "status": h["status"],
+            "frequency": h["frequency"],
+            "summary": h["summary"].strip()[:300],
+            "catalogue": h["host"].split("//")[1],
+        }
+        for h in hits[:limit]
+    ]
+    return {
+        "query": q,
+        "total": len(hits),
+        "returned": len(out),
+        "truncated": len(hits) > len(out),
+        "results": out,
+        "scope": "Table titles and summaries only; describe_cbs_table shows what a table holds.",
+    }
 
 
 def _cbs_table(db, table_id):
@@ -620,10 +707,23 @@ def _cbs_dims(db, t):
             codes = [{"key": c["Key"], "title": (c.get("Title") or "").strip()} for c in sources._all(f"{base}/{p['Key']}")]
             dims.append({"key": p["Key"], "title": (p.get("Title") or "").strip(), "type": p["Type"], "codes": codes})
         elif p["Type"] == "Topic":
-            topics.append({"key": p["Key"], "title": (p.get("Title") or "").strip(), "unit": (p.get("Unit") or "").strip(),
-                           "group": path(p), "decimals": p.get("Decimals")})
-    d = {"title": (info.get("Title") or "").strip(), "description": (info.get("ShortDescription") or "").strip(),
-         "period": info.get("Period"), "modified": info.get("Modified"), "dims": dims, "topics": topics}
+            topics.append(
+                {
+                    "key": p["Key"],
+                    "title": (p.get("Title") or "").strip(),
+                    "unit": (p.get("Unit") or "").strip(),
+                    "group": path(p),
+                    "decimals": p.get("Decimals"),
+                }
+            )
+    d = {
+        "title": (info.get("Title") or "").strip(),
+        "description": (info.get("ShortDescription") or "").strip(),
+        "period": info.get("Period"),
+        "modified": info.get("Modified"),
+        "dims": dims,
+        "topics": topics,
+    }
     with db:
         db.execute("INSERT OR REPLACE INTO cbs_dims VALUES (?,?,?,?)", (t["id"], t["modified"], CBS_DIMS_V, json.dumps(d)))
     return d
@@ -639,13 +739,27 @@ def describe_cbs_table(table_id, dimension=None, query=None, db=None):
     db = cbs_catalog(db=db)
     t = _cbs_table(db, table_id)
     d = _cbs_dims(db, t)
-    out = {"id": t["id"], "title": d["title"], "period": d["period"], "modified": d["modified"],
-           "description": d["description"][:3000], "catalogue": t["host"].split("//")[1],
-           "page": _cbs_page(t),
-           "topics": [{k: x[k] for k in ("key", "title", "unit", "group")} for x in d["topics"]],
-           "dimensions": [{"key": x["key"], "title": x["title"], "type": x["type"], "codes": len(x["codes"]),
-                           "first_codes": [f"{c['key'].strip()} = {c['title']}" for c in x["codes"][:12]]} for x in d["dims"]],
-           "scope": CBS_SCOPE}
+    out = {
+        "id": t["id"],
+        "title": d["title"],
+        "period": d["period"],
+        "modified": d["modified"],
+        "description": d["description"][:3000],
+        "catalogue": t["host"].split("//")[1],
+        "page": _cbs_page(t),
+        "topics": [{k: x[k] for k in ("key", "title", "unit", "group")} for x in d["topics"]],
+        "dimensions": [
+            {
+                "key": x["key"],
+                "title": x["title"],
+                "type": x["type"],
+                "codes": len(x["codes"]),
+                "first_codes": [f"{c['key'].strip()} = {c['title']}" for c in x["codes"][:12]],
+            }
+            for x in d["dims"]
+        ],
+        "scope": CBS_SCOPE,
+    }
     if dimension:
         dim = next((x for x in d["dims"] if x["key"].lower() == dimension.lower()), None)
         if not dim:
@@ -680,10 +794,9 @@ def get_cbs(table_id, filters=None, topics=None, limit=200, db=None):
         if not dim:
             raise KeyError(f"no dimension {k}; the dimensions are {[x['key'] for x in d['dims']]}")
         keys = []
-        for w in (wanted if isinstance(wanted, list) else [wanted]):
+        for w in wanted if isinstance(wanted, list) else [wanted]:
             f = sources._fold(str(w).strip())
-            hit = [c for c in dim["codes"] if sources._fold(c["key"].strip()) == f] or \
-                  [c for c in dim["codes"] if sources._fold(c["title"]) == f]
+            hit = [c for c in dim["codes"] if sources._fold(c["key"].strip()) == f] or [c for c in dim["codes"] if sources._fold(c["title"]) == f]
             if not hit:
                 raise KeyError(f"{dim['key']} has no code {w!r}; look it up with describe_cbs_table(table, '{dim['key']}', query)")
             keys += [c["key"] for c in hit]
@@ -700,11 +813,9 @@ def get_cbs(table_id, filters=None, topics=None, limit=200, db=None):
         missing = want - {x["key"].lower() for x in tops}
         if missing:
             raise KeyError(f"no topic {sorted(missing)}; the topics are listed by describe_cbs_table")
-    flt = " and ".join("(" + " or ".join(f"{k} eq '{v.replace(chr(39), chr(39) * 2)}'" for v in keys) + ")"
-                       for k, keys in chosen.items())
+    flt = " and ".join("(" + " or ".join(f"{k} eq '{v.replace(chr(39), chr(39) * 2)}'" for v in keys) + ")" for k, keys in chosen.items())
     sel = ",".join([x["key"] for x in d["dims"]] + [x["key"] for x in tops])
-    q = urllib.parse.urlencode({k: v for k, v in (("$filter", flt), ("$select", sel), ("$format", "json")) if v},
-                               quote_via=urllib.parse.quote)
+    q = urllib.parse.urlencode({k: v for k, v in (("$filter", flt), ("$select", sel), ("$format", "json")) if v}, quote_via=urllib.parse.quote)
     url = f"{t['host']}/ODataApi/OData/{t['id']}/UntypedDataSet?{q}"
     try:
         raw = sources._all(url)
@@ -720,11 +831,19 @@ def get_cbs(table_id, filters=None, topics=None, limit=200, db=None):
             if sym is not None:
                 symbols.add(sym)
         rows.append(row)
-    return {"id": t["id"], "title": d["title"], "modified": d["modified"], "rows_total": len(rows),
-            "returned": min(len(rows), limit), "truncated": len(rows) > limit, "rows": rows[:limit],
-            "topics": {x["key"]: f"{x['title']} ({x['unit']})" if x["unit"] else x["title"] for x in tops},
-            "symbols": {s: CBS_SYMBOLS.get(s, "see the table's description") for s in sorted(symbols)},
-            "source": url, "scope": CBS_SCOPE}
+    return {
+        "id": t["id"],
+        "title": d["title"],
+        "modified": d["modified"],
+        "rows_total": len(rows),
+        "returned": min(len(rows), limit),
+        "truncated": len(rows) > limit,
+        "rows": rows[:limit],
+        "topics": {x["key"]: f"{x['title']} ({x['unit']})" if x["unit"] else x["title"] for x in tops},
+        "symbols": {s: CBS_SYMBOLS.get(s, "see the table's description") for s in sorted(symbols)},
+        "source": url,
+        "scope": CBS_SCOPE,
+    }
 
 
 def cbs_cell(table_id, codes, topic):
@@ -746,11 +865,20 @@ def _cbs_cell(table_id, codes, topic, _hour):
     row, top = r["rows"][0], next(x for x in d["topics"] if x["key"].lower() == topic.lower())
     v = row[top["key"]]
     sym = v["symbol"] if isinstance(v, dict) else None
-    return {"id": t["id"], "title": d["title"], "modified": d["modified"], "page": _cbs_page(t),
-            "dimensions": [{"title": x["title"], "value": row[x["key"]]} for x in d["dims"]],
-            "topic": top["title"], "group": top["group"], "unit": top["unit"],
-            "value": None if sym else v, "symbol": sym, "symbol_meaning": r["symbols"].get(sym) if sym else None,
-            "source": r["source"]}
+    return {
+        "id": t["id"],
+        "title": d["title"],
+        "modified": d["modified"],
+        "page": _cbs_page(t),
+        "dimensions": [{"title": x["title"], "value": row[x["key"]]} for x in d["dims"]],
+        "topic": top["title"],
+        "group": top["group"],
+        "unit": top["unit"],
+        "value": None if sym else v,
+        "symbol": sym,
+        "symbol_meaning": r["symbols"].get(sym) if sym else None,
+        "source": r["source"],
+    }
 
 
 # ---------------------------------------------------------------- Swing Open Data Service (ABF)
@@ -759,13 +887,14 @@ def _cbs_cell(table_id, codes, topic, _hour):
 # `apikey`; a site without a key in the environment is reported as not connected, never guessed around.
 SWING = {
     "prognosemodelzw": ("https://prognosemodelzw.nl/ods/odata", "PMZW_API_KEY", "https://prognosemodelzw.nl/contact"),
-    "waarstaatjegemeente": ("https://www.waarstaatjegemeente.nl/ods/odata", "WSJG_API_KEY",
-                            "https://www.waarstaatjegemeente.nl/contact"),
+    "waarstaatjegemeente": ("https://www.waarstaatjegemeente.nl/ods/odata", "WSJG_API_KEY", "https://www.waarstaatjegemeente.nl/contact"),
 }
 SWING_CAP = 500
-SWING_SCOPE = ("Values as the Swing site publishes them, per indicator, area level and period. value null is a value "
-               "the site doesn't have, never 0; value_type other than Regular is the site's own mark. Check the "
-               "indicator's unit and source; forecast periods are forecasts.")
+SWING_SCOPE = (
+    "Values as the Swing site publishes them, per indicator, area level and period. value null is a value "
+    "the site doesn't have, never 0; value_type other than Regular is the site's own mark. Check the "
+    "indicator's unit and source; forecast periods are forecasts."
+)
 SWING_SCHEMA = """
 CREATE TABLE IF NOT EXISTS swing_indicators(site TEXT, code TEXT, name TEXT, description TEXT, unit TEXT, source TEXT,
   start TEXT, end TEXT, modified TEXT, PRIMARY KEY(site, code));
@@ -778,8 +907,7 @@ def _swing(site):
     base, env, contact = SWING[site]
     key = os.environ.get(env, "").strip()
     if not key:
-        raise RuntimeError(f"{site} is not connected: it needs an API key (free, per organisation), requested at "
-                           f"{contact}, set as {env}")
+        raise RuntimeError(f"{site} is not connected: it needs an API key (free, per organisation), requested at {contact}, set as {env}")
     return base, key
 
 
@@ -814,9 +942,20 @@ def _swing_indicators(site, refresh=False, db=None):
     r = db.execute("SELECT fetched_at FROM sources_log WHERE name=?", (f"swing:{site}",)).fetchone()
     if refresh or not r or sources._older(r[0], timedelta(days=1)):
         try:
-            rows = [(site, i["Code"], (i.get("Name") or "").strip(), (i.get("Description") or "")[:3000], i.get("Unit"),
-                     i.get("Source"), i.get("StartPeriodCode"), i.get("EndPeriodCode"), i.get("DataModificationDate"))
-                    for i in _swing_all(base, key, "Indicators")]
+            rows = [
+                (
+                    site,
+                    i["Code"],
+                    (i.get("Name") or "").strip(),
+                    (i.get("Description") or "")[:3000],
+                    i.get("Unit"),
+                    i.get("Source"),
+                    i.get("StartPeriodCode"),
+                    i.get("EndPeriodCode"),
+                    i.get("DataModificationDate"),
+                )
+                for i in _swing_all(base, key, "Indicators")
+            ]
             with db:
                 db.execute("DELETE FROM swing_indicators WHERE site=?", (site,))
                 db.executemany("INSERT INTO swing_indicators VALUES (?,?,?,?,?,?,?,?,?)", rows)
@@ -831,12 +970,31 @@ def search_swing(site, q, limit=20, db=None):
     """A Swing site's indicators whose code, name or description contains every word (accents ignored)."""
     db = _swing_indicators(site, db=db)
     words = [sources._fold(w) for w in q.split()]
-    hits = [dict(r) for r in db.execute("SELECT * FROM swing_indicators WHERE site=? ORDER BY name", (site,))
-            if all(w in sources._fold(f"{r['code']} {r['name']} {r['description']}") for w in words)]
-    out = [{"code": h["code"], "name": h["name"], "unit": h["unit"], "source": h["source"],
-            "periods": f"{h['start']}–{h['end']}", "description": h["description"][:300]} for h in hits[:limit]]
-    return {"site": site, "query": q, "total": len(hits), "returned": len(out), "truncated": len(hits) > len(out),
-            "results": out, "scope": "Indicator names and descriptions; get_swing lists what each one has."}
+    hits = [
+        dict(r)
+        for r in db.execute("SELECT * FROM swing_indicators WHERE site=? ORDER BY name", (site,))
+        if all(w in sources._fold(f"{r['code']} {r['name']} {r['description']}") for w in words)
+    ]
+    out = [
+        {
+            "code": h["code"],
+            "name": h["name"],
+            "unit": h["unit"],
+            "source": h["source"],
+            "periods": f"{h['start']}–{h['end']}",
+            "description": h["description"][:300],
+        }
+        for h in hits[:limit]
+    ]
+    return {
+        "site": site,
+        "query": q,
+        "total": len(hits),
+        "returned": len(out),
+        "truncated": len(hits) > len(out),
+        "results": out,
+        "scope": "Indicator names and descriptions; get_swing lists what each one has.",
+    }
 
 
 def get_swing(site, indicator, geo_level=None, period=None, geo_query=None, dimension_levels="", limit=SWING_CAP, db=None):
@@ -847,22 +1005,34 @@ def get_swing(site, indicator, geo_level=None, period=None, geo_query=None, dime
     meta = db.execute("SELECT * FROM swing_indicators WHERE site=? AND code=?", (site, indicator)).fetchone()
     if not meta:
         raise KeyError(f"no indicator {indicator!r} on {site}; find one with search_swing")
-    info = {"site": site, "indicator": indicator, "name": meta["name"], "unit": meta["unit"], "source": meta["source"],
-            "description": meta["description"][:1000]}
+    info = {
+        "site": site,
+        "indicator": indicator,
+        "name": meta["name"],
+        "unit": meta["unit"],
+        "source": meta["source"],
+        "description": meta["description"][:1000],
+    }
     cubes = _swing_all(base, key, f"Indicators/{_swing_q(indicator)}/DataCubes")
     if not geo_level or not period:
         combos = {}
         for c in cubes:
             k = (c["GeoLevel"], c.get("DimensionLevels") or "", c.get("DimensionLevelNames") or "")
             combos.setdefault(k, []).append(c["Period"])
-        return {**info, "combinations": [{"geo_level": g, "dimension_levels": dl, "dimensions": dn, "periods": p}
-                                         for (g, dl, dn), p in sorted(combos.items())], "scope": SWING_SCOPE}
-    if not any(c["GeoLevel"] == geo_level and c["Period"] == period and (c.get("DimensionLevels") or "") == dimension_levels
-               for c in cubes):
-        raise KeyError(f"{indicator} has no data for geo_level={geo_level!r}, period={period!r}, "
-                       f"dimension_levels={dimension_levels!r}; call get_swing without them to see what it has")
-    path = (f"DataCubes(Dimensionlevels='{_swing_q(dimension_levels)}',GeoLevel='{_swing_q(geo_level)}',"
-            f"Indicator='{_swing_q(indicator)}',Period='{_swing_q(period)}')/Data")
+        return {
+            **info,
+            "combinations": [{"geo_level": g, "dimension_levels": dl, "dimensions": dn, "periods": p} for (g, dl, dn), p in sorted(combos.items())],
+            "scope": SWING_SCOPE,
+        }
+    if not any(c["GeoLevel"] == geo_level and c["Period"] == period and (c.get("DimensionLevels") or "") == dimension_levels for c in cubes):
+        raise KeyError(
+            f"{indicator} has no data for geo_level={geo_level!r}, period={period!r}, "
+            f"dimension_levels={dimension_levels!r}; call get_swing without them to see what it has"
+        )
+    path = (
+        f"DataCubes(Dimensionlevels='{_swing_q(dimension_levels)}',GeoLevel='{_swing_q(geo_level)}',"
+        f"Indicator='{_swing_q(indicator)}',Period='{_swing_q(period)}')/Data"
+    )
     data = _swing_all(base, key, path)
     areas = {m["Code"]: m.get("Name") for m in _swing_all(base, key, f"GeoLevels/{_swing_q(geo_level)}/GeoLevelMembers")}
     dims = {}
@@ -879,12 +1049,22 @@ def get_swing(site, indicator, geo_level=None, period=None, geo_query=None, dime
         if v.get("DimensionLevelMembers"):
             row["breakdown"] = ", ".join(f"{m} = {dims.get(m, '?')}" for m in v["DimensionLevelMembers"].split(","))
         rows.append(row)
-    return {**info, "geo_level": geo_level, "period": period, "rows_total": len(rows), "returned": min(len(rows), limit),
-            "truncated": len(rows) > limit, "rows": rows[:limit], "source_url": f"{base}/{path}",
-            "site_url": base.rsplit("/ods/", 1)[0], "scope": SWING_SCOPE}
+    return {
+        **info,
+        "geo_level": geo_level,
+        "period": period,
+        "rows_total": len(rows),
+        "returned": min(len(rows), limit),
+        "truncated": len(rows) > limit,
+        "rows": rows[:limit],
+        "source_url": f"{base}/{path}",
+        "site_url": base.rsplit("/ods/", 1)[0],
+        "scope": SWING_SCOPE,
+    }
 
 
 # ---------------------------------------------------------------- CLI
+
 
 def check():
     probes = {
@@ -896,9 +1076,16 @@ def check():
         "rivm statline": lambda: any(h["id"] == "50137NED" for h in search_cbs("kosten van ziekten")["results"]),
         "open dis": lambda: read_table("https://opendisdata.nza.nl/download/csv/06_REF_SPC.csv", filters={"SPECIALISME_CD": ["0303"]})["rows_matched"] > 0,
         "open dis moved host": lambda: read_table("http://www.opendisdata.nl/download/csv/06_REF_SPC.csv", limit=1)["rows_total"] > 0,
-        "zorginzicht kvk": lambda: read_table(next(x["url"] for x in documents.links(
-            "https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging", "Wijkverpleging verslagjaar 2024 Excel")["links"]),
-            filters={"KvkNummer": ["61354740"]})["rows_matched"] > 0,
+        "zorginzicht kvk": lambda: (
+            read_table(
+                next(
+                    x["url"]
+                    for x in documents.links("https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging", "Wijkverpleging verslagjaar 2024 Excel")["links"]
+                ),
+                filters={"KvkNummer": ["61354740"]},
+            )["rows_matched"]
+            > 0
+        ),
         **{f"swing {s}": (lambda s=s: search_swing(s, "zorg")["total"] > 0) for s in SWING if os.environ.get(SWING[s][1])},
     }
     ok = True
@@ -914,31 +1101,51 @@ def check():
 
 def main(argv=None):
     import argparse
+
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("datasets").add_argument("q")
     sub.add_parser("dataset").add_argument("id")
-    s = sub.add_parser("table"); s.add_argument("url"); s.add_argument("--query"); s.add_argument("--sheet")
-    s.add_argument("--filters", default="{}", help='JSON, e.g. {"KvkNummer": ["61354740"]}'); s.add_argument("--member")
+    s = sub.add_parser("table")
+    s.add_argument("url")
+    s.add_argument("--query")
+    s.add_argument("--sheet")
+    s.add_argument("--filters", default="{}", help='JSON, e.g. {"KvkNummer": ["61354740"]}')
+    s.add_argument("--member")
     s.add_argument("--sort", help="a column, '-COL' for the largest first")
-    s = sub.add_parser("swing"); s.add_argument("site", choices=sorted(SWING)); s.add_argument("q")
-    s = sub.add_parser("swing-get"); s.add_argument("site", choices=sorted(SWING)); s.add_argument("indicator")
-    s.add_argument("--geo-level"); s.add_argument("--period"); s.add_argument("--geo-query"); s.add_argument("--dimension-levels", default="")
+    s = sub.add_parser("swing")
+    s.add_argument("site", choices=sorted(SWING))
+    s.add_argument("q")
+    s = sub.add_parser("swing-get")
+    s.add_argument("site", choices=sorted(SWING))
+    s.add_argument("indicator")
+    s.add_argument("--geo-level")
+    s.add_argument("--period")
+    s.add_argument("--geo-query")
+    s.add_argument("--dimension-levels", default="")
     sub.add_parser("cbs").add_argument("q")
-    s = sub.add_parser("cbs-table"); s.add_argument("id"); s.add_argument("--dimension"); s.add_argument("--query")
-    s = sub.add_parser("cbs-get"); s.add_argument("id"); s.add_argument("--filters", default="{}", help='JSON, e.g. {"Perioden": ["2024JJ00"]}')
+    s = sub.add_parser("cbs-table")
+    s.add_argument("id")
+    s.add_argument("--dimension")
+    s.add_argument("--query")
+    s = sub.add_parser("cbs-get")
+    s.add_argument("id")
+    s.add_argument("--filters", default="{}", help='JSON, e.g. {"Perioden": ["2024JJ00"]}')
     s.add_argument("--topics", nargs="*")
     sub.add_parser("check")
     a = p.parse_args(argv)
     if a.cmd == "check":
         sys.exit(0 if check() else 1)
-    r = {"datasets": lambda: search_datasets(a.q), "dataset": lambda: get_dataset(a.id),
-         "table": lambda: read_table(a.url, a.query, sheet=a.sheet, filters=json.loads(a.filters), member=a.member, sort=a.sort),
-         "swing": lambda: search_swing(a.site, a.q),
-         "swing-get": lambda: get_swing(a.site, a.indicator, a.geo_level, a.period, a.geo_query, a.dimension_levels),
-         "cbs": lambda: search_cbs(a.q),
-         "cbs-table": lambda: describe_cbs_table(a.id, a.dimension, a.query),
-         "cbs-get": lambda: get_cbs(a.id, json.loads(a.filters), a.topics)}[a.cmd]()
+    r = {
+        "datasets": lambda: search_datasets(a.q),
+        "dataset": lambda: get_dataset(a.id),
+        "table": lambda: read_table(a.url, a.query, sheet=a.sheet, filters=json.loads(a.filters), member=a.member, sort=a.sort),
+        "swing": lambda: search_swing(a.site, a.q),
+        "swing-get": lambda: get_swing(a.site, a.indicator, a.geo_level, a.period, a.geo_query, a.dimension_levels),
+        "cbs": lambda: search_cbs(a.q),
+        "cbs-table": lambda: describe_cbs_table(a.id, a.dimension, a.query),
+        "cbs-get": lambda: get_cbs(a.id, json.loads(a.filters), a.topics),
+    }[a.cmd]()
     print(json.dumps(r, ensure_ascii=False, indent=1))
 
 

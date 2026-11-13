@@ -1,4 +1,5 @@
 """Offline project workflow and private-data boundary checks. No Gemini or DigiMV calls."""
+
 import io
 import json
 import tempfile
@@ -118,10 +119,14 @@ class ProjectsTest(unittest.TestCase):
 
     def test_existing_chat_database_migrates_without_losing_history(self):
         import sqlite3
+
         with tempfile.TemporaryDirectory() as folder, patch.object(digimv, "DATA", Path(folder)):
             with sqlite3.connect(Path(folder) / "chats.db") as db:
                 db.execute("CREATE TABLE chats(user TEXT,id TEXT,title TEXT,updated TEXT,messages TEXT,PRIMARY KEY(user,id))")
-                db.execute("INSERT INTO chats VALUES (?,?,?,?,?)", ("alice@example.test", "legacy-id", "Oud gesprek", "2026-01-01", json.dumps([{"id":"first-message", "role":"user", "parts":[]}])) )
+                db.execute(
+                    "INSERT INTO chats VALUES (?,?,?,?,?)",
+                    ("alice@example.test", "legacy-id", "Oud gesprek", "2026-01-01", json.dumps([{"id": "first-message", "role": "user", "parts": []}])),
+                )
             result = self.call("GET", "/chats/legacy-id")
             self.assertEqual(result.status_code, 200)
             self.assertIsNone(result.json()["project_id"])
@@ -150,14 +155,19 @@ class ProjectsTest(unittest.TestCase):
 
     def test_revocation_blocks_ocr_retry(self):
         import urllib.error
+
         p = self.call("GET", f"/projects/{self.pid}").json()
         self.call("PUT", f"/projects/{self.pid}", json={**p, "allow_private": True})
+
         def revoke(_):
             self.call("PUT", f"/projects/{self.pid}", json={**p, "allow_private": False})
+
         error = urllib.error.HTTPError("https://example.test", 429, "retry", {}, io.BytesIO(b"retry"))
-        with patch.dict("os.environ", {"GEMINI_API_KEY": "synthetic-test-key"}), \
-             patch.object(digimv, "_http", side_effect=error) as http, \
-             patch.object(digimv.time, "sleep", side_effect=revoke):
+        with (
+            patch.dict("os.environ", {"GEMINI_API_KEY": "synthetic-test-key"}),
+            patch.object(digimv, "_http", side_effect=error) as http,
+            patch.object(digimv.time, "sleep", side_effect=revoke),
+        ):
             with self.assertRaises(PermissionError):
                 digimv._gemini(b"synthetic", before_request=lambda: projects.require_consent(self.pid))
             self.assertEqual(http.call_count, 1)
@@ -180,7 +190,9 @@ class ProjectsTest(unittest.TestCase):
     def test_delete_project_and_document_lifecycle(self):
         did_pdf = self.upload().json()["id"]
         did_note = self.note("Notitie om te archiveren en verwijderen")
-        self.assertEqual(self.call("PUT", "/chats/c-del", json={"title": "T", "messages": [{"role": "user", "parts": []}], "project_id": self.pid}).status_code, 200)
+        self.assertEqual(
+            self.call("PUT", "/chats/c-del", json={"title": "T", "messages": [{"role": "user", "parts": []}], "project_id": self.pid}).status_code, 200
+        )
 
         listed = self.call("GET", "/projects").json()
         self.assertEqual(listed[0]["doc_count"], 2)
