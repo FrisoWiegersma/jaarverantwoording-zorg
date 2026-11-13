@@ -808,7 +808,6 @@ function useWide() {
 }
 
 interface EvidenceProps {
-  drawer?: boolean;
   open: boolean;
   citations: Citation[];
   index: number;
@@ -820,7 +819,7 @@ interface EvidenceProps {
 /** Where an answer's figures come from: docked on a wide screen, a drawer from the bottom on a phone. */
 export function Evidence(props: EvidenceProps) {
   const { open, citations, index, onIndex, onClose } = props;
-  const wide = useWide() && !props.drawer;
+  const wide = useWide();
 
   // ← → step through the answer's sources, unless the person is typing.
   useEffect(() => {
@@ -867,8 +866,7 @@ export function Evidence(props: EvidenceProps) {
 
   return (
     <Drawer onOpenChange={(o) => !o && onClose()} open={open}>
-      {/* Centred and capped on a wide screen: a project chat always uses this drawer, and a page as wide as the
-          monitor shows only its letterhead. */}
+      {/* Capped on a tablet, where a page as wide as the screen shows only its letterhead. */}
       <DrawerContent className="mx-auto max-h-[92dvh] w-full max-w-2xl">
         <div className="flex shrink-0 items-center justify-between pr-2 pl-5">
           <DrawerTitle className="font-semibold">Waar het staat</DrawerTitle>

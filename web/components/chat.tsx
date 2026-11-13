@@ -556,7 +556,6 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
         </div>
 
         <Evidence
-          drawer={Boolean(projectId)}
           citations={citations}
           docs={docs}
           index={index}
