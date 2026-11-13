@@ -178,6 +178,33 @@ class ProjectsTest(unittest.TestCase):
         projects.worker(stop)
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/documents").json()[0]["status"], "queued")
 
+    def test_delete_project_and_document_lifecycle(self):
+        did_pdf = self.upload().json()["id"]
+        did_note = self.note("Notitie om te archiveren en verwijderen")
+        self.assertEqual(self.call("PUT", "/chats/c-del", json={"title": "T", "messages": [{"role": "user", "parts": []}], "project_id": self.pid}).status_code, 200)
+
+        listed = self.call("GET", "/projects").json()
+        self.assertEqual(listed[0]["doc_count"], 2)
+        self.assertEqual(listed[0]["chat_count"], 1)
+
+        self.assertEqual(self.call("POST", f"/projects/{self.pid}/documents/{did_note}/archive").status_code, 200)
+        self.assertEqual(self.call("GET", "/projects").json()[0]["doc_count"], 1)
+        self.assertEqual(self.call("POST", f"/projects/{self.pid}/documents/{did_note}/unarchive").status_code, 200)
+        self.assertEqual(self.call("GET", "/projects").json()[0]["doc_count"], 2)
+
+        self.assertEqual(self.call("DELETE", f"/projects/{self.pid}/documents/{did_note}").status_code, 200)
+        self.assertEqual(len(self.call("GET", f"/projects/{self.pid}/documents").json()), 1)
+
+        self.assertEqual(self.call("DELETE", f"/projects/{self.pid}", headers=self.bob).status_code, 404)
+
+        pdf_path = projects.path_for(did_pdf)
+        self.assertTrue(pdf_path.exists())
+        self.assertEqual(self.call("DELETE", f"/projects/{self.pid}").status_code, 200)
+        self.assertFalse(pdf_path.exists())
+        self.assertEqual(self.call("GET", f"/projects/{self.pid}").status_code, 404)
+        self.assertEqual(self.call("GET", "/chats/c-del").status_code, 404)
+        self.assertEqual(self.call("GET", "/projects").json(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

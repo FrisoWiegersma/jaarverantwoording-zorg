@@ -100,8 +100,15 @@ class NoteIn(BaseModel):
 
 @router.get("")
 def list_projects(request: Request):
+    user = owner(request)
     with database() as db:
-        return [dict(r) for r in db.execute("SELECT id,name,updated FROM projects WHERE owner=? ORDER BY updated DESC", (owner(request),))]
+        return [dict(r) for r in db.execute(
+            """SELECT p.id, p.name, p.updated,
+                      (SELECT count(*) FROM project_documents d WHERE d.project_id=p.id AND d.archived=0) AS doc_count,
+                      (SELECT count(*) FROM chats c WHERE c.project_id=p.id AND c.user=p.owner) AS chat_count
+               FROM projects p WHERE p.owner=? ORDER BY p.updated DESC""",
+            (user,),
+        )]
 
 
 @router.post("", status_code=201)
@@ -127,6 +134,24 @@ def update_project(pid: str, body: ProjectIn, request: Request):
         if body.allow_private:
             db.execute("UPDATE project_documents SET status='queued' WHERE project_id=? AND status='needs_ocr'", (pid,))
         return unpack(project(db, pid, owner(request)))
+
+
+@router.delete("/{pid}")
+def delete_project(pid: str, request: Request):
+    user = owner(request)
+    doc_ids: list[str] = []
+    with database() as db:
+        project(db, pid, user)
+        doc_ids = [r[0] for r in db.execute("SELECT id FROM project_documents WHERE project_id=?", (pid,))]
+        for did in doc_ids:
+            db.execute("DELETE FROM project_pages_fts WHERE document_id=?", (did,))
+            db.execute("DELETE FROM project_pages WHERE document_id=?", (did,))
+        db.execute("DELETE FROM project_documents WHERE project_id=?", (pid,))
+        db.execute("DELETE FROM chats WHERE user=? AND project_id=?", (user, pid))
+        db.execute("DELETE FROM projects WHERE id=? AND owner=?", (pid, user))
+    for did in doc_ids:
+        path_for(did).unlink(missing_ok=True)
+    return {"ok": True}
 
 
 @router.get("/{pid}/documents")
@@ -212,6 +237,27 @@ def archive(pid: str, did: str, request: Request):
         project(db, pid, owner(request))
         document(db, pid, did)
         db.execute("UPDATE project_documents SET archived=1 WHERE id=?", (did,))
+    return {"ok": True}
+
+
+@router.post("/{pid}/documents/{did}/unarchive")
+def unarchive(pid: str, did: str, request: Request):
+    with database() as db:
+        project(db, pid, owner(request))
+        document(db, pid, did)
+        db.execute("UPDATE project_documents SET archived=0 WHERE id=?", (did,))
+    return {"ok": True}
+
+
+@router.delete("/{pid}/documents/{did}")
+def delete_document(pid: str, did: str, request: Request):
+    with database() as db:
+        project(db, pid, owner(request))
+        document(db, pid, did)
+        db.execute("DELETE FROM project_pages_fts WHERE document_id=?", (did,))
+        db.execute("DELETE FROM project_pages WHERE document_id=?", (did,))
+        db.execute("DELETE FROM project_documents WHERE id=? AND project_id=?", (did, pid))
+    path_for(did).unlink(missing_ok=True)
     return {"ok": True}
 
 
