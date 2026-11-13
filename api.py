@@ -18,6 +18,7 @@ import datasets
 import digimv
 import documents
 import projects
+import project_files
 import sources
 
 # A frozen API logs nothing (uvicorn skips requests whose caller gave up), so on a freeze run
@@ -50,6 +51,7 @@ async def lifespan(app):
 
 app = FastAPI(title="DigiMV jaarverantwoording", lifespan=lifespan)
 app.include_router(projects.router)
+app.include_router(project_files.router)
 
 
 @app.middleware("http")

@@ -101,6 +101,9 @@ test("the tools hand out cites that parse back to the same row or value", () => 
   const sevenZip = rowCite({ id, member, format: "xlsx", sheet: "Blad1" }) + "2";
   assert.deepEqual(parseHref(sevenZip), { kind: "row", tableId: id, parts: [member, "Blad1"], row: 2 });
   assert.equal(parseCitations(`[rij 2](${sevenZip} "0011")`)[0].kind, "row");
+  const privateRow = `/bron/project/${"a".repeat(32)}/${"b".repeat(32)}/rij/${pathSegment(member)}/Blad1/2`;
+  assert.deepEqual(parseHref(privateRow), { kind: "row", projectId: "a".repeat(32), tableId: "b".repeat(32), parts: [member, "Blad1"], row: 2 });
+  assert.equal(parseCitations(`[rij 2](${privateRow} "0011")`)[0].kind, "row");
   const row = { TypeMaatwerkvoorziening: "T001024 = Totaal", RegioS: "GM0546 = Leiden", Perioden: "2024JJ00 = 2024", WmoClienten_1: 8575 };
   const cite = cbsCite("86050NED", row, { WmoClienten_1: "Wmo-cliënten (aantal)" });
   assert.equal(cite, "/bron/cbs/86050NED/T001024/GM0546/2024JJ00");

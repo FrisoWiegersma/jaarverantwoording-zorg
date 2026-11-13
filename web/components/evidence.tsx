@@ -8,6 +8,7 @@ import { Mark as Marker, MarkerText } from "@/components/kokonutui/marker-text";
 import { type Citation, pathSegment } from "@/lib/citations";
 import { parseNumber } from "@/lib/excel";
 import { cn } from "@/lib/utils";
+import { SaveToProject } from "@/components/save-to-project";
 
 /** A document's name for the evidence heading. Public documents (kind doc) also carry the original URL and its site. */
 export type DocMeta = { org: string; type: string; url?: string };
@@ -114,7 +115,8 @@ async function fetchText(c: TextCitation): Promise<TextPart> {
 /** The row from our cached copy of the file; a row that isn't there (or a file no longer cached) loads as null. */
 async function fetchRow(c: RowCitation): Promise<TableRow> {
   const parts = c.parts.map((p) => `part=${encodeURIComponent(p)}`).join("&");
-  const r = await fetch(`/digimv/public/tables/${c.tableId}/rows/${c.row}${parts ? `?${parts}` : ""}`);
+  const base = c.projectId ? `/digimv/projects/${c.projectId}/documents/${c.tableId}` : `/digimv/public/tables/${c.tableId}`;
+  const r = await fetch(`${base}/rows/${c.row}${parts ? `?${parts}` : ""}`, { cache: "no-store" });
   if (r.status === 404) return { kind: "row", data: null };
   if (!r.ok) throw new Error(String(r.status));
   return { kind: "row", data: await r.json() };
@@ -638,7 +640,7 @@ function RowEvidence({ c, value }: { c: RowCitation; value: TableRow | "error" |
       </Status>
       {d && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <ButtonLink download href={`/digimv/public/tables/${c.tableId}/file`}>Download het bestand</ButtonLink>
+          <ButtonLink download href={c.projectId ? `/digimv/projects/${c.projectId}/documents/${c.tableId}/file` : `/digimv/public/tables/${c.tableId}/file`}>Download het bestand</ButtonLink>
           <a className="text-[0.9rem] text-muted-foreground underline underline-offset-2 hover:text-foreground" href={d.file_url} rel="noopener noreferrer" target="_blank">
             Origineel op de site
           </a>
@@ -730,6 +732,7 @@ export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocM
       ) : (
         <FigureEvidence c={c} filed={value as Filed | "error" | null} />
       )}
+      {(c.kind === "page" || c.kind === "doc" || (c.kind === "row" && !c.projectId)) && <SaveToProject key={c.href} href={c.href} />}
     </div>
   );
 }
@@ -740,12 +743,12 @@ export function PrivateSource({ c, value, compact = false }: { c: PrivateCitatio
   if (value === "error") return <p role="alert">Privébron niet beschikbaar. Controleer je aanmelding.</p>;
   const matched = value.text.replace(/\s+/g, " ").includes(c.quote.replace(/\s+/g, " "));
   return <div className="min-w-0 space-y-3 [overflow-wrap:anywhere]">
-    <Heading title={value.filename} sub={`Privébron · ${value.documentKind === "pdf" ? "pagina" : "sectie"} ${c.page} · ${value.source === "text" || value.source === "note" || value.source === "markdown" ? "tekst" : value.source === "needs_ocr" || value.source === "pending" ? "OCR niet beschikbaar" : "OCR — controleer de tekst"}`} />
+    <Heading title={value.filename} sub={`Privébron · ${value.documentKind === "pdf" ? "pagina" : "sectie"} ${c.page} · ${["text", "note", "markdown", "table"].includes(value.source) ? "tekst" : value.source === "needs_ocr" || value.source === "pending" ? "OCR niet beschikbaar" : "OCR — controleer de tekst"}`} />
     {c.quote && <blockquote className="rounded-lg bg-marker p-3 text-marker-ink">{c.quote}</blockquote>}
     {c.quote && <p className="text-sm text-muted-foreground">{matched ? "Citaat teruggevonden in de brontekst. Controleer de betekenis zelf." : "Citaat niet letterlijk teruggevonden. Controleer de originele pagina."}</p>}
     {!compact && value.shot && <PageImage href={`${pagePath(c)}/pdf#page=${c.page}`} page={c.page} quoted={Boolean(c.quote)} shot={value.shot} />}
     {!compact && value.text && <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-4 font-sans text-sm">{value.text}</pre>}
-    {!compact && value.documentKind !== "pdf" && <a className="underline" href={`${pagePath(c)}/original`}>Download {value.documentKind === "markdown" ? "kennisbestand (.md)" : "tekstbron"}</a>}
+    {!compact && value.documentKind !== "pdf" && <a className="underline" href={`${pagePath(c)}/${value.documentKind === "table" ? "file" : "original"}`}>Download {value.documentKind === "table" ? "databestand" : value.documentKind === "markdown" ? "kennisbestand (.md)" : "tekstbron"}</a>}
     {!compact && value.documentKind === "pdf" && <a className="underline" href={`${pagePath(c)}/pdf#page=${c.page}`} target="_blank" rel="noopener">Open originele PDF op pagina {c.page}</a>}
   </div>;
 }
@@ -826,7 +829,7 @@ export function Evidence(props: EvidenceProps) {
     if (!open || citations.length < 2) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      if ((e.target as HTMLElement | null)?.closest("input, textarea, [contenteditable='true']")) return;
+      if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable='true']")) return;
       const to = { ArrowLeft: index - 1, ArrowRight: index + 1 }[e.key];
       if (to === undefined || to < 0 || to >= citations.length) return;
       e.preventDefault();

@@ -103,9 +103,13 @@ Through the frontend, prefix the following routes with `/digimv`. Inside Compose
 | `GET /public/search?q=...` | Word search in public documents read before; optional `url` for one document |
 | `GET /datasets/search?q=...` | Datasets in data.overheid.nl |
 | `GET /datasets/{id}` | One dataset with every resource |
-| `GET /datasets/table?url=...` | Rows of a CSV, XLSX or JSON file (also in a ZIP); optional `q`, `filters`, `offset`, `sheet`, `member`, `header_row`; `id` is our cached copy |
+| `GET /datasets/table?url=...` | Rows of a CSV, XLSX or JSON file (also in ZIP/7z); optional `q`, `filters`, `offset`, `sheet`, `member`, `header_row`; `id` is our cached copy |
 | `GET /public/tables/{id}/rows/{row}?part=...` | One row of that copy with its header, behind a `/bron/rij/` citation; `part` is the ZIP member and/or sheet |
 | `GET /public/tables/{id}/file` | Our cached copy of the file, as a download |
+| `POST /projects/{pid}/saved-files` | Save a cited PDF or table/ZIP/7z as a project copy; body `{ "href": "/bron/..." }`. Repeated saves return the same document and restore it if archived. Maximum 25 MB; PDFs at most 200 pages |
+| `GET /projects/{pid}/documents/{did}/file` | Download a saved original; requires project ownership |
+| `GET /projects/{pid}/documents/{did}/table` | Read the saved table with `q`, `filters`, `offset`, `sheet`, `member`, `header_row`, `sort`; `for_model=true` also requires project consent |
+| `GET /projects/{pid}/documents/{did}/rows/{row}?part=...` | Reopen a private row citation from the saved copy, including archive member/sheet |
 | `GET /cbs/search?q=...` | CBS StatLine tables (opendata and dataderden) |
 | `GET /cbs/{table}` | A table's topics and dimensions; `dimension` and `q` list one dimension's codes |
 | `GET /cbs/{table}/values?filters={...}` | Values; `filters` is JSON (`{"RegioS":["GM0546"]}`), `topics=a,b` |

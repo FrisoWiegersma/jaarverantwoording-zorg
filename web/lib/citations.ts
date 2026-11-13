@@ -17,7 +17,7 @@ export type Source =
   | { kind: "iv3"; table: string; code: string; report: string; taakveld: string; categorie: string }
   | { kind: "doc"; docId: string; page: number }
   | { kind: "text"; docId: string; page: number }
-  | { kind: "row"; tableId: string; parts: string[]; row: number }
+  | { kind: "row"; tableId: string; parts: string[]; row: number; projectId?: string }
   | { kind: "cbs"; table: string; codes: string[]; topic: string };
 
 export type Citation = Source & { key: string; href: string; quote: string };
@@ -39,6 +39,8 @@ export function parseHref(href: string): Source | null {
   let m = href.match(/^\/bron\/(\d{4})\/(\d+)\/(\d+)$/);
   if (m) return { kind: "page", year: +m[1], docId: +m[2], page: +m[3] };
   try {
+    m = href.match(/^\/bron\/project\/([a-f0-9]{32})\/([a-f0-9]{32})\/rij((?:\/[^/\s]+){0,2})\/([1-9]\d*)$/);
+    if (m) return { kind: "row", projectId: m[1], tableId: m[2], parts: m[3].split("/").slice(1).map(decodeURIComponent), row: +m[4] };
     m = href.match(/^\/bron\/vragenlijst\/(\d{4})\/([^/\s]+)\/([^/\s]+)$/);
     if (m) return { kind: "figure", year: +m[1], orgId: decodeURIComponent(m[2]), field: decodeURIComponent(m[3]) };
     m = href.match(/^\/bron\/iv3\/([A-Z0-9]+)\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)$/);
