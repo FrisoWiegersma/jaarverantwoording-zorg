@@ -315,47 +315,128 @@ def _is_scan(page):
         return False  # blank or pure text
     visible = sum(1 for sp in page.get_texttrace() if sp["type"] != 3 and sp.get("opacity", 1) > 0 for c in sp["chars"] if chr(c[0]).strip())
     cover = max(abs(pymupdf.Rect(i["bbox"]) & page.rect) / abs(page.rect) for i in imgs)
-    # ponytail: a photo cover page with a short title also goes to Gemini; costs one page, loses nothing
+    # ponytail: a photo cover page with a short title also goes to OCR; costs one page, loses nothing
     return visible < 50 or (visible < 200 and cover >= 0.5)
 
 
-def _gemini(pdf_bytes, before_request=None, prompt=None):
-    """Transcribe a one-page PDF scan with Gemini. Returns (markdown, exact model version)."""
-    key = os.environ.get("GEMINI_API_KEY")
-    if not key:
-        raise RuntimeError("GEMINI_API_KEY is not set (needed for scanned pages)")
+# The provider's key (the server's address for "compatible"), and in order of preference each provider whose own model
+# reads scans, with that model. DeepSeek and an OpenAI-compatible server only do OCR when OCR_MODEL names them: a model
+# that can't see the page writes plausible figures instead of failing.
+OCR_KEYS = {"google": "GEMINI_API_KEY", "anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "compatible": "OPENAI_COMPATIBLE_BASE_URL"}
+OCR_DEFAULTS = {"google": GEMINI_MODEL, "anthropic": "claude-haiku-5-5", "openai": "gpt-6.1-terra"}
+
+
+def ocr_model():
+    """(provider, model) for scanned pages: OCR_MODEL=provider:model, else the first of OCR_DEFAULTS with a key."""
+    spec = os.environ.get("OCR_MODEL", "").strip()
+    if spec:
+        provider, _, model = spec.partition(":")
+    else:
+        provider = next((p for p in OCR_DEFAULTS if os.environ.get(OCR_KEYS[p])), "")
+        model = OCR_DEFAULTS.get(provider, "")
+    if not model or not os.environ.get(OCR_KEYS.get(provider, "-")):
+        raise RuntimeError(
+            f"No OCR model for scanned pages: set GEMINI_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY, or OCR_MODEL with its key (OCR_MODEL={spec!r})"
+        )
+    return provider, model
+
+
+def _ocr_google(model, pdf_bytes, prompt):
     body = {
-        "contents": [
-            {"parts": [{"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(pdf_bytes).decode()}}, {"text": prompt or SCAN_PROMPT}]}
-        ],
+        "contents": [{"parts": [{"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(pdf_bytes).decode()}}, {"text": prompt}]}],
         "generationConfig": {"temperature": 0},
     }
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-    for attempt in range(4):
-        try:
-            if before_request:
-                before_request()
-            raw = _http(url, data=json.dumps(body).encode(), timeout=300, headers={"x-goog-api-key": key, "Content-Type": "application/json"})
-            break
-        except urllib.error.HTTPError as e:
-            msg = e.read()[:400].decode(errors="replace")
-            if e.code in (429, 500, 503) and attempt < 3:  # rate limit / overload: back off
-                time.sleep(10 * (attempt + 1))
-                continue
-            raise RuntimeError(f"Gemini HTTP {e.code}: {msg}") from e
-    res = json.loads(raw)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    res = json.loads(
+        _http(url, data=json.dumps(body).encode(), timeout=300, headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"], "Content-Type": "application/json"})
+    )
     cand = (res.get("candidates") or [{}])[0]
     if cand.get("finishReason") != "STOP":
         raise ValueError(f"Gemini stopped with {cand.get('finishReason')}")
-    md = "".join(p.get("text", "") for p in cand["content"]["parts"]).strip()
-    md = re.sub(r"^```(?:markdown)?\n|\n```$", "", md)  # some models fence their answer
-    return md.strip(), res.get("modelVersion", GEMINI_MODEL)
+    return "".join(p.get("text", "") for p in cand["content"]["parts"]), res.get("modelVersion", model)
+
+
+def _ocr_anthropic(model, pdf_bytes, prompt):
+    import anthropic
+
+    # No retries in the SDK: ocr() retries, and checks consent before each attempt. Low effort: copying, not reasoning.
+    msg = anthropic.Anthropic(max_retries=0, timeout=300).messages.create(
+        model=model,
+        max_tokens=16000,
+        output_config={"effort": "low"},
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": base64.b64encode(pdf_bytes).decode()}},
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ],
+    )
+    if msg.stop_reason != "end_turn":
+        raise ValueError(f"Claude stopped with {msg.stop_reason}")
+    return "".join(b.text for b in msg.content if b.type == "text"), msg.model
+
+
+def _ocr_openai(model, pdf_bytes, prompt, base=None, key=None):
+    """OpenAI's chat completions, or any server that speaks them. The page goes as an image: every vision model there
+    takes images, few take PDFs."""
+    import pymupdf
+
+    with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+        png = doc[0].get_pixmap(dpi=200).tobytes("png")
+    base = base or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1"
+    key = os.environ.get("OPENAI_API_KEY") if key is None else key
+    image = {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(png).decode()}}
+    body = {"model": model, "messages": [{"role": "user", "content": [image, {"type": "text", "text": prompt}]}]}
+    headers = {"Content-Type": "application/json"} | ({"Authorization": f"Bearer {key}"} if key else {})
+    res = json.loads(_http(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(), timeout=300, headers=headers))
+    choice = res["choices"][0]
+    if choice.get("finish_reason") != "stop":
+        raise ValueError(f"{model} stopped with {choice.get('finish_reason')}")
+    return choice["message"].get("content") or "", res.get("model", model)
+
+
+def _ocr_compatible(model, pdf_bytes, prompt):
+    return _ocr_openai(model, pdf_bytes, prompt, os.environ["OPENAI_COMPATIBLE_BASE_URL"], os.environ.get("OPENAI_COMPATIBLE_API_KEY", ""))
+
+
+OCR = {"google": _ocr_google, "anthropic": _ocr_anthropic, "openai": _ocr_openai, "compatible": _ocr_compatible}
+
+
+def ocr(pdf_bytes, before_request=None, prompt=None):
+    """Transcribe a one-page PDF scan with the OCR model. Returns (markdown, exact model version).
+
+    before_request runs before every attempt, retries included, so a project whose consent is withdrawn sends no more.
+    """
+    provider, model = ocr_model()
+    for attempt in range(4):
+        if before_request:
+            before_request()
+        try:
+            md, version = OCR[provider](model, pdf_bytes, prompt or SCAN_PROMPT)
+            break
+        except Exception as e:
+            status = getattr(e, "status_code", None) or getattr(e, "code", None)  # the Anthropic SDK's, urllib's HTTPError
+            if isinstance(status, int):
+                if status in (429, 500, 503, 529) and attempt < 3:  # rate limit / overload: back off
+                    time.sleep(10 * (attempt + 1))
+                    continue
+                detail = e.read()[:400].decode(errors="replace") if hasattr(e, "read") else str(e)[:400]
+                raise RuntimeError(f"OCR via {provider} HTTP {status}: {detail}") from e
+            if isinstance(e, (OSError, ValueError, RuntimeError)):
+                raise
+            # The callers handle those three; the SDK's connection errors and a reply without the expected fields aren't.
+            raise RuntimeError(f"OCR via {provider} failed: {e!r}"[:500]) from e
+    md = re.sub(r"^```(?:markdown)?\n|\n```$", "", md.strip())  # some models fence their answer
+    return md.strip(), version
 
 
 def extract_pages(path, prompt=None):
     """PDF -> [{"markdown", "source"[, "text"]}] per page, on first open.
 
-    Scanned pages go to Gemini one page per request, all in parallel: a page takes ~3 s with flash-lite, so a
+    Scanned pages go to the OCR model one page per request, all in parallel: a page takes ~3 s with flash-lite, so a
     scanned document takes seconds. Pages with a text layer get only their plain text here (milliseconds, for
     the search index); their Markdown ("markdown": None for now) comes on first read, see convert_pages.
     """
@@ -374,7 +455,7 @@ def extract_pages(path, prompt=None):
         sub.insert_pdf(doc, from_page=i, to_page=i)
         blobs.append(sub.tobytes())
     with ThreadPoolExecutor(16) as ex:  # ponytail: fixed fan-out; paid-tier flash-lite allows thousands RPM
-        for i, (md, model) in zip(scans, ex.map(lambda b: _gemini(b, prompt=prompt), blobs)):
+        for i, (md, model) in zip(scans, ex.map(lambda b: ocr(b, prompt=prompt), blobs)):
             out[i] = {"markdown": md, "source": model}
 
     missing = [i + 1 for i, pg in enumerate(out) if pg is None]

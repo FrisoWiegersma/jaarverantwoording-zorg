@@ -289,7 +289,83 @@ def run():
             assert c.delete("/chats/m1", headers=me).status_code == 204 and c.get("/chats", headers=me).json() == []
         finally:
             digimv.DATA = data
+    check_ocr()
     print("ok")
+
+
+def check_ocr():
+    """Which model reads scanned pages, and what each provider is sent; no network."""
+    import os
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    import pymupdf
+
+    clean = dict.fromkeys(("OCR_MODEL", *digimv.OCR_KEYS.values(), "OPENAI_BASE_URL", "OPENAI_COMPATIBLE_API_KEY", "DEEPSEEK_API_KEY"), "")
+
+    def model(**env):
+        with patch.dict(os.environ, {**clean, **env}):
+            return digimv.ocr_model()
+
+    assert model(GEMINI_API_KEY="g", ANTHROPIC_API_KEY="a") == ("google", digimv.GEMINI_MODEL)
+    assert model(ANTHROPIC_API_KEY="a", OPENAI_API_KEY="o") == ("anthropic", "claude-haiku-5-5")
+    assert model(OPENAI_API_KEY="o") == ("openai", "gpt-6.1-terra")
+    assert model(OCR_MODEL="compatible:qwen2.5vl:7b", OPENAI_COMPATIBLE_BASE_URL="http://h/v1") == ("compatible", "qwen2.5vl:7b")
+    # No key, DeepSeek or a compatible server alone (only by name), a named provider without its key, a model without provider.
+    for env in (
+        {},
+        {"DEEPSEEK_API_KEY": "d"},
+        {"OPENAI_COMPATIBLE_BASE_URL": "http://h/v1"},
+        {"OCR_MODEL": "anthropic:claude-haiku-5-5", "GEMINI_API_KEY": "g"},
+        {"OCR_MODEL": "gemini-3.5-flash-lite", "GEMINI_API_KEY": "g"},
+    ):
+        try:
+            model(**env)
+        except RuntimeError:
+            continue
+        raise AssertionError(env)
+
+    blank = pymupdf.open()
+    blank.new_page()
+    pdf = blank.tobytes()
+    sent = []
+
+    def http(url, data=None, headers=None, timeout=120):
+        sent.append((url, json.loads(data), headers))
+        if "googleapis" in url:
+            return json.dumps(
+                {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "```markdown\n| a |\n```"}]}}], "modelVersion": "gemini-x"}
+            )
+        return json.dumps({"choices": [{"finish_reason": "stop", "message": {"content": "Omzet 1.234"}}], "model": "m-1"})
+
+    with patch.object(digimv, "_http", http):
+        with patch.dict(os.environ, {**clean, "GEMINI_API_KEY": "g"}):
+            assert digimv.ocr(pdf) == ("| a |", "gemini-x")
+        _, body, headers = sent[-1]
+        assert headers["x-goog-api-key"] == "g" and body["contents"][0]["parts"][0]["inline_data"]["mime_type"] == "application/pdf"
+        with patch.dict(os.environ, {**clean, "OCR_MODEL": "compatible:qwen2.5vl:7b", "OPENAI_COMPATIBLE_BASE_URL": "http://h:11434/v1/"}):
+            assert digimv.ocr(pdf) == ("Omzet 1.234", "m-1")
+        url, body, headers = sent[-1]
+        assert url == "http://h:11434/v1/chat/completions" and "Authorization" not in headers and body["model"] == "qwen2.5vl:7b"
+        assert body["messages"][0]["content"][0]["image_url"]["url"].startswith("data:image/png;base64,")
+        with patch.dict(os.environ, {**clean, "OPENAI_API_KEY": "o"}):
+            digimv.ocr(pdf)
+        assert sent[-1][0] == "https://api.openai.com/v1/chat/completions" and sent[-1][2]["Authorization"] == "Bearer o"
+
+    text = SimpleNamespace(type="text", text="Eigen vermogen 108.256")
+    reply = SimpleNamespace(stop_reason="end_turn", model="claude-haiku-5-5", content=[SimpleNamespace(type="thinking"), text])
+    with patch.dict(os.environ, {**clean, "ANTHROPIC_API_KEY": "a"}), patch("anthropic.Anthropic") as client:
+        create = client.return_value.messages.create
+        create.return_value = reply
+        assert digimv.ocr(pdf) == ("Eigen vermogen 108.256", "claude-haiku-5-5")
+        assert client.call_args.kwargs["max_retries"] == 0 and create.call_args.kwargs["messages"][0]["content"][0]["type"] == "document"
+        create.side_effect = Exception("connection reset")  # the SDK's own errors reach the callers as RuntimeError
+        try:
+            digimv.ocr(pdf)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("SDK error passed through")
 
 
 if __name__ == "__main__":

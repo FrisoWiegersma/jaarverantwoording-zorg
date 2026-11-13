@@ -8,6 +8,9 @@ services:
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3210}
     volumes:
       - digimv-data:/app/data
+    # OCR on a vision model served from the host, such as Ollama (OCR_MODEL=compatible:...).
+    extra_hosts:
+      - host.docker.internal:host-gateway
     restart: unless-stopped
     healthcheck:
       test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]

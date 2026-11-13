@@ -368,7 +368,7 @@ def process_document(did):
                     if not db.execute("SELECT allow_private FROM projects WHERE id=?", (d["project_id"],)).fetchone()[0]:
                         needs_ocr = True
                         continue
-                text, source = digimv._gemini(sub.tobytes(), before_request=lambda: require_consent(d["project_id"]))
+                text, source = digimv.ocr(sub.tobytes(), before_request=lambda: require_consent(d["project_id"]))
                 sub.close()
             else:
                 text, source = page.get_text(sort=True).strip(), "text"

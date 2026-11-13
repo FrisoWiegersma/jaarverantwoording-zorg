@@ -1,4 +1,4 @@
-"""Offline project workflow and private-data boundary checks. No Gemini or DigiMV calls."""
+"""Offline project workflow and private-data boundary checks. No AI provider or DigiMV calls."""
 
 import io
 import json
@@ -95,7 +95,7 @@ class ProjectsTest(unittest.TestCase):
         pdf.close()
         self.assertEqual(self.upload(encrypted).status_code, 400)
         did = self.upload().json()["id"]
-        with patch.object(digimv, "_gemini", side_effect=AssertionError("No private OCR without consent")):
+        with patch.object(digimv, "ocr", side_effect=AssertionError("No private OCR without consent")):
             projects.process_document(did)
         page = self.call("GET", f"/projects/{self.pid}/documents/{did}/pages/1").json()
         self.assertIn("108.256", page["text"])
@@ -105,12 +105,12 @@ class ProjectsTest(unittest.TestCase):
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/documents/{did}/pages/2").status_code, 404)
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/documents/{did}/pages/1.png?quote=108.256").headers["x-found"], "all")
         scan = self.upload(self.pdf(scanned=True)).json()["id"]
-        with patch.object(digimv, "_gemini", side_effect=AssertionError("No consent")):
+        with patch.object(digimv, "ocr", side_effect=AssertionError("No consent")):
             projects.process_document(scan)
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/documents/{scan}/pages/1").json()["source"], "needs_ocr")
         p = self.call("GET", f"/projects/{self.pid}").json()
         self.call("PUT", f"/projects/{self.pid}", json={**p, "allow_private": True})
-        with patch.object(digimv, "_gemini", return_value=("Eigen vermogen 108.256", "test-ocr")) as ocr:
+        with patch.object(digimv, "ocr", return_value=("Eigen vermogen 108.256", "test-ocr")) as ocr:
             projects.process_document(scan)
             self.assertEqual(ocr.call_count, 1)
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/model-context").status_code, 200)
@@ -169,7 +169,7 @@ class ProjectsTest(unittest.TestCase):
             patch.object(digimv.time, "sleep", side_effect=revoke),
         ):
             with self.assertRaises(PermissionError):
-                digimv._gemini(b"synthetic", before_request=lambda: projects.require_consent(self.pid))
+                digimv.ocr(b"synthetic", before_request=lambda: projects.require_consent(self.pid))
             self.assertEqual(http.call_count, 1)
 
     def test_chats_migration_scope_and_restart(self):

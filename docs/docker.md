@@ -4,7 +4,7 @@
 
 ## Start
 
-Install Docker with the Compose plugin. You also need an API key for at least one AI provider: Gemini, Claude, DeepSeek, OpenAI, or any server that speaks the OpenAI API, such as Ollama. Scanned-page OCR uses Gemini for now.
+Install Docker with the Compose plugin. You also need an API key for at least one AI provider: Gemini, Claude, DeepSeek, OpenAI, or any server that speaks the OpenAI API, such as Ollama. Scanned PDF pages are read by the first of Gemini, Claude or OpenAI that has a key, or by `OCR_MODEL`.
 
 From the repository root:
 
@@ -53,11 +53,12 @@ The API image includes the SQLite tokenizer needed by the index and runs the off
 
 | Variable | Default | When to change it |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | At least one provider | Gemini models in the chat; scanned-page OCR |
+| `GEMINI_API_KEY` | At least one provider | Gemini models in the chat |
 | `ANTHROPIC_API_KEY` | | Claude Sonnet, Opus and Haiku 5.5 |
 | `DEEPSEEK_API_KEY` | | DeepSeek V4 Pro and Flash |
 | `OPENAI_API_KEY` | | OpenAI models: `OPENAI_MODELS` (default `gpt-6.1-sol,gpt-6.1-terra,gpt-6-astra`), optional `OPENAI_BASE_URL` |
 | `OPENAI_COMPATIBLE_BASE_URL` | | Any OpenAI-compatible server (Ollama, OpenRouter, Mistral, Groq, vLLM), with `OPENAI_COMPATIBLE_MODELS`, `OPENAI_COMPATIBLE_API_KEY` and a name for the picker in `OPENAI_COMPATIBLE_NAME`. The models must support tool calls. Ollama on the Docker host is `http://host.docker.internal:11434/v1` |
+| `OCR_MODEL` | | The model that reads scanned PDF pages, as `provider:model` (`google`, `anthropic`, `openai` or `compatible`), for example `compatible:qwen2.5vl:7b`. Default: Gemini 3.5 Flash Lite, else Claude Haiku 5.5, else OpenAI's gpt-6.1-terra, whichever has a key first. DeepSeek and the compatible server are only used when named here, and the model must read images |
 | `APP_ORIGIN` | `http://localhost:3210` | The exact address users open; Excel source links must match it |
 | `AUTH_MODE` | `builtin` | `cloudflare` when Cloudflare Access signs people in (see below) |
 | `BETTER_AUTH_SECRET` | Made on first start | Set your own (`openssl rand -hex 32`) to manage it with your other secrets |

@@ -38,7 +38,7 @@ Open **http://localhost:3210** and create an account. The first start builds the
 
 > Toon de omzet van Stichting Basalt van 2021 tot en met 2024 in een grafiek.
 
-Chat uses the models of the providers you set a key for; you pick one per question. OCR of scanned pages uses Gemini for now. Search, caching and PDF text extraction run locally. The [Docker guide](docs/docker.md) covers indexing, configuration, sign-in through Cloudflare Access instead of the built-in login, updates and backups. To work on the code without Docker, see [web/README.md](web/README.md).
+Chat uses the models of the providers you set a key for; you pick one per question. OCR of scanned pages uses Gemini, Claude or OpenAI, or the model `OCR_MODEL` names. Search, caching and PDF text extraction run locally. The [Docker guide](docs/docker.md) covers indexing, configuration, sign-in through Cloudflare Access instead of the built-in login, updates and backups. To work on the code without Docker, see [web/README.md](web/README.md).
 
 ## How it works
 
@@ -53,7 +53,7 @@ flowchart LR
     A --> E[Filed value or highlighted PDF page]
 ```
 
-The model finds the organisation, reads its filing and answers with sourced rows. Filed questionnaire values come first, because they keep their label, unit, year and scope. PDF pages fill in the rest: their text is extracted locally, and only pages that are images go to Gemini for OCR. Group totals and an entity's own accounts are kept apart. The [architecture notes](docs/architecture.md) go into the tool loop, validation, caching and tradeoffs.
+The model finds the organisation, reads its filing and answers with sourced rows. Filed questionnaire values come first, because they keep their label, unit, year and scope. PDF pages fill in the rest: their text is extracted locally, and only pages that are images go to the AI provider for OCR. Group totals and an entity's own accounts are kept apart. The [architecture notes](docs/architecture.md) go into the tool loop, validation, caching and tradeoffs.
 
 ## Limits
 

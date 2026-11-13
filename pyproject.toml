@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Retrieval API for Jaarverslagen Zorg: Dutch healthcare annual reports and other public sources, cited to the page"
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=2.8.0",
     "fastapi>=0.162.0",
     "mcp>=2.3.0",
     "py7zr>=1.1.4",
