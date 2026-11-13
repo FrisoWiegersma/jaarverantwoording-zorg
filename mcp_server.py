@@ -288,14 +288,16 @@ def get_dataset(dataset_id: str) -> dict:
 @mcp.tool()
 def read_table(url: str, query: str | None = None, limit: int = 50, offset: int = 0, sheet: str | None = None,
                header_row: int | None = None, filters: dict[str, list[str]] | None = None,
-               member: str | None = None) -> dict:
+               member: str | None = None, sort: str | None = None) -> dict:
     """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim, each with its row number. filters:
     {column: [values]}, exact match on that column (use it for codes such as a KvK number, AGB code or diagnosis code:
     query also matches amounts). member picks a file inside a ZIP (listed in `members`). query keeps rows
     containing every word (an AGB code, a name, a municipality). The header is detected (title rows above it are
     in title_rows); header_row overrides it. sheet picks an Excel sheet (all are in `sheets`). rows_total and
-    rows_matched say how much there is: page with offset before saying something is not in the file."""
-    return _call(datasets.read_table, url, query, limit, offset, sheet, header_row, filters=filters, member=member)
+    rows_matched say how much there is: page with offset before saying something is not in the file. sort: a column
+    to order the matched rows by as numbers, '-COL' for the largest first (the most patients, the highest amount)."""
+    return _call(datasets.read_table, url, query, limit, offset, sheet, header_row, filters=filters, member=member,
+                 sort=sort)
 
 
 @mcp.tool()

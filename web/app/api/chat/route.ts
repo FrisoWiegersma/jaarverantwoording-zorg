@@ -80,10 +80,13 @@ dan filters op die kolom in read_table, niet query: query vindt het getal ook in
 - Kwaliteit per zorgaanbieder (Zorginzicht): list_links op https://www.zorginzicht.nl/algemeen/map/openbare-data, dan op de \
 sectorpagina; elk Excel-bestand heeft één rij per indicator per locatie. Lees het met read_table en filters {"KvkNummer": [kvk]}. De \
 bestandslinks veranderen bij elk bezoek: haal ze opnieuw op met list_links, hergebruik geen oude link.
-- DBC's van ziekenhuizen (NZa Open DIS), CSV op https://opendisdata.nza.nl/download/csv/ : 01_DBC.csv (zorgproducten per jaar, \
-specialisme en diagnose, met patiënten en gemiddelde verkoopprijs), 02_DBC_PROFIEL.csv (zorgactiviteiten per zorgproduct; 11 miljoen \
-rijen: een minuut per vraag, de eerste keer enkele minuten), namen bij de codes in 04_REF_DGN.csv, 05_REF_ZPD.csv, 06_REF_SPC.csv en 03_REF_ZAT.csv. Filter op JAAR en de \
-codekolommen, codes met voorloopnullen zoals in het bestand (specialisme 0303).
+- DBC's van ziekenhuizen (NZa Open DIS): lees de CSV's direct met read_table op https://opendisdata.nza.nl/download/csv/{bestand} \
+(die map zelf is geen pagina). 01_DBC.csv: één rij per JAAR, BEHANDELEND_SPECIALISME_CD, TYPERENDE_DIAGNOSE_CD en ZORGPRODUCT_CD, met \
+AANTAL_PAT_PER_ZPD (patiënten bij die diagnose; een zorgproduct kan bij meer diagnoses staan) en GEMIDDELDE_VERKOOPPRIJS (per \
+zorgproduct, in hele euro's). 02_DBC_PROFIEL.csv: zorgactiviteiten per zorgproduct (11 miljoen rijen: een minuut per vraag, de eerste \
+keer enkele minuten). Namen bij de codes in 04_REF_DGN.csv, 05_REF_ZPD.csv, 06_REF_SPC.csv en 03_REF_ZAT.csv. Filter met filters op \
+JAAR en de codekolommen (niet met query), codes met voorloopnullen zoals in het bestand (specialisme 0303, cardiologie 0320); voor de \
+grootste zorgproducten sort "-AANTAL_PAT_PER_ZPD".
 - Zvw-zorgkosten per gemeente en postcode (Vektis): list_links op https://www.vektis.nl/zorgprisma/open-databestanden, dan \
 read_table; de Zorgthermometer en factsheets staan als PDF op vektis.nl.
 - Kosten van de Zvw en de Wlz per zorgsoort (Zorgcijfersdatabank): read_document op \
@@ -487,7 +490,7 @@ const tools = {
   }),
   read_table: tool({
     description:
-      "Rows of a CSV, Excel (.xlsx) or JSON file by URL (also inside a ZIP: member, listed in members), values verbatim, each with its row number. filters: {column: [values]}, exact match on that column: use it for a code (KvK number, AGB code, diagnosis or product code, with its leading zeros as in the file); query keeps rows containing every word anywhere, so a code can also hit an amount. The header row is detected (title rows above it are in title_rows); header_row overrides it; sheet picks an Excel sheet (all are in sheets). rows_total and rows_matched say how much there is: page with offset before saying something is not in the file. Large files (up to 1 GB) are read in full: about a minute for 10 million rows, and the first read also downloads the file (a few minutes); use filters to keep the result small. Cite a row as row_cite followed by its row number (row_cite + 12 for row 12).",
+      "Rows of a CSV, Excel (.xlsx) or JSON file by URL (also inside a ZIP: member, listed in members), values verbatim, each with its row number. filters: {column: [values]}, exact match on that column: use it for a code (KvK number, AGB code, diagnosis or product code, with its leading zeros as in the file); query keeps rows containing every word anywhere, so a code can also hit an amount. The header row is detected (title rows above it are in title_rows); header_row overrides it; sheet picks an Excel sheet (all are in sheets). rows_total and rows_matched say how much there is: page with offset before saying something is not in the file. sort: a column to order the matched rows by as numbers, '-COL' for the largest first: for a top or 'most common' question, never page through everything to rank it yourself. Large files (up to 1 GB) are read in full: about a minute for 10 million rows, and the first read also downloads the file (a few minutes); use filters to keep the result small. Cite a row as row_cite followed by its row number (row_cite + 12 for row 12).",
     inputSchema: z.object({
       url: z.string().url().max(2000),
       query: z.string().max(200).optional(),
@@ -497,9 +500,10 @@ const tools = {
       // A bare string is one value (datasets._scan reads it as [value]); Gemini sends that sometimes.
       filters: z.record(z.string(), z.union([z.string().max(200), z.array(z.string().max(200)).max(50)])).optional(),
       member: z.string().max(300).optional(),
+      sort: z.string().max(200).optional(),
     }),
-    execute: async ({ url, query, offset, sheet, header_row, filters, member }): Promise<Table> =>
-      api("/datasets/table", { url, q: query, offset, sheet, header_row, filters: filters && JSON.stringify(filters), member, limit: 40 }),
+    execute: async ({ url, query, offset, sheet, header_row, filters, member, sort }): Promise<Table> =>
+      api("/datasets/table", { url, q: query, offset, sheet, header_row, filters: filters && JSON.stringify(filters), member, sort, limit: 40 }),
     // Rows as arrays under one column list: the column names are not repeated per row.
     toModelOutput: ({ output: { rows, columns, id, ...r } }) => ({
       type: "json",

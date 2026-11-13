@@ -17,6 +17,7 @@ Checked against the live services on 2026-11-12:
 
 import csv
 import functools
+import heapq
 import io
 import itertools
 import json
@@ -267,9 +268,24 @@ def _in_memory(size, what):
                          "look for a CSV version of it")
 
 
-def _scan(rows, header_row, filters, words, offset, limit, shift, row=None):
+def _sort_key(v):
+    """A cell as a number to sort on: 94691, 3875.5, Dutch 1.234,5; (0,) for text or empty, so it sorts after numbers."""
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return (1, v)
+    s = str(v or "").strip()
+    for t in (s, s.replace(".", "").replace(",", ".") if "," in s else None):
+        try:
+            return (1, float(t))
+        except (TypeError, ValueError):
+            pass
+    return (0,)
+
+
+def _scan(rows, header_row, filters, words, offset, limit, shift, row=None, sort=None):
     """One pass over rows (a list or a stream): header, the counts, and only the requested page kept. With row, only
-    that row (by its number in the file), stopping there: what a /bron/rij/ citation shows; the counts are then partial."""
+    that row (by its number in the file), stopping there: what a /bron/rij/ citation shows; the counts are then partial.
+    sort 'COL' or '-COL' (descending) pages through the matched rows ordered by that column as numbers, text last;
+    only offset + limit rows are held, so a 10-million-row file is still one pass."""
     rows = iter(rows)
     first = list(itertools.islice(rows, max(30, header_row or 0)))
     h = header_row or _header_row(first)
@@ -278,13 +294,15 @@ def _scan(rows, header_row, filters, words, offset, limit, shift, row=None):
     header = first[h - 1]
     width = max(map(len, first[h - 1:]))
     cols = _columns(header + [None] * (width - len(header)))
-    want = {}
-    for k, v in (filters or {}).items():
+    def index(k):
         i = next((i for i, c in enumerate(cols) if c == k), None)
         i = i if i is not None else next((i for i, c in enumerate(cols) if c.casefold() == str(k).strip().casefold()), None)
         if i is None:
             raise KeyError(f"no column {k!r}; the columns are {cols}")
-        want[i] = {str(x).strip().casefold() for x in (v if isinstance(v, list) else [v])}
+        return i
+    want = {index(k): {str(x).strip().casefold() for x in (v if isinstance(v, list) else [v])} for k, v in (filters or {}).items()}
+    desc, si = (sort or "").startswith("-"), sort and index(sort.lstrip("-"))
+    top = []  # with sort: a min-heap of the offset + limit best rows; on a tie the earlier row stays
     total = matched = 0
     page = []
     # n is the row's number in the file as a spreadsheet shows it (JSON: the record's number), so a citation finds it
@@ -305,8 +323,14 @@ def _scan(rows, header_row, filters, words, offset, limit, shift, row=None):
         if words and not all(w in sources._fold(" ".join("" if v is None else str(v) for v in r)) for w in words):
             continue
         matched += 1
-        if offset < matched <= offset + limit:
+        if sort:
+            k = _sort_key(r[si] if si < len(r) else None)
+            item = ((k[0], k[1] if desc else -k[1]) if k[0] else k, -n, n - shift, r)
+            (heapq.heappush if len(top) < offset + limit else heapq.heappushpop)(top, item)
+        elif offset < matched <= offset + limit:
             page.append((n - shift, r))
+    if sort:
+        page = [(n, r) for *_, n, r in sorted(top, reverse=True)][offset:]
     # a value right of the last header cell still gets a column, never dropped
     cols = _columns(header + [None] * (width - len(header)))
     return {"header_row": h, "title_rows": [t for r in first[:h - 1] if (t := [v for v in r if v not in (None, "")])][:5],
@@ -315,25 +339,28 @@ def _scan(rows, header_row, filters, words, offset, limit, shift, row=None):
             "rows": [{"row": n, **{c: (r[i] if i < len(r) else None) for i, c in enumerate(cols)}} for n, r in page]}
 
 
-def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None, refresh=False, filters=None, member=None):
+def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None, refresh=False, filters=None, member=None,
+               sort=None):
     """Rows of a CSV, Excel (.xlsx) or JSON file, also inside a ZIP. query keeps rows containing every word (accents
     ignored), e.g. an AGB code, a municipality or 'begeleiding'. filters {column: [values]} keeps rows whose cell in
     that column is one of the values (exact, case ignored): how to match a code without hitting amounts. header_row
-    (1-based) overrides the detected header. member picks a file inside a ZIP."""
+    (1-based) overrides the detected header. member picks a file inside a ZIP. sort 'COL' or '-COL' orders the matched
+    rows by that column as numbers (descending with -): the largest first, e.g. the most patients."""
     path, ctype, final, fetched = _file(url.strip(), refresh)
-    fmt, out, sheet, sheets, member, members = _read(path, ctype, query, limit, offset, sheet, header_row, filters, member)
+    fmt, out, sheet, sheets, member, members = _read(path, ctype, query, limit, offset, sheet, header_row, filters, member,
+                                                     sort=sort)
     # id: our cached copy, which a /bron/rij/{id}/.../{row} citation opens (the site's link may expire, as Zorginzicht's do)
     return {"id": path.name, "url": url, "file_url": final, "format": fmt, "sheet": sheet, "sheets": sheets,
             "member": member, "members": members, "fetched_at": fetched, **out, "scope": TABLE_SCOPE}
 
 
-def _read(path, ctype, query, limit, offset, sheet, header_row, filters, member, row=None):
+def _read(path, ctype, query, limit, offset, sheet, header_row, filters, member, row=None, sort=None):
     """The table in a cached file: (format, scan, sheet, sheets, member, members)."""
     with open(path, "rb") as f:
         head = f.read(2048)
     sheets = members = None
     words = [sources._fold(w) for w in (query or "").split()]
-    scan = lambda rows, shift=0: _scan(rows, header_row, filters, words, offset, min(limit, 200), shift, row)
+    scan = lambda rows, shift=0: _scan(rows, header_row, filters, words, offset, min(limit, 200), shift, row, sort)
     if head[:4] == b"\xd0\xcf\x11\xe0":
         raise ValueError("an old binary Excel file (.xls), which cannot be read here; look for a .xlsx or .csv version")
     if head[:6] == b"7z\xbc\xaf\x27\x1c":
@@ -784,6 +811,7 @@ def main(argv=None):
     sub.add_parser("dataset").add_argument("id")
     s = sub.add_parser("table"); s.add_argument("url"); s.add_argument("--query"); s.add_argument("--sheet")
     s.add_argument("--filters", default="{}", help='JSON, e.g. {"KvkNummer": ["61354740"]}'); s.add_argument("--member")
+    s.add_argument("--sort", help="a column, '-COL' for the largest first")
     s = sub.add_parser("swing"); s.add_argument("site", choices=sorted(SWING)); s.add_argument("q")
     s = sub.add_parser("swing-get"); s.add_argument("site", choices=sorted(SWING)); s.add_argument("indicator")
     s.add_argument("--geo-level"); s.add_argument("--period"); s.add_argument("--geo-query"); s.add_argument("--dimension-levels", default="")
@@ -796,7 +824,7 @@ def main(argv=None):
     if a.cmd == "check":
         sys.exit(0 if check() else 1)
     r = {"datasets": lambda: search_datasets(a.q), "dataset": lambda: get_dataset(a.id),
-         "table": lambda: read_table(a.url, a.query, sheet=a.sheet, filters=json.loads(a.filters), member=a.member),
+         "table": lambda: read_table(a.url, a.query, sheet=a.sheet, filters=json.loads(a.filters), member=a.member, sort=a.sort),
          "swing": lambda: search_swing(a.site, a.q),
          "swing-get": lambda: get_swing(a.site, a.indicator, a.geo_level, a.period, a.geo_query, a.dimension_levels),
          "cbs": lambda: search_cbs(a.q),

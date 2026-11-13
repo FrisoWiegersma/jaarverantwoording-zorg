@@ -357,7 +357,7 @@ def datasets_search(q: str, limit: int = 20, start: int = 0):
 @app.get("/datasets/table")
 def datasets_table(url: str, q: str | None = None, limit: int = 50, offset: int = 0, sheet: str | None = None,
                    header_row: int | None = None, refresh: bool = False, filters: str | None = None,
-                   member: str | None = None):
+                   member: str | None = None, sort: str | None = None):
     """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim."""
     try:
         flt = json.loads(filters) if filters else None
@@ -365,7 +365,8 @@ def datasets_table(url: str, q: str | None = None, limit: int = 50, offset: int 
         raise HTTPException(400, 'filters must be JSON, e.g. {"KvkNummer":["61354740"]}')
     if flt is not None and not isinstance(flt, dict):
         raise HTTPException(400, 'filters must be a JSON object, e.g. {"KvkNummer":["61354740"]}')
-    return _source(datasets.read_table, url, q, limit, offset, sheet, header_row, refresh, filters=flt, member=member)
+    return _source(datasets.read_table, url, q, limit, offset, sheet, header_row, refresh, filters=flt, member=member,
+                   sort=sort)
 
 
 @app.get("/datasets/{dataset_id}")

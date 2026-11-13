@@ -330,6 +330,13 @@ assert [x["row"] for x in t["rows"]] == [len(whole)] and t["rows"][0]["AANTAL"] 
 assert datasets.read_table("https://x.example/dbc.csv", query="1101")["rows_matched"] > len(want), \
     "query hits amounts too: that is why filters exist"
 assert "AANTAL" in raises(KeyError, datasets.read_table, "https://x.example/dbc.csv", filters={"Nope": ["1"]})
+# sort: the most first over every matched row in one pass, text after numbers, paging the same order; ties keep file order
+rank = lambda **kw: [x["AANTAL"] for x in datasets.read_table("https://x.example/dbc.csv", filters={"JAAR": "2024"}, **kw)["rows"]]
+assert rank(sort="-AANTAL", limit=3) == ["29997", "29994", "29991"]
+assert rank(sort="AANTAL", limit=2) == ["0", "3"] and rank(sort="-AANTAL", offset=10000, limit=5)[-1] == "Zorg één"
+assert rank(sort="-AANTAL", offset=2, limit=2) == ["29991", "29988"]
+assert [datasets._sort_key(v) for v in ("1.234,5", "94691", 7, "", "n.v.t.")] == [(1, 1234.5), (1, 94691.0), (1, 7), (0,), (0,)]
+assert "AANTAL" in raises(KeyError, datasets.read_table, "https://x.example/dbc.csv", sort="-Nope")
 serve(b"a,b\n" + b"1,2\n" * 40 + b"3,4,5\n", "text/csv")  # the wide row comes after the 30 rows read up front
 t = datasets.read_table("https://x.example/w.csv", filters={"a": ["3"]})
 assert t["columns"] == ["a", "b", "column 3"] and t["rows"][0]["column 3"] == "5", "a cell past the header keeps a column"
