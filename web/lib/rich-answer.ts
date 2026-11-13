@@ -5,7 +5,8 @@ import { parseNumber } from "./excel.ts";
 const figureSchema = z.object({
   organization: z.string().min(1).max(200),
   label: z.string().min(1).max(200),
-  year: z.number().int().min(2019).max(2100),
+  // Not 2019: Open DIS, RIVM and CBS go back further than DigiMV.
+  year: z.number().int().min(1900).max(2100),
   amount: z.string().max(60).refine((s) => Number.isFinite(parseNumber(s)?.num), "Use Dutch number notation"),
   unit: z.string().min(1).max(80),
   href: z.string().max(500).refine((s) => parseHref(s) !== null, "Use a /bron/ citation"),
@@ -13,7 +14,7 @@ const figureSchema = z.object({
 });
 
 export const richAnswerSchema = z.object({
-  summary: z.string().max(60000).describe("Dutch explanation, at most 60,000 characters, with Markdown source links for figures; keep it concise where possible"),
+  summary: z.string().min(40, "Write the answer itself: what the figures show, in Dutch, with source links").max(60000).describe("Dutch explanation, at most 60,000 characters, with Markdown source links for figures; keep it concise where possible"),
   // Not .max(200): as maxItems on these rows, Gemini refuses a forced present_answer call (400 INVALID_ARGUMENT),
   // which is the budget's final step. A refine still rejects more, it just isn't sent to the model as schema.
   figures: z.array(figureSchema).min(1).refine((rows) => rows.length <= 200, "At most 200 rows")

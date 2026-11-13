@@ -19,6 +19,8 @@ test("long reports retain validation and support the summaries that failed in pr
   assert.ok(answer.summary.length > 21283);
   assert.equal(presentAnswer(answer).summary, answer.summary);
   assert.equal(richAnswerSchema.safeParse({ ...answer, summary: "x".repeat(60001) }).success, false);
+  assert.equal(richAnswerSchema.safeParse({ ...answer, summary: "test" }).success, false, "a placeholder is not an answer");
+  assert.equal(richAnswerSchema.safeParse({ ...answer, figures: [{ ...answer.figures[0], year: 2014 }] }).success, true, "Open DIS starts in 2014");
   assert.equal(richAnswerSchema.safeParse({ ...answer, figures: [{ ...answer.figures[0], amount: "NaN" }] }).success, false);
 });
 
@@ -62,7 +64,8 @@ test("tool-only or failed turns get an explicit explanation, completed answers d
 
 
 test("the budget transition forces presentation, with a final text fallback", () => {
-  assert.deepEqual(finalAnswerStep(RESEARCH_STEPS, "Onderzoek").toolChoice, { type: "tool", toolName: "present_answer" });
+  assert.equal(finalAnswerStep(RESEARCH_STEPS, "Onderzoek").toolChoice, "auto");
+  assert.deepEqual(finalAnswerStep(RESEARCH_STEPS, "Onderzoek").activeTools, ["present_answer"]);
   const fallback = finalAnswerStep(MAX_STEPS - 1, "Onderzoek");
   assert.equal(fallback.toolChoice, "none");
   assert.deepEqual(fallback.activeTools, []);
@@ -83,7 +86,7 @@ test("the token budget ends research early, and the final steps count from there
   const over = steps(RESEARCH_TOKENS / 2, RESEARCH_TOKENS / 2, 10);
   assert.equal(researchEnd(over), 2);
   assert.equal(finalAnswerStep(1, "Onderzoek", over.slice(0, 1)).toolChoice, undefined);
-  assert.deepEqual(finalAnswerStep(2, "Onderzoek", over.slice(0, 2)).toolChoice, { type: "tool", toolName: "present_answer" });
+  assert.equal(finalAnswerStep(2, "Onderzoek", over.slice(0, 2)).toolChoice, "auto");
   assert.equal(finalAnswerStep(4, "Onderzoek", [...over, ...steps(10)]).toolChoice, "none");
   assert.equal(outOfBudget({ steps: over }), false);
   assert.equal(outOfBudget({ steps: [...over, ...steps(10, 10)] }), true);

@@ -100,7 +100,8 @@ function FinancialAnswer({ summary, figures, view }: typeof richAnswerSchema._ou
   return (
     <div className="min-w-0">
       <Answer {...context} text={summary} />
-      <SmoothTab className="mt-5" defaultTabId={view} items={items} label="Weergave van de cijfers" />
+      {/* One figure: nothing to switch between. */}
+      {figures.length > 1 ? <SmoothTab className="mt-5" defaultTabId={view} items={items} label="Weergave van de cijfers" /> : table}
     </div>
   );
 }

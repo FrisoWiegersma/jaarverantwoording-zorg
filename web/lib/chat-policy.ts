@@ -35,11 +35,12 @@ export function finalAnswerStep(stepNumber: number, instructions: string, steps:
   const plainTextFallback = stepNumber >= end + 2;
   return {
     activeTools: plainTextFallback ? [] : ["present_answer"] as ["present_answer"],
-    toolChoice: plainTextFallback ? "none" as const : { type: "tool" as const, toolName: "present_answer" as const },
+    // Not forced: an answer without sourced figures would have to invent rows for present_answer.
+    toolChoice: plainTextFallback ? "none" as const : "auto" as const,
     instructions: instructions + "\nHet onderzoeksbudget is bereikt. Zoek niets meer op. Geef nu een antwoord met wat je al hebt gevonden; benoem expliciet wat nog ontbreekt. " +
       (plainTextFallback
         ? "De presentatie is niet gelukt. Geef je antwoord nu in gewone tekst met bronlinks."
-        : "Gebruik present_answer voor cijfers, met maximaal 200 rijen en een samenvatting van maximaal 60.000 tekens. Herstel een eventuele validatiefout en probeer de presentatie opnieuw."),
+        : "Heb je drie of meer gevonden getallen met bronlink, gebruik dan present_answer (maximaal 200 rijen, samenvatting maximaal 60.000 tekens) en herstel een eventuele validatiefout; anders antwoord je in gewone tekst met bronlinks."),
   };
 }
 
