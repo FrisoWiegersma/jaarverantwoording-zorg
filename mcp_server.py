@@ -234,11 +234,13 @@ def search_regulations(query: str, creator: str | None = None, limit: int = 20, 
 
 @mcp.tool()
 def search_tenders(query: str | None = None, buyer: str | None = None, cpv: str = "85000000", since: str | None = None,
-                   limit: int = 20, page: int = 1) -> dict:
+                   limit: int = 20, page: int = 1, place: str | None = None, awarded: bool = False) -> dict:
     """EU tender and award notices (TED) of Dutch buyers, newest first. cpv 85000000 (default) is health and social
-    work with all its subcodes; query matches words in the notice, buyer the buyer's name. Only contracts above the
-    EU threshold are here. Each notice's PDF url can be read with read_document."""
-    return _call(documents.search_tenders, query, buyer, cpv, "NLD", since, limit, page)
+    work with all its subcodes; query matches words in the notice, buyer the buyer's name. place: NUTS codes where
+    the work is done, subregions included (a province takes both codes, e.g. "NL33 NL36" for Zuid-Holland, before
+    and after NUTS 2024). awarded: only award notices, each with its winners. Only contracts above the EU threshold
+    are here. Each notice's PDF url can be read with read_document."""
+    return _call(documents.search_tenders, query, buyer, cpv, "NLD", since, limit, page, place, awarded)
 
 
 @mcp.tool()

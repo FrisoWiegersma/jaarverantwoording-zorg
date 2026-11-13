@@ -6,7 +6,8 @@ const FILE = process.env.ERROR_LOG ?? "logs/errors.jsonl";
 
 const cut = (v: unknown, n = 2000) => {
   const s = typeof v === "string" ? v : (JSON.stringify(v) ?? String(v));
-  return s.length > n ? `${s.slice(0, n)}…` : s;
+  // Head and tail: a validation error puts the input first and the reason last.
+  return s.length > n ? `${s.slice(0, n / 2)} … ${s.slice(-n / 2)}` : s;
 };
 
 interface Chat { id: string; model: string; effort: string }

@@ -284,9 +284,9 @@ def public_regulations(q: str, creator: str | None = None, limit: int = 20, star
 
 @app.get("/public/tenders")
 def public_tenders(q: str | None = None, buyer: str | None = None, cpv: str = "85000000", since: str | None = None,
-                   limit: int = 20, page: int = 1):
+                   limit: int = 20, page: int = 1, place: str | None = None, awarded: bool = False):
     """EU tender and award notices (TED) of Dutch buyers, newest first."""
-    return _source(documents.search_tenders, q, buyer, cpv, "NLD", since, limit, page)
+    return _source(documents.search_tenders, q, buyer, cpv, "NLD", since, limit, page, place, awarded)
 
 
 @app.get("/public/read")

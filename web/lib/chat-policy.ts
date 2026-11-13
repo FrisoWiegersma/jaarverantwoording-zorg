@@ -1,6 +1,8 @@
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 
 export const RESEARCH_STEPS = 24;
+/** The UI's text for a call to a tool that wasn't offered (Gemini still asks for one after research ended): never run, so not failed. */
+export const SKIPPED = "Niet uitgevoerd: het onderzoek was al afgerond.";
 export const MAX_STEPS = RESEARCH_STEPS + 3;
 /** Input tokens over all steps, the cost of an answer: every step resends the conversation. With parallel tool calls a
  * step can read a lot, so research also ends here. ponytail: fixed; the dearest answers in the 2026-11-11 eval used

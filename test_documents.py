@@ -233,6 +233,20 @@ raises(ValueError, d.search_woo, "x", since="1-1-2026")
 SRU = """<?xml version="1.0"?><sru:searchRetrieveResponse xmlns:sru="http://docs.oasis-open.org/ns/search-ws/sruResponse"
  xmlns:dcterms="http://purl.org/dc/terms/" xmlns:gzd="http://standaarden.overheid.nl/sru"><sru:numberOfRecords>3</sru:numberOfRecords>
 <sru:records>{}</sru:records></sru:searchRetrieveResponse>"""
+# TED: a region in one search; winners from winner-name (once each, not per lot), a direct award's contractor from its
+# tenderer, and never the losing tenderers of a result notice
+sent = []
+d._get_json = lambda url, body=None: sent.append(body) or {"totalNoticeCount": 3, "notices": [
+    {"publication-number": "1-2025", "notice-type": "can-social", "place-of-performance": ["NL366", "NLD"],
+     "winner-name": {"nld": ["Fort Jeugd B.V.", "Fort Jeugd B.V."]}, "organisation-name-tenderer": {"nld": ["Fort Jeugd B.V.", "Verliezer B.V."]}},
+    {"publication-number": "2-2025", "notice-type": "veat", "organisation-name-tenderer": {"nld": ["Zorggroep Katwijk"]}},
+    {"publication-number": "3-2025", "notice-type": "cn-social", "organisation-name-tenderer": {"nld": ["Nog niemand"]}}]}
+r = d.search_tenders("jeugd", place="NL33 NL36", awarded=True)
+assert "place-of-performance IN (NL33 NL36)" in sent[0]["query"] and "notice-type IN (can-standard" in sent[0]["query"], sent
+assert [(h["winners"], h["winners_total"]) for h in r["results"]] == [(["Fort Jeugd B.V."], 1), (["Zorggroep Katwijk"], 1), ([], 0)], r
+assert r["results"][0]["place"] == ["NL366"]
+assert "NUTS" in raises(ValueError, d.search_tenders, place="Zuid-Holland")
+
 rec = lambda body: f"<sru:record><sru:recordData><gzd:gzd>{body}</gzd:gzd></sru:recordData></sru:record>"
 pub = rec("<dcterms:identifier>gmb-2026-1</dcterms:identifier><dcterms:title>Beleidsregels jeugdhulp</dcterms:title>"
           "<dcterms:creator>Leiden</dcterms:creator><dcterms:date>2026-02-01</dcterms:date>"

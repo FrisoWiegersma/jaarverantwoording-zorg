@@ -5,6 +5,7 @@ import {
   generateId,
   isStepCount,
   isToolUIPart,
+  NoSuchToolError,
   pruneMessages,
   validateUIMessages,
   streamText,
@@ -13,7 +14,7 @@ import {
   type UIMessage,
 } from "ai";
 import { z } from "zod";
-import { finalAnswerStep, finishWhenPresented, MAX_STEPS, missingAnswer, outOfBudget } from "@/lib/chat-policy";
+import { finalAnswerStep, finishWhenPresented, MAX_STEPS, missingAnswer, outOfBudget, SKIPPED } from "@/lib/chat-policy";
 import { presentAnswer, richAnswerSchema } from "@/lib/rich-answer";
 import { cbsCite, rowCite } from "@/lib/citations";
 import { pickModel } from "@/lib/models";
@@ -419,20 +420,29 @@ const tools = {
   search_tenders: tool({
     description:
       "EU tender and award notices (TED) of Dutch buyers, newest first. cpv 85000000 (default) is health and social work with all " +
-      "subcodes; query matches words in the notice, buyer the buyer's name. Only contracts above the EU threshold are here. " +
-      "Read a notice's url (PDF) with read_document.",
+      "subcodes; query matches words in the notice, buyer the buyer's name. place: NUTS codes where the work is done, subregions " +
+      "included: for a region, search once with place instead of buyer by buyer (a province takes both codes, e.g. 'NL33 NL36' " +
+      "for Zuid-Holland, before and after NUTS 2024). awarded: only award notices, each with who it was awarded to, so who won " +
+      "needs no PDF. Only contracts above the EU threshold are here. Read a notice's url (PDF) with read_document.",
     inputSchema: z.object({
       query: z.string().max(300).optional(),
       buyer: z.string().max(200).optional(),
       cpv: z.string().regex(/^\d{8}$/).default("85000000"),
       since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      place: z.string().regex(/^[A-Z]{2}[0-9A-Z]{0,3}( [A-Z]{2}[0-9A-Z]{0,3})*$/).optional(),
+      awarded: z.boolean().optional(),
       page: z.number().int().min(1).default(1),
     }),
-    execute: async ({ query, buyer, cpv, since, page }): Promise<Hits> =>
-      api("/public/tenders", { q: query, buyer, cpv, since, page, limit: 20 }),
+    execute: async ({ query, buyer, cpv, since, place, awarded, page }): Promise<Hits> =>
+      api("/public/tenders", { q: query, buyer, cpv, since, place, awarded: awarded ? "true" : undefined, page, limit: 20 }),
     toModelOutput: ({ output: { results, ...r } }) => ({
       type: "json",
-      value: { ...r, results: results.map((h) => `${h.date} ${h.type} ${h.buyer}: ${h.title} [${h.url}]`) },
+      value: { ...r, results: results.map((h) => {
+        const winners = (h.winners ?? []) as unknown as string[];
+        const more = Number(h.winners_total) - winners.length;
+        const won = winners.length ? ` · gegund aan ${winners.join("; ")}${more > 0 ? ` en ${more} anderen` : ""}` : "";
+        return `${h.date} ${h.type} ${h.buyer}: ${h.title}${won} [${h.url}]`;
+      }) },
     }),
   }),
   read_document: tool({
@@ -691,6 +701,8 @@ export async function POST(req: Request) {
   return createUIMessageStreamResponse({
     stream: toUIMessageStream({
       stream: result.stream, originalMessages: messages, generateMessageId: generateId,
+      // Other errors stay generic for the reader; the error log has them in full.
+      onError: (e) => (NoSuchToolError.isInstance(e) ? SKIPPED : "An error occurred."),
       messageMetadata: ({ part }) => {
         if (part.type === "start") return { model: choice.model, effort: choice.effort, startedAt: Date.now() };
         if (part.type !== "finish-step") return;

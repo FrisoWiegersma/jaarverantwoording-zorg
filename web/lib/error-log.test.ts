@@ -20,4 +20,6 @@ test("a failed tool call is appended with its input; project tools keep input ou
   assert.equal(b.input, undefined);
   assert.equal(c.status, 429);
   assert.ok(c.error.length < 2100);
+  const long = errorEntry(chat, 1, "present_answer", {}, new Error(`Value: ${"x".repeat(5000)} Error message: summary too short`));
+  assert.match(long.error, /summary too short$/, "the reason at the end of a long validation error is kept");
 });

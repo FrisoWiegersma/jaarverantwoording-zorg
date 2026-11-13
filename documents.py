@@ -664,10 +664,22 @@ def _lang(v):
     return v[0] if isinstance(v, list) and len(v) == 1 else v
 
 
-def search_tenders(q=None, buyer=None, cpv="85000000", country="NLD", since=None, limit=20, page=1):
+AWARDS = "can-standard can-social can-desg can-tran can-modif veat"  # eForms result notices, and direct awards
+
+
+def search_tenders(q=None, buyer=None, cpv="85000000", country="NLD", since=None, limit=20, page=1, place=None,
+                   awarded=False):
     """Tender and award notices on TED. cpv: a CPV code; a top code matches its subcodes (85000000 = health and
-    social work). q: words in the notice text. since: YYYY-MM-DD."""
+    social work). q: words in the notice text. since: YYYY-MM-DD. place: NUTS codes where the work is done, each
+    matching its subregions (Zuid-Holland is NL33 before NUTS 2024, NL36 after). awarded: only award notices."""
     query = [f"buyer-country={country}"]
+    if place:
+        codes = place.split()
+        if not all(re.fullmatch(r"[A-Z]{2}[0-9A-Z]{0,3}", c) for c in codes):
+            raise ValueError("place is NUTS codes, e.g. 'NL33 NL36' for Zuid-Holland")
+        query.append(f"place-of-performance IN ({' '.join(codes)})")
+    if awarded:
+        query.append(f"notice-type IN ({AWARDS})")
     if cpv:
         if not re.fullmatch(r"\d{8}", cpv):
             raise ValueError("cpv is 8 digits, e.g. 85000000")
@@ -680,7 +692,7 @@ def search_tenders(q=None, buyer=None, cpv="85000000", country="NLD", since=None
         query.append(f"publication-date>={date.fromisoformat(since).strftime('%Y%m%d')}")
     body = {"query": " AND ".join(query) + " SORT BY publication-date DESC", "limit": min(limit, 50), "page": page,
             "fields": ["publication-number", "notice-title", "buyer-name", "publication-date", "notice-type",
-                       "classification-cpv"]}
+                       "classification-cpv", "winner-name", "organisation-name-tenderer", "place-of-performance"]}
     try:
         d = _get_json(TED, body)
     except OSError as e:
@@ -691,10 +703,16 @@ def search_tenders(q=None, buyer=None, cpv="85000000", country="NLD", since=None
     for n in d["notices"]:
         num = n.get("publication-number")
         cpvs = n.get("classification-cpv") or []
+        # winner-name repeats per lot; a direct award (veat) names its contractor only as tenderer. Tenderers in a
+        # result notice also include those who lost, so they are never read as winners.
+        names = lambda field, n=n: list(dict.fromkeys(x for v in (n.get(field) or {}).values() for x in v))
+        winners = names("winner-name") or (names("organisation-name-tenderer") if n.get("notice-type") == "veat" else [])
         hits.append({"id": num, "title": _lang(n.get("notice-title")), "buyer": _lang(n.get("buyer-name")),
                      "date": (n.get("publication-date") or "")[:10], "type": n.get("notice-type"),
                      "cpv": list(dict.fromkeys(cpvs)), "url": f"https://ted.europa.eu/nl/notice/{num}/pdf",
-                     "web_page": f"https://ted.europa.eu/nl/notice/-/detail/{num}"})
+                     "web_page": f"https://ted.europa.eu/nl/notice/-/detail/{num}",
+                     "place": [c for c in dict.fromkeys(n.get("place-of-performance") or []) if len(c) > 3],
+                     "winners": winners[:25], "winners_total": len(winners)})
     total = d.get("totalNoticeCount", len(hits))
     return {"query": body["query"], "total": total, "returned": len(hits),
             "truncated": total > (page - 1) * body["limit"] + len(hits), "results": hits,

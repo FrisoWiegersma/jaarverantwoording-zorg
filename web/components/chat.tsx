@@ -24,7 +24,7 @@ import { announceAnswer, NotifyBell } from "@/components/notify";
 import { OrgSearch } from "@/components/org-search";
 import { Welcome } from "@/components/welcome";
 import { hidePartialLink, parseCitations } from "@/lib/citations";
-import { missingAnswer } from "@/lib/chat-policy";
+import { missingAnswer, SKIPPED } from "@/lib/chat-policy";
 import { conversationId, reconnectOnReturn, rememberConversation } from "@/lib/chat-session";
 import { type AnswerMeta, answerLabel, CONTEXT_WINDOW, type ModelSelection, pickModel } from "@/lib/models";
 import { EXAMPLES } from "@/lib/sources";
@@ -49,7 +49,8 @@ function stepsOf(m: UIMessage, live: boolean): AgentStep[] {
   return m.parts.filter(isToolUIPart).map((p) => {
     const input = (p.input ?? {}) as Record<string, unknown>;
     const out = (p.state === "output-available" ? p.output : null) as Out | Out[] | null;
-    const status = p.state === "output-available" ? "done" : p.state === "output-error" || !live ? "error" : "running";
+    const skipped = p.state === "output-error" && p.errorText === SKIPPED;
+    const status = p.state === "output-available" || skipped ? "done" : p.state === "output-error" || !live ? "error" : "running";
     const list = Array.isArray(out) ? out : [];
     let label: string;
     let detail: string[] | undefined;
@@ -194,7 +195,7 @@ function stepsOf(m: UIMessage, live: boolean): AgentStep[] {
       default:
         label = getToolName(p);
     }
-    if (p.state === "output-error") label = `${label}: mislukt`;
+    if (p.state === "output-error") label = `${label}: ${skipped ? "overgeslagen" : "mislukt"}`;
     return { id: p.toolCallId, label, status, detail };
   });
 }
