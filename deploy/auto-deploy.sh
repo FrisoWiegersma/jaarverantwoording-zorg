@@ -12,6 +12,11 @@ set -eu
 cd "$HOME/jaarverantwoording-zorg"
 failed=.git/deploy-failed
 
+# Installs from before AUTH_MODE existed signed people in only through Cloudflare Access, and their projects belong to
+# those emails. Pin that mode once, so an update never puts them behind the built-in login; new installs get AUTH_MODE
+# from .env.example. Runs on every tick, so it lands before the release that reads it.
+grep -q '^AUTH_MODE=' .env || printf '\n# Added by deploy/auto-deploy.sh: this install predates the built-in login.\nAUTH_MODE=cloudflare\n' >> .env
+
 git fetch -q origin main
 new=$(git rev-parse origin/main)
 old=$(git rev-parse HEAD)
