@@ -1,7 +1,7 @@
 [project]
 name = "jaarverantwoording-zorg"
 version = "0.1.0"
-description = "Searchable index, PDF cache and Markdown knowledge base for DigiMV jaarverantwoordingen"
+description = "Retrieval API for Jaarverslagen Zorg: Dutch healthcare annual reports and other public sources, cited to the page"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.162.0",
