@@ -2,13 +2,13 @@
 
 [![Checks](https://github.com/FrisoWiegersma/jaarverantwoording-zorg/actions/workflows/checks.yml/badge.svg)](https://github.com/FrisoWiegersma/jaarverantwoording-zorg/actions/workflows/checks.yml)
 
-Ask questions about Dutch healthcare annual reports and public government data, and see where every figure comes from.
+Ask questions about Dutch healthcare and government data, public or your own, and see where every figure comes from.
 
 [![A question about Zorggroep Exact answered with the balance-sheet passage highlighted on its page, then Stichting Basalt's key figures and a comparison with Treant Zorggroep](docs/demo.webp)](docs/demo.mp4)
 
 <sub>Recorded in the running app with public data. Waiting for the model is cut.</sub>
 
-It reads the public [DigiMV archive](https://digimv13.desan.nl/archive/search), where Dutch healthcare providers file their annual accounts, and the other public sources listed below. It is made for consultants who research and advise care providers and government, where a figure is only useful if you can show the page it came from. The interface and the answers are in Dutch.
+It searches the annual accounts care providers file in [DigiMV](https://digimv13.desan.nl/archive/search) and [17 other public sources](#sources): registers, CBS tables, court rulings, Woo releases, tenders and any public PDF. It also searches the PDFs and notes you upload to a project. Every figure links to the page, filed field or data row it came from, because the consultants it is made for have to show their sources to the care providers and governments they advise. The interface and the answers are in Dutch.
 
 ## Install
 
