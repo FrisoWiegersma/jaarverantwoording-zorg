@@ -85,6 +85,10 @@ Through the frontend, prefix the following routes with `/digimv`. Inside Compose
 | `GET /orgs/{org_id}/key-figures?years=2022,2023` | Key figures for several years; default every indexed year from 2020 |
 | `GET /register/{kvk}` | LRZa entry: legal form, AGB codes, Wtza notification and permit, branches |
 | `GET /register/search?naam=...` | LRZa search by `naam` or `postcode`; at most 50 hits plus the total |
+| `GET /kvk/{kvk}` | A BV's or NV's basics in the KVK Handelsregister open data: status, legal form, start date, SBI, postcode region; no name or address. KVK allows one request per minute |
+| `GET /lei?kvk=...` | An LEI record by `kvk` or `lei`, with its reported direct and ultimate parent and direct children |
+| `GET /lei/search?q=...` | LEI search by name (every word must match); optional `country` (default `NL`) |
+| `GET /sanctions/search?q=...` | Possible matches on the EU financial sanctions list: every word in a name or alias; optional `kind` |
 | `GET /iv3/bodies?q=...` | Municipalities, joint arrangements, provinces and water boards in CBS Iv3; optional `kind` |
 | `GET /iv3/{kind}/{year}/{code}?taakveld=...` | A body's Iv3 cells; optional `verslagsoort` (default `Jaarrekening`) |
 | `GET /iv3/value/{table}/{code}/{report}/{taakveld}/{categorie}` | One Iv3 cell, behind a `/bron/iv3/` citation |
@@ -114,6 +118,8 @@ Through the frontend, prefix the following routes with `/digimv`. Inside Compose
 | `GET /cbs/{table}` | A table's topics and dimensions; `dimension` and `q` list one dimension's codes |
 | `GET /cbs/{table}/values?filters={...}` | Values; `filters` is JSON (`{"RegioS":["GM0546"]}`), `topics=a,b` |
 | `GET /cbs/{table}/cell/{code}/.../{topic}` | One value, a code per dimension in the table's order, behind a `/bron/cbs/` citation |
+| `GET /swing/{site}/search?q=...` | Indicators on a Swing site (`prognosemodelzw`, `waarstaatjegemeente`) by words in code, name or description; needs that site's key |
+| `GET /swing/{site}/{indicator}` | An indicator's values per area and period; optional `geo_level`, `period`, `q`, `dimension_levels`; without them, the area levels and periods |
 
 Errors from the other sources: 400 for bad input, 404 when the source does not hold it, 502 when the source failed.
 

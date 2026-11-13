@@ -69,7 +69,7 @@ For Excel, the client extracts table rows and parses Dutch numeric notation. Cli
 
 - The tool loop stops after the presentation tool or the configured step limit. Older tool results are pruned from later turns to limit repeated document context; earlier answer links remain available.
 - The prompt tells the model to re-read figures when their tool evidence is no longer in context. This is an instruction, not a guarantee of factual correctness.
-- The API is internal to the Compose network. The frontend binds to host loopback. A remotely accessible deployment needs an authenticated reverse proxy; the application itself does not implement user accounts or rate limits.
+- The API is internal to the Compose network. The frontend binds to host loopback. People sign in with the built-in email-and-password login or through Cloudflare Access; a remotely accessible deployment still needs HTTPS in front, and the application has no rate limits.
 - Provider credentials remain on the server. Scanned pages sent for OCR are public report content, but questions and model context also reach the provider.
 - The system has offline regression checks and manual browser validation, rather than a scored dataset of financial questions. Reported behaviour should be assessed with that limit in mind.
 

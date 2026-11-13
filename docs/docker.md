@@ -4,9 +4,15 @@
 
 ## Start
 
-Install Docker with the Compose plugin. You also need an API key for at least one AI provider: Gemini, Claude, DeepSeek, OpenAI, or any server that speaks the OpenAI API, such as Ollama. Scanned PDF pages are read by the first of Gemini, Claude or OpenAI that has a key, or by `OCR_MODEL`.
+The quickest way is the install script, which does the steps below and asks for your key:
 
-From the repository root:
+```sh
+curl -fsSL https://raw.githubusercontent.com/FrisoWiegersma/jaarverantwoording-zorg/main/install.sh | bash
+```
+
+Run it again to update. `JVZ_DIR` installs somewhere other than `~/jaarverantwoording-zorg`. To do it by hand, install Docker with the Compose plugin. You also need an API key for at least one AI provider: Gemini, Claude, DeepSeek, OpenAI, or any server that speaks the OpenAI API, such as Ollama. Scanned PDF pages are read by the first of Gemini, Claude or OpenAI that has a key, or by `OCR_MODEL`.
+
+Clone the repository and, from its root:
 
 ```sh
 cp .env.example .env
