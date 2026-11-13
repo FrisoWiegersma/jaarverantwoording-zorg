@@ -169,7 +169,7 @@ Probed from here on 12 November 2026. *Reachable* means the current tools (`sear
 | Source | What | Access | Status |
 |---|---|---|---|
 | KvK deposited annual accounts | The accounts every BV/NV/cooperative files | Full PDFs paid per document. The free HVD open dataset (`opendata.kvk.nl/api/v1/hvds/jaarrekeningen/kvknummer/{kvk}`) covers BV/NV only, without name or address, and rate-limits (429) after a few calls | live; partial |
-| KvK basic company data (HVD) | Legal form, SBI, status per KvK | Same open-data API; answered 429 here | live; new source |
+| KvK basic company data (HVD) | Status, legal form, start date, insolvency, SBI and postcode region per KvK, BV/NV only, no name or address | Same open-data API, one request per minute per IP | connected: `get_kvk_basics` |
 | [GLEIF LEI](https://api.gleif.org/api/v1/lei-records) | Legal name, address and **parent/child relationships** for 200,896 Dutch entities with an LEI | Free JSON API, CC0 | live; new source |
 | [filings.xbrl.org](https://filings.xbrl.org/) | Annual reports of listed companies in ESEF/XBRL, keyed by LEI | Free JSON API | live; new source |
 | AFM registers | Substantial holdings, licences, warnings, fines | Public pages; robots.txt allows | live; reachable |

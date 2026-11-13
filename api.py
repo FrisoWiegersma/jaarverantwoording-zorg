@@ -203,6 +203,13 @@ def register(kvk: str):
     return _source(sources.register, kvk)
 
 
+@app.get("/kvk/{kvk}")
+def kvk_basics(kvk: str):
+    """A BV's or NV's basics in the KVK Handelsregister open data: status, legal form, start date, SBI, postcode region.
+    No name or address. KVK allows one request per minute, so an uncached number can wait up to a minute."""
+    return _source(sources.kvk_basics, kvk)
+
+
 @app.get("/lei/search")
 def lei_search(q: str, country: str = "NL"):
     """Live LEI search by name (every word must match), with KvK number where registered there."""

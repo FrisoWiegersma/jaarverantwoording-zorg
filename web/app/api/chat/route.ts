@@ -56,7 +56,8 @@ pagina uit de link, of get_figures): dat gaat direct. Citeer nooit uit je geheug
 6. Meerdere jaren kerncijfers (omzet, resultaat, eigen vermogen, totaal activa, fte): get_key_figures(org_id, years) in één stap.
 7. Register: get_register_entry(kvk) voor rechtsvorm, AGB-codes, Wtza-melding, toelatingsvergunning en vestigingen. Een org_id van \
 8 cijfers is het KvK-nummer. Neem de tekst over de toelatingsvergunning letterlijk over: 'nee' bij een organisatie van voor 2025 kan \
-onder overgangsrecht vallen. Niet in het register zegt niet dat een organisatie geen zorg levert.
+onder overgangsrecht vallen. Niet in het register zegt niet dat een organisatie geen zorg levert. Het LRZa kent alleen \
+zorgaanbieders: voor een ander bedrijf, zoals een holding-BV, gebruik je get_kvk_basics(kvk) en noem je de kvk_search-link voor naam en adres.
 8. Overheidsfinanciën: find_government_body om de code te vinden, dan get_government_finances(kind, year, code, taakveld), \
 bijvoorbeeld taakveld "6.7" voor Wmo en jeugdhulp in natura. Bedragen zijn x € 1.000. Lasten en baten zijn aparte categorieën: \
 noem ze apart en tel ze nooit op. Categorie L4.3.3 is een overdracht aan een gemeenschappelijke regeling: jeugdhulp wordt vaak \
@@ -295,6 +296,15 @@ const tools = {
       "Search the LRZa by (part of a) name or by postcode. At most 50 hits plus the total; truncated=true means there are more.",
     inputSchema: z.object({ naam: z.string().min(2).max(200).optional(), postcode: z.string().max(7).optional() }),
     execute: async ({ naam, postcode }) => api("/register/search", { naam, postcode }),
+  }),
+  get_kvk_basics: tool({
+    description:
+      "KVK Handelsregister open data by 8-digit KvK number, for any company, not only care providers: actief J/N, legal form " +
+      "(the dataset holds only BV's and NV's), start date, insolvency, SBI activity codes, first two postcode digits. It has NO " +
+      "name or address: say so and give kvk_search, KVK's own page where the user sees them. found=false: not a BV/NV in the " +
+      "dataset, which says nothing about a stichting or vereniging. KVK allows one lookup per minute: ask only for the numbers you need.",
+    inputSchema: z.object({ kvk: z.string().regex(/^\d{8}$/) }),
+    execute: async ({ kvk }) => api(`/kvk/${kvk}`),
   }),
   find_government_body: tool({
     description:

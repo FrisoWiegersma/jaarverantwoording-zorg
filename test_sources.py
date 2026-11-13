@@ -414,9 +414,34 @@ def sanctions():
         pass
 
 
+def kvk():
+    db = sources.connect(":memory:")
+    sources.KVK_SPACING = 0
+    digimv._http, calls = fake_http({
+        "/95255524": json.dumps({"datumAanvang": "20241015", "actief": "J", "rechtsvormCode": "BV", "postcodeRegio": 38,
+                                 "activiteiten": [{"sbiCode": "70102", "soortActiviteit": "Hoofdactiviteit"}], "lidstaat": "NL"}).encode(),
+        "/59581883": json.dumps({"datumAanvang": "00000000", "actief": "N", "rechtsvormCode": "NV", "insolventieCode": "FAIL"}).encode(),
+        "/41150213": 404, "/12345678": 429})
+    r = sources.kvk_basics("95255524", db=db)
+    assert (r["found"], r["actief"], r["rechtsvormCode"], r["datumAanvang"], r["activiteiten"][0]["sbiCode"]) == (True, "J", "BV", "2024-10-15", "70102"), r
+    assert r["kvk_search"].endswith("q=95255524") and "naam" not in r
+    assert sources.kvk_basics("95255524", db=db)["found"] and len(calls) == 1  # cached
+    r = sources.kvk_basics("59581883", db=db)
+    assert (r["datumAanvang"], r["insolventie"]) == (None, "faillissement"), r  # zeros are an unknown date
+    r = sources.kvk_basics("41150213", db=db)
+    assert r["found"] is False and "alleen BV's en NV's" in r["note"], r  # not "does not exist"
+    try:  # rate-limited: an error, never "not found"
+        sources.kvk_basics("12345678", db=db)
+        raise AssertionError("429 read as an answer")
+    except RuntimeError:
+        pass
+    assert db.execute("SELECT count(*) FROM kvk_open WHERE kvk='12345678'").fetchone()[0] == 0
+
+
 def run():
     real = digimv._http
     try:
+        kvk()
         lrza()
         iv3()
         chunks()

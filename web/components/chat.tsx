@@ -96,6 +96,12 @@ function stepsOf(m: UIMessage, live: boolean): AgentStep[] {
           : r.found ? `${r.naam} in het Landelijk Register Zorgaanbieders` : `KvK ${input.kvk} staat niet in het zorgaanbiedersregister (LRZa)`;
         break;
       }
+      case "get_kvk_basics": {
+        const r = out as Out | null;
+        label = !r ? `Handelsregister raadplegen (KvK ${input.kvk})`
+          : r.found ? `KvK ${input.kvk}: ${r.rechtsvormCode}, ${r.actief === "J" ? "actief" : "niet actief"}` : `KvK ${input.kvk} is geen BV of NV in de open KVK-data`;
+        break;
+      }
       case "search_register": {
         const r = out as Out | null;
         label = r ? `${r.total} zorgaanbieders in het register voor ${quoted(input.naam ?? input.postcode)}`

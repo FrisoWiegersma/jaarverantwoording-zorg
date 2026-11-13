@@ -12,6 +12,7 @@ export const SOURCES: { name: string; what: string; group: SourceGroup }[] = [
   { name: "Vektis", what: "Zorgkosten per gemeente en postcode, Zorgthermometer en factsheets", group: "zorg" },
   { name: "Zorgcijfersdatabank", what: "Kosten van de Zvw en de Wlz per zorgsoort, en GIP-data", group: "zorg" },
   { name: "Prognosemodel Zorg en Welzijn", what: "Arbeidsmarktprognoses voor zorg en welzijn (met API-sleutel)", group: "cijfers" },
+  { name: "KVK Handelsregister", what: "Status, rechtsvorm, startdatum en SBI-code van BV's en NV's, op KvK-nummer", group: "recht" },
   { name: "Rechtspraak", what: "Gepubliceerde uitspraken, op naam te doorzoeken", group: "recht" },
   { name: "Woo-index", what: "Woo-besluiten, nota's en rapporten van de overheid", group: "recht" },
   { name: "Officiële bekendmakingen", what: "Gemeenteblad, Staatscourant en Kamerstukken", group: "recht" },

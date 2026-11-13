@@ -6,6 +6,8 @@ Same rules as digimv.py: values verbatim with their source, cached once fetched,
 missing, never filled in. Checked against the live services on 2026-11-12:
   LRZa     GET  https://zoeken.zorgaanbiedersportaal.nl/api/v1/Organisatie/{kvk}  -> JSON; 404 for an unknown KvK
            POST https://zoeken.zorgaanbiedersportaal.nl/api/v1/Zoeken {naam|postcode|kvknummer} -> aantal + <= 50 hits
+  KVK      GET  https://opendata.kvk.nl/api/v1/hvds/basisbedrijfsgegevens/kvknummer/{kvk} -> JSON, 404 when not a BV/NV
+           in the dataset; one request per minute per IP, 429 beyond that (checked 2026-11-13)
   Iv3      https://dataderden.cbs.nl/ODataCatalog/Tables lists one OData v3 table per kind and year. Keys are
            space-padded per dimension ('GM0546   ', '6.711 '), and a query over 10,000 rows is refused, not paged.
   Rulings  text: https://data.rechtspraak.nl/uitspraken/content?id={ECLI} (official open data, CC0)
@@ -23,6 +25,7 @@ import json
 import re
 import sys
 import threading
+import time
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -33,6 +36,7 @@ import digimv
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lrza(kvk TEXT PRIMARY KEY, fetched_at TEXT, found INT, raw TEXT);
+CREATE TABLE IF NOT EXISTS kvk_open(kvk TEXT PRIMARY KEY, fetched_at TEXT, parsed TEXT);
 CREATE TABLE IF NOT EXISTS iv3_tables(id TEXT PRIMARY KEY, kind TEXT, year INT, title TEXT, modified TEXT);
 CREATE TABLE IF NOT EXISTS iv3_dims(tbl TEXT PRIMARY KEY, modified TEXT, dims TEXT);
 CREATE TABLE IF NOT EXISTS iv3_rows(tbl TEXT, body TEXT, report TEXT, taakveld TEXT, categorie TEXT, v1 REAL, v2 REAL);
@@ -228,6 +232,61 @@ def search_register(naam=None, postcode=None, kvk=None):
     total = d.get("aantal", len(hits))
     return {"total": total, "returned": len(hits), "truncated": total > len(hits), "results": hits,
             "source": LRZA, "scope": LRZA_SCOPE}
+
+
+# ---------------------------------------------------------------- KVK Handelsregister open data (HVD)
+
+KVK_OPEN = "https://opendata.kvk.nl/api/v1/hvds/basisbedrijfsgegevens/kvknummer"
+KVK_TTL = timedelta(days=7)
+KVK_SPACING = 61  # seconds; KVK allows one request per minute per IP address
+KVK_SCOPE = ("KVK Handelsregister Open Dataset Basis Bedrijfsgegevens (CC BY 4.0). It holds only BV's and NV's, and by "
+             "design no name or address: only the first two digits of the visiting address's postcode. actief J/N; "
+             "datumAanvang null is an unknown date; activiteiten are SBI codes (CBS), the main one marked Hoofdactiviteit. "
+             "For the name and address, open kvk_search: KVK's own search page.")
+INSOLVENCY = {"FAIL": "faillissement", "SSAN": "schuldsanering", "SURS": "surseance van betaling"}
+_kvk_slot = threading.Lock()
+_kvk_last = [float("-inf")]
+
+
+def _kvk_get(kvk):
+    """The open-data record, or None on 404. ponytail: one global lock spaces the calls a minute apart, as KVK asks;
+    several numbers in one question wait their turn."""
+    with _kvk_slot:
+        time.sleep(max(0.0, _kvk_last[0] + KVK_SPACING - time.monotonic()))
+        try:
+            return _json(f"{KVK_OPEN}/{kvk}")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            if e.code == 429:
+                raise RuntimeError("KVK open data allows one lookup per minute; try again in a minute") from e
+            raise RuntimeError(f"KVK open data answered HTTP {e.code} for {kvk}") from e
+        finally:
+            _kvk_last[0] = time.monotonic()
+
+
+def kvk_basics(kvk, refresh=False, db=None):
+    """A BV's or NV's basic facts in the Handelsregister open data, by KvK number. Cached for a week; 'not found' for a day."""
+    kvk = _kvk(kvk)
+    db = db or connect()
+    row = db.execute("SELECT fetched_at, parsed FROM kvk_open WHERE kvk=?", (kvk,)).fetchone()
+    if refresh or not row or _older(row["fetched_at"], KVK_TTL if json.loads(row["parsed"])["found"] else LRZA_MISSING_TTL):
+        raw = _kvk_get(kvk)
+        if raw is None:
+            parsed = {"found": False, "note": "Niet in de open KVK-data. Die bevat alleen BV's en NV's: een stichting, "
+                      "vereniging, coöperatie of eenmanszaak staat er nooit in. Zoek het nummer op kvk.nl via kvk_search."}
+        else:
+            start = raw.get("datumAanvang") or ""
+            parsed = {"found": True, **raw,
+                      "datumAanvang": f"{start[:4]}-{start[4:6]}-{start[6:]}" if re.fullmatch(r"\d{8}", start) and start != "0" * 8 else None}
+            if raw.get("insolventieCode"):
+                parsed["insolventie"] = INSOLVENCY.get(raw["insolventieCode"], raw["insolventieCode"])
+        stamp = _iso(_now())
+        with db:
+            db.execute("INSERT OR REPLACE INTO kvk_open VALUES (?,?,?)", (kvk, stamp, json.dumps(parsed, ensure_ascii=False)))
+        row = {"fetched_at": stamp, "parsed": json.dumps(parsed)}
+    return {**json.loads(row["parsed"]), "kvk": kvk, "fetched": row["fetched_at"], "source": f"{KVK_OPEN}/{kvk}",
+            "kvk_search": f"https://www.kvk.nl/zoeken/?source=all&q={kvk}", "scope": KVK_SCOPE}
 
 
 # ---------------------------------------------------------------- CBS Iv3 (Informatie voor derden)
