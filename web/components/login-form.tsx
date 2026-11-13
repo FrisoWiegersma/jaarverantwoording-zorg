@@ -38,6 +38,7 @@ const ERRORS: Record<string, string> = {
   INVALID_EMAIL: "Dat is geen geldig e-mailadres.",
   EMAIL_NOT_ALLOWED: "Dit e-mailadres mag hier geen account maken. Vraag de beheerder.",
   EMAIL_PASSWORD_SIGN_UP_DISABLED: "Nieuwe accounts maken staat hier uit. Vraag de beheerder.",
+  INVALID_ORIGIN: "Open de app via het adres dat bij deze installatie hoort (APP_ORIGIN).",
 };
 
 const FIELD = "w-full rounded-full border bg-background px-5 py-3 text-[0.95rem] placeholder:text-muted-foreground/70 transition-colors focus-visible:border-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-foreground disabled:opacity-60";
@@ -63,6 +64,7 @@ export function LoginForm() {
     } catch (e) {
       // An API error has a code; a dropped connection does not.
       const code = (e as { code?: string } | null)?.code ?? "";
+      if (!ERRORS[code]) console.error("Login failed:", e);
       setError(ERRORS[code] ?? "Dat lukte niet. Probeer het opnieuw.");
       setBusy(false);
       return;

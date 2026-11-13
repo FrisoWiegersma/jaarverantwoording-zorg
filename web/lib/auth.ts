@@ -40,6 +40,15 @@ function create() {
     secret,
     // Compose sets APP_ORIGIN; without it (npm run dev) Better Auth takes the address from the request.
     baseURL: process.env.APP_ORIGIN,
+    // In development without APP_ORIGIN, also accept the address the page was opened on (localhost, 127.0.0.1 or the
+    // network address next dev prints): an Origin equal to the server's own Host is same-origin.
+    trustedOrigins:
+      process.env.APP_ORIGIN || process.env.NODE_ENV === "production"
+        ? undefined
+        : (req) => {
+            const host = req?.headers.get("host");
+            return host ? [`http://${host}`] : [];
+          },
     // Addresses are not verified (no mail is sent): AUTH_ALLOW_SIGNUP=false closes sign-up once everyone has an account.
     emailAndPassword: { enabled: true, minPasswordLength: 10, autoSignIn: true, disableSignUp: process.env.AUTH_ALLOW_SIGNUP?.trim().toLowerCase() === "false" },
     // The proxy reads the session on every request: a signed cookie for five minutes instead of a database read.
