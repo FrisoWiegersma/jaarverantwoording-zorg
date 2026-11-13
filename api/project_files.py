@@ -117,7 +117,7 @@ def saved_file(pid, did, request, for_model=False):
     with database() as db:
         p = projects.project(db, pid, projects.owner(request))
         if for_model and not p["allow_private"]:
-            raise HTTPException(403, "Privémateriaal naar Gemini is uitgeschakeld")
+            raise HTTPException(403, "Privémateriaal naar het AI-model is uitgeschakeld")
         d = dict(projects.document(db, pid, did))
         meta = db.execute("SELECT * FROM project_saved_files WHERE document_id=?", (did,)).fetchone()
         if not meta or (for_model and d["archived"]):

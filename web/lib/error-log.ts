@@ -10,7 +10,7 @@ const cut = (v: unknown, n = 2000) => {
   return s.length > n ? `${s.slice(0, n / 2)} … ${s.slice(-n / 2)}` : s;
 };
 
-interface Chat { id: string; model: string; effort: string }
+interface Chat { id: string; model: string; effort?: string }
 
 // "fetch failed" says nothing; its cause says which (ECONNRESET, UND_ERR_SOCKET, a timeout).
 const causeOf = (e: Error) => {

@@ -161,7 +161,7 @@ def documents(pid: str, request: Request, for_model: bool = False):
     with database() as db:
         p = project(db, pid, owner(request))
         if for_model and not p["allow_private"]:
-            raise HTTPException(403, "Privémateriaal naar Gemini is uitgeschakeld")
+            raise HTTPException(403, "Privémateriaal naar het AI-model is uitgeschakeld")
         return [
             dict(r)
             for r in db.execute(
@@ -279,7 +279,7 @@ def read_page(pid: str, did: str, page: int, request: Request, for_model: bool =
     with database() as db:
         p = project(db, pid, owner(request))
         if for_model and not p["allow_private"]:
-            raise HTTPException(403, "Privémateriaal naar Gemini is uitgeschakeld")
+            raise HTTPException(403, "Privémateriaal naar het AI-model is uitgeschakeld")
         d = document(db, pid, did)
         row = db.execute("SELECT * FROM project_pages WHERE document_id=? AND page=?", (did, page)).fetchone()
         if not 1 <= page <= d["pages"]:
@@ -322,7 +322,7 @@ def search(pid: str, request: Request, q: str = Query(max_length=500), for_model
     with database() as db:
         p = project(db, pid, owner(request))
         if for_model and not p["allow_private"]:
-            raise HTTPException(403, "Privémateriaal naar Gemini is uitgeschakeld")
+            raise HTTPException(403, "Privémateriaal naar het AI-model is uitgeschakeld")
         match = digimv._text_query(q)
         if not match:
             return []
@@ -339,7 +339,7 @@ def search(pid: str, request: Request, q: str = Query(max_length=500), for_model
 def require_consent(pid):
     with database() as db:
         if not db.execute("SELECT allow_private FROM projects WHERE id=?", (pid,)).fetchone()[0]:
-            raise PermissionError("Privémateriaal naar Gemini is uitgeschakeld")
+            raise PermissionError("Privémateriaal naar het AI-model is uitgeschakeld")
 
 
 def process_document(did):
@@ -412,7 +412,7 @@ def model_context(pid: str, request: Request):
     with database() as db:
         p = project(db, pid, owner(request))
         if not p["allow_private"]:
-            raise HTTPException(403, "Privémateriaal naar Gemini is uitgeschakeld")
+            raise HTTPException(403, "Privémateriaal naar het AI-model is uitgeschakeld")
         return {"context": p["context"]}
 
 

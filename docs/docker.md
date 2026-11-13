@@ -4,7 +4,7 @@
 
 ## Start
 
-Install Docker with the Compose plugin. You also need a Gemini API key for chat and scanned-page OCR.
+Install Docker with the Compose plugin. You also need an API key for at least one AI provider: Gemini, Claude, DeepSeek, OpenAI, or any server that speaks the OpenAI API, such as Ollama. Scanned-page OCR uses Gemini for now.
 
 From the repository root:
 
@@ -12,7 +12,7 @@ From the repository root:
 cp .env.example .env
 ```
 
-Edit `.env` and set `GEMINI_API_KEY`. Leave `APP_ORIGIN=http://localhost:3210` for a local installation.
+Edit `.env` and set the key of your provider (see [Configuration](#configuration)). Leave `APP_ORIGIN=http://localhost:3210` for a local installation.
 
 ```sh
 docker compose up -d --build --wait
@@ -36,7 +36,7 @@ Try this after indexing finishes:
 
 > Toon de omzet van Stichting Basalt van 2021 tot en met 2024 in een grafiek.
 
-PDFs and questionnaire answers are fetched as requested, so the initial sync does not download the full report archive. Chat and OCR use the Gemini API and may incur provider charges.
+PDFs and questionnaire answers are fetched as requested, so the initial sync does not download the full report archive. Chat and OCR call your AI provider and may incur its charges.
 
 ## What runs
 
@@ -53,7 +53,11 @@ The API image includes the SQLite tokenizer needed by the index and runs the off
 
 | Variable | Default | When to change it |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | Required | Your server-side provider key |
+| `GEMINI_API_KEY` | At least one provider | Gemini models in the chat; scanned-page OCR |
+| `ANTHROPIC_API_KEY` | | Claude Sonnet, Opus and Haiku 5.5 |
+| `DEEPSEEK_API_KEY` | | DeepSeek V4 Pro and Flash |
+| `OPENAI_API_KEY` | | OpenAI models: `OPENAI_MODELS` (default `gpt-6.1-sol,gpt-6.1-terra,gpt-6-astra`), optional `OPENAI_BASE_URL` |
+| `OPENAI_COMPATIBLE_BASE_URL` | | Any OpenAI-compatible server (Ollama, OpenRouter, Mistral, Groq, vLLM), with `OPENAI_COMPATIBLE_MODELS`, `OPENAI_COMPATIBLE_API_KEY` and a name for the picker in `OPENAI_COMPATIBLE_NAME`. The models must support tool calls. Ollama on the Docker host is `http://host.docker.internal:11434/v1` |
 | `APP_ORIGIN` | `http://localhost:3210` | The exact address users open; Excel source links must match it |
 | `AUTH_MODE` | `builtin` | `cloudflare` when Cloudflare Access signs people in (see below) |
 | `BETTER_AUTH_SECRET` | Made on first start | Set your own (`openssl rand -hex 32`) to manage it with your other secrets |

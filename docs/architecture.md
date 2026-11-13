@@ -4,14 +4,14 @@
 
 ## Request flow
 
-1. The Next.js chat route runs Gemini through the AI SDK. The browser receives tool progress and answer parts over the same stream.
+1. The Next.js chat route runs the chosen model (Gemini, Claude, DeepSeek, OpenAI or an OpenAI-compatible server) through the AI SDK. The browser receives tool progress and answer parts over the same stream.
 2. `search_organizations` identifies the organisation and its documents. Document keys include both year and document ID because IDs restart each year.
 3. `get_figures` retrieves questionnaire fields with their label paths, values, units, and variable names. The result distinguishes group accounts from single-entity filings. Field names vary across years, so searches use labels.
 4. `get_document` downloads and extracts a document on its first read, then returns requested pages. `search_documents` searches pages already indexed in the cache.
 5. `present_answer` accepts a short summary and sourced figure rows. Zod checks the input shape, Dutch numeric notation, and citation paths. The server serializes validated arguments into an OpenUI `FinancialAnswer` program.
 6. The client renders a table, cards, or chart. All views retain a source table and Excel controls. The Markdown fallback is generated from the same rows.
 
-OpenUI supplies the renderer inside the existing chat, using the app's Gemini connection. Chart groups separate posts and units; negative values keep their sign and use a different bar colour.
+OpenUI supplies the renderer inside the existing chat, using the chosen model. Chart groups separate posts and units; negative values keep their sign and use a different bar colour.
 
 ## Retrieval and storage
 
@@ -70,7 +70,7 @@ For Excel, the client extracts table rows and parses Dutch numeric notation. Cli
 - The tool loop stops after the presentation tool or the configured step limit. Older tool results are pruned from later turns to limit repeated document context; earlier answer links remain available.
 - The prompt tells the model to re-read figures when their tool evidence is no longer in context. This is an instruction, not a guarantee of factual correctness.
 - The API is internal to the Compose network. The frontend binds to host loopback. A remotely accessible deployment needs an authenticated reverse proxy; the application itself does not implement user accounts or rate limits.
-- Provider credentials remain on the server. Extracted pages sent to Gemini are public report content, but questions and model context also reach the provider.
+- Provider credentials remain on the server. Scanned pages sent to Gemini for OCR are public report content, but questions and model context also reach the provider.
 - The system has offline regression checks and manual browser validation, rather than a scored dataset of financial questions. Reported behaviour should be assessed with that limit in mind.
 
 ## Long answers and interrupted connections

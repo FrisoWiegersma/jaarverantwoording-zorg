@@ -11,7 +11,11 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.104",
+    "@ai-sdk/deepseek": "^3.0.86",
     "@ai-sdk/google": "^4.0.113",
+    "@ai-sdk/openai": "^4.0.117",
+    "@ai-sdk/openai-compatible": "^3.0.92",
     "@ai-sdk/react": "^4.0.168",
     "@openuidev/react-lang": "1.1.0",
     "ai": "^7.0.164",

@@ -26,6 +26,9 @@ services:
     volumes:
       - web-logs:/app/logs
       - web-data:/app/data
+    # An OpenAI-compatible server on the host, such as Ollama (OPENAI_COMPATIBLE_BASE_URL).
+    extra_hosts:
+      - host.docker.internal:host-gateway
     ports:
       - "127.0.0.1:3210:3000"
     depends_on:

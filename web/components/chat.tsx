@@ -27,7 +27,7 @@ import { Welcome } from "@/components/welcome";
 import { hidePartialLink, parseCitations } from "@/lib/citations";
 import { missingAnswer, SKIPPED } from "@/lib/chat-policy";
 import { conversationId, reconnectOnReturn, rememberConversation } from "@/lib/chat-session";
-import { type AnswerMeta, answerLabel, CONTEXT_WINDOW, type ModelSelection, pickModel } from "@/lib/models";
+import { type AnswerMeta, answerLabel, MODELS, type ModelOption, type ModelSelection, pickModel } from "@/lib/models";
 import { EXAMPLES } from "@/lib/sources";
 import { cn } from "@/lib/utils";
 
@@ -364,12 +364,23 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const docs = useMemo(() => docsOf(messages), [messages]);
   // Rendered only after the session loads in the browser, so reading the saved choice here can't mismatch SSR.
-  const [choice, setChoice] = useState<ModelSelection>(() => {
+  const [choice, setChoice] = useState<ModelSelection | null>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("model") ?? "{}");
       return pickModel(saved.model, saved.effort);
     } catch { return pickModel(); }
   });
+  // The models this server has keys for; the picker waits for them rather than offer one it can't use.
+  const [models, setModels] = useState<ModelOption[]>([]);
+  useEffect(() => {
+    fetch("/api/models")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((list: ModelOption[]) => {
+        setModels(list);
+        setChoice((c) => pickModel(c?.model, c?.effort, list));
+      })
+      .catch(() => {});
+  }, []);
   const choose = (next: ModelSelection) => {
     setChoice(next);
     try { localStorage.setItem("model", JSON.stringify(next)); } catch {}
@@ -539,8 +550,8 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
                 busy={busy}
                 examples={messages.length || projectId ? undefined : EXAMPLES}
                 footer={<>
-                  <AIModelSelector onChange={choose} value={choice} />
-                  {context && <AIContextMeter className="ml-auto" limit={CONTEXT_WINDOW} segments={[
+                  {choice && models.length > 0 && <AIModelSelector models={models} onChange={choose} value={choice} />}
+                  {context && <AIContextMeter className="ml-auto" limit={(models.find((m) => m.id === choice?.model) ?? MODELS[0]).contextWindow} segments={[
                     { id: "prompt", label: "Instructies en gesprek", tokens: context.prompt, color: "bg-muted-foreground/50" },
                     { id: "sources", label: "Gelezen bronnen", tokens: context.sources, color: "bg-(--series-1)" },
                   ]} />}

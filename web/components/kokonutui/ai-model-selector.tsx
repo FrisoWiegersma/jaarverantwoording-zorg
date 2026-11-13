@@ -9,14 +9,15 @@
  * @website: https://kokonutui.com
  * @github: https://github.com/kokonut-labs/kokonutui
  *
- * Trimmed for this app: controlled only, models from lib/models.ts, Dutch labels and the app's theme tokens.
+ * Trimmed for this app: controlled only, the models the server is configured for (grouped by provider when there are
+ * several), Dutch labels and the app's theme tokens.
  * The trigger sits in the prompt footer, so the surrounding bar of the original is gone.
  */
 
 import { Check, ChevronDown } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
-import { type EffortLevel, MODELS, type ModelOption, type ModelSelection } from "@/lib/models";
+import { type EffortLevel, type ModelOption, type ModelSelection, PROVIDER_NAMES } from "@/lib/models";
 import { cn } from "@/lib/utils";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -146,15 +147,18 @@ function EffortTrack({
 }
 
 export default function AIModelSelector({
+  models,
   value,
   onChange,
   className,
 }: {
+  models: ModelOption[];
   value: ModelSelection;
   onChange: (value: ModelSelection) => void;
   className?: string;
 }) {
-  const model = MODELS.find((item) => item.id === value.model) ?? MODELS[0];
+  const model = models.find((item) => item.id === value.model) ?? models[0];
+  const grouped = new Set(models.map((m) => m.provider)).size > 1;
   const level = effortIndex(model, value.effort);
   const effort = model.efforts[level];
 
@@ -191,9 +195,9 @@ export default function AIModelSelector({
     const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
     if (step === undefined) return;
     event.preventDefault();
-    const next = (index + step + MODELS.length) % MODELS.length;
+    const next = (index + step + models.length) % models.length;
     optionRefs.current[next]?.focus();
-    pickModel(MODELS[next]);
+    pickModel(models[next]);
   };
 
   return (
@@ -202,7 +206,7 @@ export default function AIModelSelector({
         <button
           aria-controls={panelId}
           aria-expanded={open}
-          aria-label={`Model: ${model.name}, nadenken ${effort?.label.toLowerCase()}. Wijzigen`}
+          aria-label={`Model: ${model.name}${effort ? `, nadenken ${effort.label.toLowerCase()}` : ""}. Wijzigen`}
           className={cn(
             "flex h-11 items-center gap-2 rounded-full px-3 text-sm text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
             open && "bg-muted text-foreground"
@@ -212,10 +216,12 @@ export default function AIModelSelector({
           type="button"
         >
           <span className="font-medium text-foreground">{model.name}</span>
-          <span className="flex items-center gap-1.5">
-            <EffortGlyph count={model.efforts.length} level={level} />
-            <span className="hidden sm:inline">{effort?.label}</span>
-          </span>
+          {effort && (
+            <span className="flex items-center gap-1.5">
+              <EffortGlyph count={model.efforts.length} level={level} />
+              <span className="hidden sm:inline">{effort.label}</span>
+            </span>
+          )}
           <ChevronDown
             aria-hidden="true"
             className={cn("size-3.5 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]", open && "rotate-180")}
@@ -232,14 +238,20 @@ export default function AIModelSelector({
               initial={{ opacity: 0, scale: 0.97, y: 4 }}
               transition={{ duration: 0.16, ease: EASE_OUT }}
             >
-              <div aria-label="Model" role="radiogroup">
-                {MODELS.map((option, index) => {
+              <div aria-label="Model" className="max-h-[50vh] overflow-y-auto" role="radiogroup">
+                {models.map((option, index) => {
                   const selected = option.id === model.id;
+                  const heading = grouped && option.provider !== models[index - 1]?.provider;
                   return (
+                    <div key={option.id}>
+                    {heading && (
+                      <p aria-hidden="true" className="px-2.5 pt-2 pb-1 font-medium text-muted-foreground text-xs">
+                        {PROVIDER_NAMES[option.provider]}
+                      </p>
+                    )}
                     <button
                       aria-checked={selected}
                       className="flex min-h-11 w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left outline-hidden transition-colors duration-150 hover:bg-muted focus-visible:bg-muted"
-                      key={option.id}
                       onClick={() => pickModel(option)}
                       onKeyDown={(event) => onOptionKey(event, index)}
                       ref={(node) => {
@@ -257,10 +269,12 @@ export default function AIModelSelector({
                         {selected && <Check aria-hidden="true" className="size-4" />}
                       </span>
                     </button>
+                    </div>
                   );
                 })}
               </div>
 
+              {effort && <>
               <div className="mx-1.5 my-1 border-t" />
 
               <div className="px-1.5 pt-1.5 pb-2">
@@ -290,6 +304,7 @@ export default function AIModelSelector({
                   </AnimatePresence>
                 </div>
               </div>
+              </>}
             </motion.div>
           )}
         </AnimatePresence>

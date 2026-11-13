@@ -17,9 +17,9 @@ URL expires. With project permission enabled, later chats can read saved PDFs an
 archive members, filters and sheets. Table answers cite private rows from that saved copy. Local source search
 finds saved table filenames and provenance; table contents are queried through the project table reader.
 
-**Projectcontext en bronnen gebruiken met Gemini** defaults to off. Save the instructions to apply a permission change. While off, the app can inspect and search files locally and research public DigiMV information; project context and previous conversation contents are excluded from model input. Text you type directly as a chat question is sent to Gemini.
+**Projectcontext en bronnen gebruiken met het AI-model** defaults to off. Save the instructions to apply a permission change. While off, the app can inspect and search files locally and research public DigiMV information; project context and previous conversation contents are excluded from model input. Text you type directly as a chat question is sent to the chosen model's provider.
 
-When enabled, project context, relevant source excerpts and scanned pages may be sent to the configured Gemini service. Calls, OCR retries and model steps recheck permission on the server. Turning permission off stops subsequent requests; it cannot recall data already sent or cancel an HTTP request in flight. The model can retrieve information but cannot edit sources or project settings.
+When enabled, project context, relevant source excerpts and scanned pages may be sent to the provider of the model chosen for the question, and scanned pages to Gemini for OCR. Pick a model whose provider may see this material. Calls, OCR retries and model steps recheck permission on the server. Turning permission off stops subsequent requests; it cannot recall data already sent or cancel an HTTP request in flight. The model can retrieve information but cannot edit sources or project settings.
 
 Answers link to filename, physical PDF page and supporting quotation. Open yellow source citations to inspect the evidence. OCR-derived text and unmatched quotations are identified. Text matching proves only that a passage was found, not that the model's interpretation is correct. Reports and advisory decisions stay in the consultant's own workflow. Existing Excel exports remain available for numeric answers.
 

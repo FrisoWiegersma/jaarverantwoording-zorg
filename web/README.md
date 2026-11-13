@@ -1,6 +1,7 @@
 # Jaarverslagen zorg chat
 
-Next.js chat with Gemini, DigiMV source evidence, OpenUI financial answers, and Excel export.
+Next.js chat with Gemini, Claude, DeepSeek, OpenAI or any OpenAI-compatible model, DigiMV source evidence, OpenUI
+financial answers, and Excel export.
 Use Node 24, as CI and the Docker image do (Node 26 stalls parallel Gemini calls), and npm. Start the Python API from the repository root:
 
 ```sh
@@ -19,16 +20,18 @@ at least 10 characters. Accounts and the generated session secret live in `data/
 `AUTH_MODE=cloudflare` there is no login and the app trusts Cloudflare Access's `cf-access-authenticated-user-email`
 header, which you can send yourself with curl to act as someone.
 
-Required: `GEMINI_API_KEY`. Optional: `DIGIMV_API` (default `http://127.0.0.1:8000`),
+Required: a key for at least one provider (`GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`
+or `OPENAI_COMPATIBLE_BASE_URL`; see `.env.example`). Optional: `DIGIMV_API` (default `http://127.0.0.1:8000`),
 `APP_ORIGIN` (public origin used to validate Excel hyperlinks and sign-in requests; defaults to the request origin). The chat
-model and its thinking level are picked in the prompt; `lib/models.ts` lists the choices the API route accepts.
+model and its thinking level are picked in the prompt. `lib/models.ts` lists the curated models, `lib/providers.ts` keeps those
+whose provider has a key, adds the ones `.env` names, and says each provider's thinking level its own way.
 
 The AI SDK stream carries DigiMV tools and a `present_answer` tool. The latter validates one figure
 per row and produces an OpenUI `FinancialAnswer` program. The model chooses a table, cards, or chart.
 Each view includes the source table and Excel controls. Charts separate posts and units; bars show
 absolute magnitude, with negative values labelled and coloured red. The same rows produce a Markdown
 fallback, so a rendering error does not hide the answer. OpenUI runs inside the existing chat with
-the existing Gemini connection; no additional API key is required.
+the chosen model; no additional API key is required.
 
 Light and dark modes follow the device setting. Conversations are saved on the server per account, and an answer keeps
 running if the connection drops.

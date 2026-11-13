@@ -19,7 +19,7 @@ It reads the public [DigiMV archive](https://digimv13.desan.nl/archive/search), 
 - **Export** an answer's table to Excel, with numeric cells and links to the sources, or copy it into a spreadsheet.
 - **Look past the annual report.** The chat also reads the care-provider register (permits, AGB codes, branches), what municipalities, youth-care regions, provinces and water boards spend per policy area (CBS Iv3), and court rulings. An Iv3 amount links to its cell.
 - **Find the buried PDF.** It searches Woo releases, gazettes and parliamentary papers, local regulations and EU tenders, follows links on any public site (insurers' purchasing policies, IZA regional plans, council portals), reads the PDF and quotes the page. Open data too: data.overheid.nl, CSV/Excel files and every CBS StatLine table.
-- **Work in projects.** Upload PDFs and notes, keep context and conversations together, save the sources an answer cites into one or more projects, and inspect evidence from public and private sources. Private material is sent to Gemini only after enabling that project’s permission; see [project setup and privacy](docs/projects.md).
+- **Work in projects.** Upload PDFs and notes, keep context and conversations together, save the sources an answer cites into one or more projects, and inspect evidence from public and private sources. Private material is sent to the AI provider only after enabling that project’s permission; see [project setup and privacy](docs/projects.md).
 - **Pick up later.** Conversations are saved, an answer keeps running if the connection drops, and the bell tells you when it is done.
 - **Your own account.** Everyone signs in with email and password, or through Cloudflare Access, and their conversations and projects are theirs alone.
 
@@ -27,10 +27,10 @@ The same retrieval tools work from a CLI, an HTTP API and an MCP server ([refere
 
 ## Run it
 
-You need Docker with Compose and a Gemini API key.
+You need Docker with Compose and an API key for Gemini, Claude, DeepSeek or OpenAI, or a server that speaks the OpenAI API, such as Ollama.
 
 ```sh
-cp .env.example .env   # set GEMINI_API_KEY
+cp .env.example .env   # set your provider's key
 docker compose up -d --build --wait
 ```
 
@@ -38,13 +38,13 @@ Open **http://localhost:3210** and create an account. The first start builds the
 
 > Toon de omzet van Stichting Basalt van 2021 tot en met 2024 in een grafiek.
 
-Chat and OCR of scanned pages use the Gemini API. Search, caching and PDF text extraction run locally. The [Docker guide](docs/docker.md) covers indexing, configuration, sign-in through Cloudflare Access instead of the built-in login, updates and backups. To work on the code without Docker, see [web/README.md](web/README.md).
+Chat uses the models of the providers you set a key for; you pick one per question. OCR of scanned pages uses Gemini for now. Search, caching and PDF text extraction run locally. The [Docker guide](docs/docker.md) covers indexing, configuration, sign-in through Cloudflare Access instead of the built-in login, updates and backups. To work on the code without Docker, see [web/README.md](web/README.md).
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    U[Question] --> C[Next.js chat · Gemini tool loop]
+    U[Question] --> C[Next.js chat · AI tool loop]
     C --> R[FastAPI retrieval tools]
     R --> Q[DigiMV questionnaires]
     R --> P[PDF text extraction · OCR fallback]
@@ -59,7 +59,7 @@ The model finds the organisation, reads its filing and answers with sourced rows
 
 - The model and OCR can be wrong. Check the source, especially the unit, the year and whether a figure is for the whole group.
 - A citation match is a text check, not an audit.
-- A first read can be slow while a document downloads and converts, and it needs DigiMV and Gemini to be up.
+- A first read can be slow while a document downloads and converts, and it needs DigiMV and the AI provider to be up.
 - Conversations are saved on the server, per account.
 - The built-in login does not verify email addresses. On a public address, close sign-up once everyone has an account (`AUTH_ALLOW_SIGNUP=false`).
 - Excel files are checked programmatically; pasting into Microsoft Excel still needs checking by hand.

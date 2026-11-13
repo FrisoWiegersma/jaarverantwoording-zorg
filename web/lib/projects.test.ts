@@ -21,7 +21,7 @@ test("project requests require identity and forward it to the private API", asyn
     calls++;
     assert.equal(new Headers(init?.headers).get("cf-access-authenticated-user-email"), "alice@example.test");
     assert.equal(init?.cache, "no-store");
-    return Response.json({ detail: "Privémateriaal naar Gemini is uitgeschakeld" }, { status: 403 });
+    return Response.json({ detail: "Privémateriaal naar het AI-model is uitgeschakeld" }, { status: 403 });
   };
   try {
     await assert.rejects(projectApi(new Request("https://zorg.example"), "/projects/a"), /Meld je aan/);
