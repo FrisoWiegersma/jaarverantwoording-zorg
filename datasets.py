@@ -136,7 +136,9 @@ def xlsx_rows(body, sheet=None):
         shared = ["".join(t.text or "" for t in si.iter(f"{m}t"))
                   for si in ET.fromstring(z.read("xl/sharedStrings.xml")).iter(f"{m}si")]
     names = [s[0] for s in sheets]
-    pick = next((s for s in sheets if s[0] == sheet), None) if sheet else sheets[0]
+    # exact, else ignoring case: 'MSZ vj2025' is what a model writes for 'MSZ VJ2025'
+    pick = (next((s for s in sheets if s[0] == sheet), None)
+            or next((s for s in sheets if s[0].casefold() == sheet.strip().casefold()), None)) if sheet else sheets[0]
     if not pick:
         raise KeyError(f"no sheet {sheet!r}; the sheets are {names}")
     target = targets[pick[1]]
@@ -165,6 +167,23 @@ def xlsx_rows(body, sheet=None):
             cells[i] = val
         rows.append([cells.get(i) for i in range(max(cells) + 1)] if cells else [])
     return pick[0], names, rows
+
+
+def _xlsx_scan(body, sheet, scan):
+    """(sheet, sheets, scan) of the sheet asked for; with none asked and the first sheet lacking a filter or sort column,
+    the first sheet that has them: a workbook often opens on a cover, disclaimer or version history (Zorginzicht's do)."""
+    name, sheets, rows = xlsx_rows(body, sheet)
+    try:
+        return name, sheets, scan(rows)
+    except KeyError:
+        if sheet is not None:
+            raise
+        for other in sheets[1:]:
+            try:
+                return other, sheets, scan(xlsx_rows(body, other)[2])
+            except KeyError:
+                continue
+        raise
 
 
 ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")  # latin-1 decodes any byte: the last resort
@@ -370,8 +389,7 @@ def _read(path, ctype, query, limit, offset, sheet, header_row, filters, member,
             names = z.namelist()
             if "xl/workbook.xml" in names:
                 _in_memory(path.stat().st_size, "Excel file")
-                fmt, (sheet, sheets, rows) = "xlsx", xlsx_rows(path.read_bytes(), sheet)
-                out = scan(rows)
+                fmt, (sheet, sheets, out) = "xlsx", _xlsx_scan(path.read_bytes(), sheet, scan)
             elif "word/document.xml" in names:
                 raise ValueError("a Word document, not a data file: read it with read_document")
             else:
@@ -385,8 +403,7 @@ def _read(path, ctype, query, limit, offset, sheet, header_row, filters, member,
                     _in_memory(z.getinfo(m).file_size, "file")
                     body = z.read(m)
                     if m.lower().endswith(".xlsx"):
-                        fmt, (sheet, sheets, rows) = "xlsx", xlsx_rows(body, sheet)
-                        out = scan(rows)
+                        fmt, (sheet, sheets, out) = "xlsx", _xlsx_scan(body, sheet, scan)
                     else:
                         fmt, out = "json", scan(json_rows(body), 1)
                 else:

@@ -298,6 +298,7 @@ assert rows == [["Subsidieregister 2025"], [], ["Ontvanger", "Bedrag", "Ontvange
                 [None, "n.v.t.", True]], rows  # a gap keeps its column, rich text is joined, numbers are numbers
 assert datasets.xlsx_rows(xlsx, "Toelichting")[2] == [["uitleg"]]  # a target with an absolute path
 raises(KeyError, datasets.xlsx_rows, xlsx, "Nope")
+assert datasets.xlsx_rows(xlsx, "toelichting")[0] == "Toelichting", "a sheet name matches ignoring case"
 assert datasets._number("16646") == 16646 and datasets._number("1E-3") == 0.001 and datasets._number("2.0") == 2.0
 assert datasets._header_row(rows) == 3
 assert datasets._columns(["Ontvanger", "", "Ontvanger", "row", None]) == ["Ontvanger", "column 2", "Ontvanger'", "row'", "column 5"]
@@ -320,6 +321,11 @@ assert (t["header_row"], t["title_rows"], t["rows_total"], t["rows_matched"]) ==
 assert t["rows"] == [{"row": 4, "Ontvanger": "St. Overweeghuis", "Bedrag": 95000, "Ontvanger'": None, "column 4": 0.1}], t
 assert [x["row"] for x in datasets.read_table("https://gemeente.example/subsidies.xlsx")["rows"]] == [4, 5]  # as Excel shows
 assert datasets.read_table("https://gemeente.example/subsidies.xlsx", header_row=1)["columns"][:2] == ["Subsidieregister 2025", "column 2"]
+# no sheet asked, and the first lacks the filter column: the sheet that has it (a cover or version history comes first)
+assert datasets.read_table("https://gemeente.example/subsidies.xlsx", filters={"uitleg": ["x"]})["sheet"] == "Toelichting"
+assert "uitleg" in raises(KeyError, datasets.read_table, "https://gemeente.example/subsidies.xlsx", sheet="Subsidies",
+                          filters={"uitleg": ["x"]}), "a sheet asked for is never swapped"
+assert "Nope" in raises(KeyError, datasets.read_table, "https://gemeente.example/subsidies.xlsx", filters={"Nope": ["x"]})
 serve(b'[{"a": 1}, {"a": 2}]', "application/json")
 assert [x["row"] for x in datasets.read_table("https://x.example/a.json")["rows"]] == [1, 2]  # JSON: the record number
 serve(b"<!doctype html><html>", "text/html")
