@@ -1,4 +1,4 @@
-"""HTTP API over the DigiMV index and knowledge base. Run: uv run --env-file .env uvicorn api:app"""
+"""HTTP API over the DigiMV index and knowledge base. Run: uv run --env-file .env uvicorn main:app --app-dir api"""
 
 import faulthandler
 import json

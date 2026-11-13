@@ -4,4 +4,6 @@
 data
 seed-data
 web
-__pycache__
+docs
+deploy
+**/__pycache__

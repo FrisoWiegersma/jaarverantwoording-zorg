@@ -4,7 +4,7 @@ Next.js chat with Gemini, DigiMV source evidence, OpenUI financial answers, and 
 Use Node 24 or later and npm. Start the Python API from the repository root:
 
 ```sh
-uv run --env-file .env uvicorn api:app
+uv run --env-file .env uvicorn main:app --app-dir api
 ```
 
 In this directory, make the root `.env` available as `.env.local` (an untracked symlink works), then:

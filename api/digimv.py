@@ -33,7 +33,7 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
 EXTRACTOR = 2  # bump when extraction changes: cached documents from older versions count as stale
 UA = "jaarverantwoording-zorg/0.1"
 YEARS = range(2019, date.today().year + 1)  # API returns [] for years outside its archive window
-DATA = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
+DATA = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS orgs(

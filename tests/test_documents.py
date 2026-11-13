@@ -1,8 +1,8 @@
 """Offline check of public-document finding and reading (documents.py) and open data (datasets.py).
-Run: python test_documents.py
+Run: PYTHONPATH=api uv run python tests/test_documents.py
 
-Fixtures have the shapes the live services returned on 2026-11-12; `python documents.py check` and
-`python datasets.py check` test the live services.
+Fixtures have the shapes the live services returned on 2026-11-12; `uv run python api/documents.py check` and
+`uv run python api/datasets.py check` test the live services.
 """
 
 import io
@@ -27,7 +27,7 @@ import documents as d  # noqa: E402
 import sources  # noqa: E402
 
 # unittest discover imports test_digimv first, which fixes digimv.DATA to the real data/ before the line above
-assert str(digimv.DATA) == os.environ["DATA_DIR"], "run on its own: python test_documents.py"
+assert str(digimv.DATA) == os.environ["DATA_DIR"], "run on its own: PYTHONPATH=api python tests/test_documents.py"
 
 
 def raises(exc, fn, *a, **kw):

@@ -1,6 +1,6 @@
-"""Offline check of the LRZa, CBS Iv3, Rechtspraak, GLEIF and EU sanctions parsing and caching. Run: python test_sources.py
+"""Offline check of the LRZa, CBS Iv3, Rechtspraak, GLEIF and EU sanctions parsing and caching. Run: PYTHONPATH=api uv run python tests/test_sources.py
 
-Fixtures have the shapes the live services returned on 2026-11-12; `python sources.py check` tests the live services.
+Fixtures have the shapes the live services returned on 2026-11-12; `uv run python api/sources.py check` tests the live services.
 """
 
 import io

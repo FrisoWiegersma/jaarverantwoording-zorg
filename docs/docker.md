@@ -29,7 +29,7 @@ docker compose logs -f api
 Use Ctrl+C to stop watching logs; the containers keep running. You can also open `http://localhost:3210/digimv/health` to see the latest successful sync timestamp. If a year reports `FAILED`, inspect the error and retry indexing:
 
 ```sh
-docker compose exec api .venv/bin/python digimv.py sync
+docker compose exec api .venv/bin/python api/digimv.py sync
 ```
 
 Try this after indexing finishes:

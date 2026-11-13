@@ -1,6 +1,6 @@
 """MCP server over the DigiMV index and knowledge base, the care-provider register (LRZa), CBS Iv3 government
 accounts, court rulings, public documents (Woo, gazettes, CVDR, TED, any public URL) and open data (data.overheid.nl,
-CBS StatLine). Run: uv run --env-file .env mcp_server.py (stdio)."""
+CBS StatLine). Run: uv run --env-file .env api/mcp_server.py (stdio)."""
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError

@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pymupdf
 from fastapi.testclient import TestClient
 
-import api
+import main
 import digimv
 import projects
 
@@ -20,7 +20,7 @@ class ProjectsTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.data = patch.object(digimv, "DATA", Path(self.tmp.name))
         self.data.start()
-        self.client = TestClient(api.app)  # no lifespan: tests explicitly run processing jobs
+        self.client = TestClient(main.app)  # no lifespan: tests explicitly run processing jobs
         self.alice = {"cf-access-authenticated-user-email": "alice@example.test"}
         self.bob = {"cf-access-authenticated-user-email": "bob@example.test"}
         self.pid = self.call("POST", "/projects", json={"name": "Financiële review", "client": "Testklant"}).json()["id"]

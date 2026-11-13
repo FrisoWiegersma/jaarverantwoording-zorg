@@ -66,9 +66,10 @@ The model finds the organisation, reads its filing and answers with sourced rows
 
 | Path | Contents |
 | --- | --- |
-| `digimv.py` | Indexing, retrieval, extraction, caching and the CLI |
-| `api.py`, `mcp_server.py` | HTTP and MCP on top of the retrieval functions |
+| `api/` | Python: DigiMV indexing and extraction (`digimv.py`), the other public sources (`sources.py`, `documents.py`, `datasets.py`), projects, and HTTP (`main.py`) and MCP (`mcp_server.py`) on top |
 | `web/` | The Next.js app: chat, organisation pages, comparisons, sources and Excel export |
-| `test_digimv.py`, `web/lib/*.test.ts` | Offline tests, run in [CI](.github/workflows/checks.yml) with lint, type checks and a build |
+| `tests/`, `web/lib/*.test.ts` | Offline tests, run in [CI](.github/workflows/checks.yml) with lint, type checks and a build |
+| `deploy/` | The systemd timer that deploys `main` once its checks pass |
+| `docs/` | Architecture, data sources, Docker, projects and the API/CLI/MCP reference |
 
 Not affiliated with DigiMV or with the organisations whose reports it reads. Code under the [MIT licence](LICENSE).

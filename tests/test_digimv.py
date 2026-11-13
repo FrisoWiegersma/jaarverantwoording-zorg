@@ -1,4 +1,4 @@
-"""Offline check of flattening, keys, search and the knowledge-base index. Run: python test_digimv.py"""
+"""Offline check of flattening, keys, search and the knowledge-base index. Run: PYTHONPATH=api uv run python tests/test_digimv.py"""
 
 import json
 
@@ -228,11 +228,11 @@ def run():
 
     # saved conversations: per Cloudflare Access user, never another's
     from fastapi.testclient import TestClient
-    import api
+    import main
     with tempfile.TemporaryDirectory() as tmp:
         digimv.DATA, data = Path(tmp), digimv.DATA
         try:
-            c, me, other = TestClient(api.app), {"cf-access-authenticated-user-email": "a@x"}, {"cf-access-authenticated-user-email": "b@x"}
+            c, me, other = TestClient(main.app), {"cf-access-authenticated-user-email": "a@x"}, {"cf-access-authenticated-user-email": "b@x"}
             body = {"title": "Omzet Basalt", "messages": [{"id": "m1", "role": "user", "parts": []}]}
             assert c.put("/chats/m1", json=body, headers=me).status_code == 200
             assert [x["title"] for x in c.get("/chats", headers=me).json()] == ["Omzet Basalt"]

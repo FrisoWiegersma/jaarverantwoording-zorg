@@ -10,7 +10,7 @@ import py7zr
 import pymupdf
 from fastapi.testclient import TestClient
 
-import api
+import main
 import datasets
 import digimv
 import documents
@@ -25,7 +25,7 @@ class SavedFilesTest(unittest.TestCase):
         self.data = patch.object(digimv, "DATA", self.root)
         self.pub = patch.object(documents, "PUB", self.root / "pub")
         self.data.start(); self.pub.start()
-        self.client = TestClient(api.app)
+        self.client = TestClient(main.app)
         self.alice = {"cf-access-authenticated-user-email": "alice@example.test"}
         self.bob = {"cf-access-authenticated-user-email": "bob@example.test"}
         self.pid = self.call("POST", "/projects", json={"name": "Research"}).json()["id"]

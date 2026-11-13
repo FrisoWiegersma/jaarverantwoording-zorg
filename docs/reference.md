@@ -12,8 +12,8 @@ From the repository root:
 cp .env.example .env
 # Set GEMINI_API_KEY in .env.
 uv sync --frozen
-uv run python digimv.py sync
-uv run --env-file .env uvicorn api:app
+uv run python api/digimv.py sync
+uv run --env-file .env uvicorn main:app --app-dir api
 ```
 
 In another terminal:
@@ -30,39 +30,39 @@ The symlink command is for Unix shells; copying the file to `web/.env.local` als
 ## CLI
 
 ```sh
-uv run python digimv.py sync
-uv run python digimv.py search "woonzorggroep"
-uv run python digimv.py search 82905347 --type jaarrekening
-uv run --env-file .env python digimv.py fetch --org 82905347 --year 2023
-uv run --env-file .env python digimv.py fetch --doc 2023/84870
-uv run python digimv.py text "eigen vermogen" --org 82905347
-uv run python digimv.py figures 28099814 2025 "som der bedrijfsopbrengsten"
-uv run python digimv.py verify
+uv run python api/digimv.py sync
+uv run python api/digimv.py search "woonzorggroep"
+uv run python api/digimv.py search 82905347 --type jaarrekening
+uv run --env-file .env python api/digimv.py fetch --org 82905347 --year 2023
+uv run --env-file .env python api/digimv.py fetch --doc 2023/84870
+uv run python api/digimv.py text "eigen vermogen" --org 82905347
+uv run python api/digimv.py figures 28099814 2025 "som der bedrijfsopbrengsten"
+uv run python api/digimv.py verify
 ```
 
 The other public sources have their own CLI, with JSON output:
 
 ```sh
-uv run python sources.py register 28099814
-uv run python sources.py register-search --naam basalt
-uv run python sources.py bodies "Holland Rijnland"
-uv run python sources.py iv3 gemeenten 2025 GM0546 6.7
-uv run python sources.py rulings "Stichting Basalt"
-uv run python sources.py ruling ECLI:NL:RBAMS:2019:441 --part 2
-uv run python sources.py check      # live probe of every source
+uv run python api/sources.py register 28099814
+uv run python api/sources.py register-search --naam basalt
+uv run python api/sources.py bodies "Holland Rijnland"
+uv run python api/sources.py iv3 gemeenten 2025 GM0546 6.7
+uv run python api/sources.py rulings "Stichting Basalt"
+uv run python api/sources.py ruling ECLI:NL:RBAMS:2019:441 --part 2
+uv run python api/sources.py check      # live probe of every source
 
-uv run python documents.py woo "jeugdzorg" --org "Nederlandse Zorgautoriteit"
-uv run python documents.py gazettes 'tarief "zorg in natura"' --creator Leiden --gazette gmb
-uv run python documents.py regulations jeugdhulp --creator Leiden
-uv run python documents.py tenders jeugdhulp --since 2026-01-01
-uv run --env-file .env python documents.py read https://zoek.officielebekendmakingen.nl/gmb-2026-312503.pdf --pages 1-3
-uv run python documents.py search tarief --url <url read before>
-uv run python documents.py check
+uv run python api/documents.py woo "jeugdzorg" --org "Nederlandse Zorgautoriteit"
+uv run python api/documents.py gazettes 'tarief "zorg in natura"' --creator Leiden --gazette gmb
+uv run python api/documents.py regulations jeugdhulp --creator Leiden
+uv run python api/documents.py tenders jeugdhulp --since 2026-01-01
+uv run --env-file .env python api/documents.py read https://zoek.officielebekendmakingen.nl/gmb-2026-312503.pdf --pages 1-3
+uv run python api/documents.py search tarief --url <url read before>
+uv run python api/documents.py check
 
-uv run python datasets.py datasets wachtlijsten
-uv run python datasets.py table https://example.org/subsidies.xlsx
-uv run python datasets.py cbs "Wmo cliënten"
-uv run python datasets.py check
+uv run python api/datasets.py datasets wachtlijsten
+uv run python api/datasets.py table https://example.org/subsidies.xlsx
+uv run python api/datasets.py cbs "Wmo cliënten"
+uv run python api/datasets.py check
 ```
 
 `sync` prints a reconciliation table for each year. `fetch` downloads and converts documents on demand. `text` searches extracted pages; it does not search PDFs that have not yet been opened. `verify` checks cached files against the index for size, publication, and extraction-version mismatches.
@@ -126,13 +126,13 @@ The stdio server exposes `search_organizations`, `get_figures`, `get_key_figures
 Run it directly:
 
 ```sh
-uv run --env-file .env mcp_server.py
+uv run --env-file .env api/mcp_server.py
 ```
 
 For a Claude Code client, from the repository root:
 
 ```sh
-claude mcp add digimv -- uv run --env-file "$PWD/.env" --directory "$PWD" mcp_server.py
+claude mcp add digimv -- uv run --env-file "$PWD/.env" --directory "$PWD" api/mcp_server.py
 ```
 
 ## Data conventions
@@ -167,12 +167,10 @@ pub/tables/{id}                      Data files read with read_table, refreshed 
 ## Checks
 
 ```sh
-uv run python test_digimv.py
-uv run python test_sources.py
-uv run python test_documents.py
-uv run python sources.py check     # live; not in CI
-uv run python documents.py check   # live
-uv run python datasets.py check    # live
+for t in tests/test_*.py; do PYTHONPATH=api uv run python "$t" || break; done
+uv run python api/sources.py check     # live; not in CI
+uv run python api/documents.py check   # live
+uv run python api/datasets.py check    # live
 cd web
 npm ci
 npm run lint
