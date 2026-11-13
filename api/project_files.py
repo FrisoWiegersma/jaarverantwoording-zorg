@@ -7,14 +7,13 @@ import uuid
 from contextlib import contextmanager
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
-
 import datasets
 import digimv
 import documents
 import projects
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/projects")
 

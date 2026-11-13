@@ -6,20 +6,19 @@ import signal
 import sqlite3
 import threading
 import traceback
-from typing import Annotated
 from contextlib import asynccontextmanager, closing
-from datetime import datetime, timedelta, timezone
-
-from fastapi import FastAPI, HTTPException, Path, Query, Request
-from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, Field
+from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 import datasets
 import digimv
 import documents
-import projects
 import project_files
+import projects
 import sources
+from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, Field
 
 # A frozen API logs nothing (uvicorn skips requests whose caller gave up), so on a freeze run
 # `docker compose kill -s SIGUSR1 api` and `docker compose logs api` shows where every thread is stuck.
@@ -31,7 +30,7 @@ def _refresh(stop):
     hourly for as long as the API runs (not only at startup). The old index stays readable meanwhile."""
     while not stop.is_set():
         last = digimv.last_sync()
-        if not last or datetime.fromisoformat(last) < datetime.now(timezone.utc) - timedelta(hours=24):
+        if not last or datetime.fromisoformat(last) < datetime.now(UTC) - timedelta(hours=24):
             try:
                 digimv.sync()
             except Exception:  # an upstream failure must not end the loop; retried within the hour
@@ -57,6 +56,7 @@ app.include_router(project_files.router)
 @app.middleware("http")
 async def private_boundary(request: Request, call_next):
     import os
+
     from fastapi.responses import JSONResponse
     private = request.url.path.startswith(("/projects", "/chats"))
     if private and request.method not in ("GET", "HEAD", "OPTIONS"):
@@ -480,7 +480,7 @@ def save_chat(body: ChatIn, request: Request, chat_id: ChatId):
     messages = json.dumps(body.messages, ensure_ascii=False)
     if len(messages) > 20_000_000:
         raise HTTPException(413, "conversation too large")
-    updated = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    updated = datetime.now(UTC).isoformat(timespec="seconds")
     with closing(_chats()) as db, db:
         old = db.execute("SELECT project_id FROM chats WHERE user=? AND id=?", (_user(request), chat_id)).fetchone()
         if old and old[0] != body.project_id:

@@ -24,7 +24,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 BASE = "https://digimv13.desan.nl/api/ArchiveSearch"
@@ -123,7 +123,7 @@ def load_year(db, year, data):
         if (n_orgs, n_docs) != (len(orgs), len(docs)):
             raise ValueError(f"{year}: stored {n_orgs} orgs/{n_docs} docs, API had {len(orgs)}/{len(docs)}")
         db.execute("INSERT INTO sync_log VALUES (?,?,?,?)",
-                   (year, datetime.now(timezone.utc).isoformat(timespec="seconds"), n_orgs, n_docs))
+                   (year, datetime.now(UTC).isoformat(timespec="seconds"), n_orgs, n_docs))
     return len(orgs), n_orgs, len(docs), n_docs
 
 
@@ -534,7 +534,7 @@ def search_text(q, org_id=None, year=None, doc_id=None, limit=20, db=None):
 
 def page_heading(md):
     """First Markdown headings of a page, e.g. 'II.2 LUMC-GROEP › Geconsolideerde winst- en verliesrekening'."""
-    lines = re.findall(r"^#{1,6} .+$|^\*\*[^*|\n]{6,}\*\*\s*$", md, re.M)  # headings and full-bold title lines
+    lines = re.findall(r"^#{1,6} .+$|^\*\*[^*|\n]{6,}\*\*\s*$", md, re.MULTILINE)  # headings and full-bold title lines
     heads = [re.sub(r"[#*_]+", "", h).strip() for h in lines]
     return " › ".join(dict.fromkeys(h for h in heads if h)).strip()[:200] or None
 
@@ -636,7 +636,7 @@ def _fetch_figures(db, org_id, year):
                        "VALUES (?,?,?,?,?,?,?,?)",
                        [(lab, var, val, unit, year, org_id, cid, rgi) for cid, rgi, var, lab, unit, val in rows])
         db.execute("INSERT OR REPLACE INTO figures_log VALUES (?,?,?,?,?,?,?)",
-                   (year, org_id, datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                   (year, org_id, datetime.now(UTC).isoformat(timespec="seconds"),
                     sc.get("name"), sc.get("dateFinished"), len(rows), FIGURES_V))
 
 

@@ -7,12 +7,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import digimv
+import main
+import projects
 import pymupdf
 from fastapi.testclient import TestClient
-
-import main
-import digimv
-import projects
 
 
 class ProjectsTest(unittest.TestCase):

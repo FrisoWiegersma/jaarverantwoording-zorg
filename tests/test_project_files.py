@@ -6,16 +6,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import digimv
+import documents
+import main
+import project_files
+import projects
 import py7zr
 import pymupdf
 from fastapi.testclient import TestClient
-
-import main
-import datasets
-import digimv
-import documents
-import project_files
-import projects
 
 
 class SavedFilesTest(unittest.TestCase):
@@ -121,9 +119,8 @@ class SavedFilesTest(unittest.TestCase):
     def test_size_limit_and_failed_copy_leave_no_document(self):
         with patch.object(projects, "MAX_FILE", 1):
             self.assertEqual(self.save().status_code, 413)
-        with patch.object(project_files.shutil, "copyfile", side_effect=OSError("disk full")):
-            with self.assertRaises(OSError):
-                self.save()
+        with patch.object(project_files.shutil, "copyfile", side_effect=OSError("disk full")), self.assertRaises(OSError):
+            self.save()
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/documents").json(), [])
         self.assertFalse(list((self.root / "private").glob("*")))
 

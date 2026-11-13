@@ -24,8 +24,8 @@ import json
 import lzma
 import os
 import re
-import sys
 import struct
+import sys
 import tempfile
 import time
 import urllib.error
@@ -35,9 +35,8 @@ import zlib
 from datetime import timedelta
 from xml.etree import ElementTree as ET
 
-import py7zr
-
 import documents
+import py7zr
 import sources
 
 CKAN = "https://data.overheid.nl/data/api/3/action"

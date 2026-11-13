@@ -21,10 +21,10 @@ import py7zr
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp()  # before digimv is imported: caches go to a scratch directory
 
-import datasets  # noqa: E402
-import digimv  # noqa: E402
-import documents as d  # noqa: E402
-import sources  # noqa: E402
+import datasets
+import digimv
+import documents as d
+import sources
 
 # unittest discover imports test_digimv first, which fixes digimv.DATA to the real data/ before the line above
 assert str(digimv.DATA) == os.environ["DATA_DIR"], "run on its own: PYTHONPATH=api python tests/test_documents.py"
@@ -207,8 +207,8 @@ assert found == [
     {"text": "Wijkverpleging", "url": "https://www.insurer.example/zorgaanbieders/sub/page", "type": "page"},
     {"text": "Prognose", "url": "https://other.example/data.xlsx", "type": "xlsx"},
 ], found  # absolute, each once, fragments and mailto/javascript dropped, extension case ignored
-d.fetch = lambda url, timeout=120: (b"<html><a href='/a'>Visie</a><a href='/b.pdf'>Beleid GGZ 2027</a>"
-                                    b"<a href='/c.pdf'>Beleid wijk 2026</a></html>", "text/html", url)
+d.fetch = lambda url, timeout=120: ((b"<html><a href='/a'>Visie</a><a href='/b.pdf'>Beleid GGZ 2027</a>"
+                                    b"<a href='/c.pdf'>Beleid wijk 2026</a></html>"), "text/html", url)
 r = d.links("https://insurer.example/", query="beleid")
 assert [x["url"] for x in r["links"]] == ["https://insurer.example/b.pdf", "https://insurer.example/c.pdf"], r
 assert d.links("https://insurer.example/")["links"][0]["type"] == "pdf", "files come first"

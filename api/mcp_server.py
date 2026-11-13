@@ -2,13 +2,12 @@
 accounts, court rulings, public documents (Woo, gazettes, CVDR, TED, any public URL) and open data (data.overheid.nl,
 CBS StatLine). Run: uv run --env-file .env api/mcp_server.py (stdio)."""
 
-from mcp.server.mcpserver import MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
-
 import datasets
 import digimv
 import documents
 import sources
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 
 def _call(fn, *args, **kwargs):

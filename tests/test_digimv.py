@@ -87,6 +87,7 @@ def run():
     # scan detection + local extraction keeps page order (text page, blank page, image-only scan page)
     import tempfile
     from pathlib import Path
+
     import pymupdf
     pdf = pymupdf.open()
     pdf.new_page().insert_text((72, 72), "Balans per 31 december 2023, eigen vermogen 108.256")
@@ -227,8 +228,8 @@ def run():
                                    False)["omzet"]["value"] == "532058"  # 2020-2021 micro form
 
     # saved conversations: per Cloudflare Access user, never another's
-    from fastapi.testclient import TestClient
     import main
+    from fastapi.testclient import TestClient
     with tempfile.TemporaryDirectory() as tmp:
         digimv.DATA, data = Path(tmp), digimv.DATA
         try:

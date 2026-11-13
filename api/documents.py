@@ -31,7 +31,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 import zipfile
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 from xml.etree import ElementTree as ET
 
@@ -324,7 +324,7 @@ def _title(did, d):
     if d["kind"] == "html" and len(line.split()) >= 2 and len(line) <= 200 and not line.startswith("#"):
         return line  # the page's <title>, which comes first; its headings are often the site's menus
     name = urllib.parse.unquote(urllib.parse.urlsplit(d["file_url"]).path.rstrip("/").rsplit("/", 1)[-1])
-    return digimv.page_heading(first) or re.sub(r"\.(pdf|docx?|html?|xml)$", "", name, flags=re.I) or d["file_url"]
+    return digimv.page_heading(first) or re.sub(r"\.(pdf|docx?|html?|xml)$", "", name, flags=re.IGNORECASE) or d["file_url"]
 
 
 def _cached(did):
@@ -385,7 +385,7 @@ def read(url, pages="1-5", refresh=False, db=None):
             kind = kind_of(body, ctype)
             PUB.mkdir(parents=True, exist_ok=True)
             d = {"url": url, "file_url": final, "kind": kind, "size": len(body), "v": _v(kind),
-                 "sha256": hashlib.sha256(body).hexdigest(), "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+                 "sha256": hashlib.sha256(body).hexdigest(), "fetched_at": datetime.now(UTC).isoformat(timespec="seconds")}
             if kind == "pdf":
                 pdf_file = PUB / f"{did}.pdf"
                 tmp = pdf_file.with_suffix(".part")

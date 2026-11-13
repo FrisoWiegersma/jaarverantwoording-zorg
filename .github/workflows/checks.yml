@@ -41,3 +41,11 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: docker build --tag digimv-check .
+  lint:
+    name: Python lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - run: pipx run ruff==0.17.5 check
+      - run: pipx run ruff==0.17.5 format --check

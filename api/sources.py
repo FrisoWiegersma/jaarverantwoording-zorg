@@ -30,7 +30,7 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import digimv
 
@@ -58,7 +58,7 @@ def connect(path=None):
 
 
 def _now():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _iso(t):
@@ -148,7 +148,7 @@ def _permit(code, registered):
 def _notification(melding):
     if not melding:
         return "niet gemeld onder de Wtza (niet alle zorgaanbieders hebben meldplicht)"
-    yes = lambda v: "ja" if v is True else "nee"  # noqa: E731
+    yes = lambda v: "ja" if v is True else "nee"
     return (f"gemeld onder de Wtza; als zorgaanbieder: {yes(melding.get('isZorgaanbieder'))}, "
             f"als jeugdhulpaanbieder: {yes(melding.get('isJeugdhulpaanbieder'))}")
 
