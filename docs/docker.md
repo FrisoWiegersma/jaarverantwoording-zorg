@@ -142,6 +142,7 @@ Use `-p zorg-restored` for subsequent commands on this restored instance. Your o
 - **A long answer ends without a result:** inspect `chat.finish` in the frontend logs. Research has a bounded budget and should finish with the available evidence or an explicit continuation message.
 - **A phone loses its connection:** reopen the same conversation URL or choose it from history. Keepalive/replay protects network disconnects; container restarts still interrupt generation.
 - **Chat fails:** check `docker compose logs web`, your key, and model access. Search itself does not require a key.
+- **A step shows *mislukt*:** every failed tool call is in the error log, with its input and error, also after a redeploy: `docker compose exec web tail -n 20 logs/errors.jsonl`. Filter on the chat ID from the `?gesprek=` URL to find one conversation.
 - **Excel source links are missing or use the wrong host:** set `APP_ORIGIN` to the address used in the browser, including its port, and recreate `web`.
 - **Tokenizer errors:** rebuild the supplied API image. A host Python installation may link an older SQLite even when its Python version is recent.
 - **A PDF takes longer on first read:** the API may be downloading or OCR-processing it; later reads use the cache.

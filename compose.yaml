@@ -23,6 +23,8 @@ services:
     environment:
       DIGIMV_API: http://api:8000
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3210}
+    volumes:
+      - web-logs:/app/logs
     ports:
       - "127.0.0.1:3210:3000"
     depends_on:
@@ -37,3 +39,4 @@ services:
       start_period: 20s
 volumes:
   digimv-data:
+  web-logs:

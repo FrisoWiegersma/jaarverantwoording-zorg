@@ -1,0 +1,31 @@
+import { appendFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+
+// A volume in compose.yaml, so it survives the redeploy that recreates the container.
+const FILE = process.env.ERROR_LOG ?? "logs/errors.jsonl";
+
+const cut = (v: unknown, n = 2000) => {
+  const s = typeof v === "string" ? v : (JSON.stringify(v) ?? String(v));
+  return s.length > n ? `${s.slice(0, n)}…` : s;
+};
+
+interface Chat { id: string; model: string; effort: string }
+
+/** One failure with what's needed to reproduce it: the tool, its input and the error. Project tools keep their input private. */
+export function errorEntry(chat: Chat, step: number | null, tool: string | null, input: unknown, error: unknown) {
+  return {
+    at: new Date().toISOString(), chat: chat.id, model: chat.model, effort: chat.effort, step, tool,
+    input: tool && !tool.includes("_project_") ? cut(input) : undefined,
+    error: error instanceof Error ? `${error.name}: ${cut(error.message)}` : cut(error),
+    status: (error as { statusCode?: number } | null)?.statusCode,
+  };
+}
+
+// ponytail: one growing file, no rotation; a few KB per failure. Truncate by hand if it ever gets big.
+export async function logError(entry: ReturnType<typeof errorEntry>) {
+  console.error("chat.failure", JSON.stringify(entry));
+  try {
+    await mkdir(dirname(FILE), { recursive: true });
+    await appendFile(FILE, `${JSON.stringify(entry)}\n`);
+  } catch (e) { console.error("errorlog.write", (e as Error).message); }
+}
