@@ -1,4 +1,4 @@
-export type Project = { id: string; name: string; context: string; allow_private: boolean; updated: string };
+export type Project = { id: string; name: string; context: string; allow_private: boolean; updated: string; doc_count?: number; chat_count?: number };
 export type ProjectDocument = { id: string; filename: string; kind: string; pages: number; processed: number; status: string; error: string; archived: number };
 
 export async function projectRequest(path: string, method = "GET", body?: unknown) {
