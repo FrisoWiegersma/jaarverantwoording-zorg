@@ -1,22 +1,24 @@
+export type SourceGroup = "zorg" | "cijfers" | "recht" | "open";
+
 /** What the chat can read, for the welcome screen. Keep in step with the tools in app/api/chat/route.ts. */
-export const SOURCES: { name: string; what: string }[] = [
-  { name: "DigiMV", what: "Jaarverslagen, jaarrekeningen en de vragenlijst van zorgorganisaties, 2019 tot nu" },
-  { name: "Zorgaanbiedersregister (LRZa)", what: "Toelatingsvergunning, Wtza-melding, vestigingen en AGB-codes" },
-  { name: "CBS Iv3", what: "Lasten en baten van gemeenten, regio's en provincies per taakveld, 2010 tot nu" },
-  { name: "CBS StatLine", what: "Alle CBS-tabellen, zoals Wmo-cliënten en jeugdhulp per gemeente" },
-  { name: "RIVM StatLine en VZinfo", what: "Volksgezondheid en zorg, zoals kosten van ziekten" },
-  { name: "Zorginzicht", what: "Kwaliteitsindicatoren per zorgaanbieder en locatie, op KvK-nummer" },
-  { name: "NZa Open DIS", what: "DBC-zorgproducten, patiëntaantallen en gemiddelde verkoopprijzen" },
-  { name: "Vektis", what: "Zorgkosten per gemeente en postcode, Zorgthermometer en factsheets" },
-  { name: "Zorgcijfersdatabank", what: "Kosten van de Zvw en de Wlz per zorgsoort, en GIP-data" },
-  { name: "Prognosemodel Zorg en Welzijn", what: "Arbeidsmarktprognoses voor zorg en welzijn (met API-sleutel)" },
-  { name: "Rechtspraak", what: "Gepubliceerde uitspraken, op naam te doorzoeken" },
-  { name: "Woo-index", what: "Woo-besluiten, nota's en rapporten van de overheid" },
-  { name: "Officiële bekendmakingen", what: "Gemeenteblad, Staatscourant en Kamerstukken" },
-  { name: "Lokale regelgeving", what: "Verordeningen en beleidsregels, met wat nu geldt" },
-  { name: "Europese aanbestedingen", what: "Aankondigingen en gunningen op TED" },
-  { name: "data.overheid.nl", what: "Open datasets, zoals subsidieregisters, als CSV of Excel gelezen" },
-  { name: "Elke openbare link", what: "PDF's en webpagina's van verzekeraars, regio's en gemeenten" },
+export const SOURCES: { name: string; what: string; group: SourceGroup }[] = [
+  { name: "DigiMV", what: "Jaarverslagen, jaarrekeningen en de vragenlijst van zorgorganisaties, 2019 tot nu", group: "zorg" },
+  { name: "Zorgaanbiedersregister (LRZa)", what: "Toelatingsvergunning, Wtza-melding, vestigingen en AGB-codes", group: "zorg" },
+  { name: "CBS Iv3", what: "Lasten en baten van gemeenten, regio's en provincies per taakveld, 2010 tot nu", group: "cijfers" },
+  { name: "CBS StatLine", what: "Alle CBS-tabellen, zoals Wmo-cliënten en jeugdhulp per gemeente", group: "cijfers" },
+  { name: "RIVM StatLine en VZinfo", what: "Volksgezondheid en zorg, zoals kosten van ziekten", group: "cijfers" },
+  { name: "Zorginzicht", what: "Kwaliteitsindicatoren per zorgaanbieder en locatie, op KvK-nummer", group: "zorg" },
+  { name: "NZa Open DIS", what: "DBC-zorgproducten, patiëntaantallen en gemiddelde verkoopprijzen", group: "zorg" },
+  { name: "Vektis", what: "Zorgkosten per gemeente en postcode, Zorgthermometer en factsheets", group: "zorg" },
+  { name: "Zorgcijfersdatabank", what: "Kosten van de Zvw en de Wlz per zorgsoort, en GIP-data", group: "zorg" },
+  { name: "Prognosemodel Zorg en Welzijn", what: "Arbeidsmarktprognoses voor zorg en welzijn (met API-sleutel)", group: "cijfers" },
+  { name: "Rechtspraak", what: "Gepubliceerde uitspraken, op naam te doorzoeken", group: "recht" },
+  { name: "Woo-index", what: "Woo-besluiten, nota's en rapporten van de overheid", group: "recht" },
+  { name: "Officiële bekendmakingen", what: "Gemeenteblad, Staatscourant en Kamerstukken", group: "recht" },
+  { name: "Lokale regelgeving", what: "Verordeningen en beleidsregels, met wat nu geldt", group: "recht" },
+  { name: "Europese aanbestedingen", what: "Aankondigingen en gunningen op TED", group: "open" },
+  { name: "data.overheid.nl", what: "Open datasets, zoals subsidieregisters, als CSV of Excel gelezen", group: "open" },
+  { name: "Elke openbare link", what: "PDF's en webpagina's van verzekeraars, regio's en gemeenten", group: "open" },
 ];
 
 /** Real questions, shown one per group on the welcome screen and typed into the empty prompt. */
