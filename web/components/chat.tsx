@@ -93,7 +93,7 @@ function stepsOf(m: UIMessage, live: boolean): AgentStep[] {
       case "get_register_entry": {
         const r = out as Out | null;
         label = !r ? `Zorgaanbiedersregister raadplegen (KvK ${input.kvk})`
-          : r.found ? `${r.naam} in het Landelijk Register Zorgaanbieders` : `KvK ${input.kvk} staat niet in het register`;
+          : r.found ? `${r.naam} in het Landelijk Register Zorgaanbieders` : `KvK ${input.kvk} staat niet in het zorgaanbiedersregister (LRZa)`;
         break;
       }
       case "search_register": {
