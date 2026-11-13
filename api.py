@@ -358,7 +358,7 @@ def datasets_search(q: str, limit: int = 20, start: int = 0):
 def datasets_table(url: str, q: str | None = None, limit: int = 50, offset: int = 0, sheet: str | None = None,
                    header_row: int | None = None, refresh: bool = False, filters: str | None = None,
                    member: str | None = None, sort: str | None = None):
-    """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim."""
+    """Rows of a CSV, Excel (.xlsx) or JSON file by URL, including ZIP/7z members, values verbatim."""
     try:
         flt = json.loads(filters) if filters else None
     except ValueError:

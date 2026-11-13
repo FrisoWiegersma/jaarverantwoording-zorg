@@ -122,6 +122,14 @@ The rest of the [open.overheid.nl/verwijzingen](https://open.overheid.nl/verwijz
 |---|---|---|
 | Company.info, Graydon, Creditsafe | Credit scores, directors, group structures | unchecked |
 
+`read_table` reads CSV/TSV, XLSX and JSON members inside ZIP and 7z archives. It lists the available data files when
+`member` is needed; summarize the whole archive by reading each member. Filters, sheets, paging and row citations
+work as for direct files, and citations reopen the cached original archive. CSV members are limited to 1 GB
+uncompressed, XLSX/JSON to 80 MB (including expanded XLSX contents); a 7z archive's total expanded size is capped
+at 1 GB because solid compression can require decoding other members. Extraction writes only the selected member
+to a bounded temporary file. Encrypted archives, unsafe paths, links, nested archives and old binary XLS files
+are unsupported. A related report supplies background, not evidence of an unread archive's contents.
+
 ## 6. Not obtainable
 
 | Source | Why |
@@ -133,7 +141,6 @@ The rest of the [open.overheid.nl/verwijzingen](https://open.overheid.nl/verwijz
 | NZa claims data (DIS) per provider | Only via a freedom-of-information request |
 | CBS microdata (for example BIG 1995–2020) | Only through CBS remote access for approved researchers |
 | Dashboards: Vektis (Power BI), Zorgcijfersdatabank (Tableau Public) | Drawn in the browser; Tableau's CSV export is behind a captcha. Not readable |
-| 7-Zip archives | No reader in the standard library; refused with a clear message |
 
 ## 7. Competitors
 

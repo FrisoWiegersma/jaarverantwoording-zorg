@@ -4,8 +4,8 @@ Checked against the live services on 2026-11-12:
   Catalogue  CKAN https://data.overheid.nl/data/api/3/action/package_search|package_show: ~18,000 datasets from 25
              catalogues (CBS, CBS DataDerden, DONL with ministries' and agencies' own data, DNB, municipalities).
              Descriptions can be years older or newer than the data, and a resource URL is often a web page.
-  Files      CSV, Excel (.xlsx) and JSON read here as rows, also inside a ZIP; old .xls (binary) and 7-Zip are not
-             readable without a library. A CSV is streamed from disk (up to 1 GB: NZa's Open DIS files are 37 and
+  Files      CSV, Excel (.xlsx) and JSON read here as rows, also inside ZIP and 7-Zip; old .xls (binary) is refused.
+             A CSV is streamed from disk (up to 1 GB: NZa's Open DIS files are 37 and
              757 MB), Excel and JSON are read in memory (up to 80 MB).
   Swing      ABF's Open Data Service (OData v4, header apikey) behind Prognosemodel Zorg en Welzijn and
              Waarstaatjegemeente: Indicators, Indicators/{code}/DataCubes, DataCubes(...)/Data, GeoLevels/{level}/
@@ -21,15 +21,21 @@ import heapq
 import io
 import itertools
 import json
+import lzma
 import os
 import re
 import sys
+import struct
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import zipfile
+import zlib
 from datetime import timedelta
 from xml.etree import ElementTree as ET
+
+import py7zr
 
 import documents
 import sources
@@ -40,6 +46,8 @@ CATALOGUE_SCOPE = ("data.overheid.nl describes datasets held elsewhere. Its date
                    "often a web page that links to the file rather than the file itself.")
 TABLE_TTL = timedelta(days=1)  # a data file is fetched again after a day
 TABLE_MAX = 1 << 30  # a CSV is streamed from disk, so it can be large: NZa's Open DIS activity file is 757 MB
+TABLE_EXTENSIONS = (".csv", ".txt", ".tsv", ".xlsx", ".json")
+SEVENZIP_MAGIC = b"7z\xbc\xaf\x27\x1c"
 TABLE_SCOPE = ("Rows as they are in the file, values verbatim. Excel dates show as day numbers (45658 = 1 Jan 2025). "
                "row = the row's number in the file as a spreadsheet program shows it (JSON: the record's number), "
                "to cite with the file URL. query matches a word in any cell, so a code can also hit an amount; "
@@ -129,6 +137,7 @@ def xlsx_rows(body, sheet=None):
     m = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
     rel = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
     z = zipfile.ZipFile(io.BytesIO(body))
+    _in_memory(sum(f.file_size for f in z.infolist()), "uncompressed Excel file")
     sheets = [(s.get("name"), s.get(rel)) for s in ET.fromstring(z.read("xl/workbook.xml")).iter(f"{m}sheet")]
     targets = {r.get("Id"): r.get("Target") for r in ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))}
     shared = []
@@ -360,12 +369,72 @@ def _scan(rows, header_row, filters, words, offset, limit, shift, row=None, sort
             "rows": [{"row": n, **{c: (r[i] if i < len(r) else None) for i, c in enumerate(cols)}} for n, r in page]}
 
 
+def _pick_member(names, member, kind):
+    members = [n for n in names if n.lower().endswith(TABLE_EXTENSIONS)]
+    if member is None and len(members) != 1:
+        raise ValueError(f"a {kind} with {len(members)} data files: pick one with member; they are {members[:50]}; "
+                         + (f"archive files: {names[:50]}" if not members else "read each member to summarize the archive"))
+    member = member if member is not None else members[0]
+    if member not in names:
+        raise KeyError(f"no file {member!r} in this {kind}; the data files are {members[:50]}")
+    if member not in members:
+        raise ValueError(f"unsupported archive member {member!r}; choose a CSV, TSV, XLSX or JSON file: {members[:50]}")
+    if names.count(member) != 1:
+        raise ValueError(f"duplicate archive member {member!r}; use an archive with unique file names")
+    if member.startswith("/") or "\\" in member or re.match(r"^[a-zA-Z]:", member) or ".." in member.split("/"):
+        raise ValueError(f"unsafe archive member path {member!r}")
+    return member, members
+
+
+def _scan_member(open_bin, member, size, sheet, scan):
+    if size > TABLE_MAX:
+        raise ValueError("archive member exceeds the 1 GB uncompressed table limit")
+    if member.lower().endswith((".xlsx", ".json")):
+        _in_memory(size, "archive member")
+        with open_bin() as f:
+            body = f.read()
+        if member.lower().endswith(".xlsx"):
+            sheet, sheets, out = _xlsx_scan(body, sheet, scan)
+            return "xlsx", out, sheet, sheets
+        return "json", scan(json_rows(body), 1), sheet, None
+    return "csv", _scan_csv(open_bin, scan), sheet, None
+
+
+class _TableWriter(py7zr.io.WriterFactory, py7zr.io.Py7zIO):
+    """7z output goes to one bounded temporary file, never an archive-supplied path."""
+    def __init__(self, file, limit):
+        self.file, self.limit = file, limit
+
+    def create(self, filename):
+        return self
+
+    def write(self, data):
+        if self.file.tell() + len(data) > self.limit:
+            raise ValueError("archive member exceeds its uncompressed size limit")
+        return self.file.write(data)
+
+    def read(self, size=None):
+        return self.file.read(size)
+
+    def seek(self, offset, whence=0):
+        return self.file.seek(offset, whence)
+
+    def flush(self):
+        self.file.flush()
+
+    def size(self):
+        pos = self.file.tell()
+        size = self.file.seek(0, 2)
+        self.file.seek(pos)
+        return size
+
+
 def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None, refresh=False, filters=None, member=None,
                sort=None):
-    """Rows of a CSV, Excel (.xlsx) or JSON file, also inside a ZIP. query keeps rows containing every word (accents
+    """Rows of a CSV, Excel (.xlsx) or JSON file, also inside ZIP or 7z. query keeps rows containing every word (accents
     ignored), e.g. an AGB code, a municipality or 'begeleiding'. filters {column: [values]} keeps rows whose cell in
     that column is one of the values (exact, case ignored): how to match a code without hitting amounts. header_row
-    (1-based) overrides the detected header. member picks a file inside a ZIP. sort 'COL' or '-COL' orders the matched
+    (1-based) overrides the detected header. member picks a file inside an archive. sort 'COL' or '-COL' orders the matched
     rows by that column as numbers (descending with -): the largest first, e.g. the most patients."""
     path, ctype, final, fetched = _file(url.strip(), refresh)
     fmt, out, sheet, sheets, member, members = _read(path, ctype, query, limit, offset, sheet, header_row, filters, member,
@@ -376,6 +445,13 @@ def read_table(url, query=None, limit=50, offset=0, sheet=None, header_row=None,
 
 
 def _read(path, ctype, query, limit, offset, sheet, header_row, filters, member, row=None, sort=None):
+    try:
+        return _read_file(path, ctype, query, limit, offset, sheet, header_row, filters, member, row, sort)
+    except (zipfile.BadZipFile, zlib.error) as e:
+        raise ValueError(f"cannot read this ZIP or Excel file (corrupt or unsupported): {e}") from e
+
+
+def _read_file(path, ctype, query, limit, offset, sheet, header_row, filters, member, row=None, sort=None):
     """The table in a cached file: (format, scan, sheet, sheets, member, members)."""
     with open(path, "rb") as f:
         head = f.read(2048)
@@ -384,9 +460,32 @@ def _read(path, ctype, query, limit, offset, sheet, header_row, filters, member,
     scan = lambda rows, shift=0: _scan(rows, header_row, filters, words, offset, min(limit, 200), shift, row, sort)
     if head[:4] == b"\xd0\xcf\x11\xe0":
         raise ValueError("an old binary Excel file (.xls), which cannot be read here; look for a .xlsx or .csv version")
-    if head[:6] == b"7z\xbc\xaf\x27\x1c":
-        raise ValueError("a 7-Zip archive, which cannot be read here; look for a .zip, .xlsx or .csv version")
-    if head[:2] == b"PK":
+    if head.startswith(SEVENZIP_MAGIC):
+        try:
+            with py7zr.SevenZipFile(path, max_extract_size=TABLE_MAX) as z:
+                if z.needs_password():
+                    raise ValueError("encrypted 7-Zip archive: use an unencrypted CSV, XLSX or JSON version")
+                files = z.list()
+                member, members = _pick_member([f.filename for f in files if not f.is_directory], member, "7-Zip")
+                info = next(f for f in files if f.filename == member)
+                if not info.is_file:
+                    raise ValueError("archive member is not a regular file")
+                if sum(f.uncompressed for f in files) > TABLE_MAX:
+                    raise ValueError("7-Zip archive exceeds the 1 GB uncompressed limit (including solid-block data)")
+                cap = documents.MAX_BYTES if member.lower().endswith((".xlsx", ".json")) else TABLE_MAX
+                if info.uncompressed > cap:
+                    raise ValueError(f"archive member exceeds its {cap // 2**20} MB uncompressed limit")
+                with tempfile.NamedTemporaryFile() as tmp:
+                    writer = _TableWriter(tmp, cap)
+                    z.extract(targets=[member], factory=writer)
+                    writer.flush()
+                    fmt, out, sheet, sheets = _scan_member(lambda: open(tmp.name, "rb"), member, writer.size(), sheet, scan)
+        except py7zr.exceptions.PasswordRequired as e:
+            raise ValueError("encrypted 7-Zip archive: use an unencrypted CSV, XLSX or JSON version") from e
+        except (py7zr.exceptions.ArchiveError, py7zr.exceptions.AbsolutePathError, EOFError, lzma.LZMAError,
+                struct.error, NotImplementedError) as e:
+            raise ValueError(f"cannot read this 7-Zip archive (corrupt, unsupported, or extraction limit exceeded): {e}") from e
+    elif head[:2] == b"PK":
         with zipfile.ZipFile(path) as z:
             names = z.namelist()
             if "xl/workbook.xml" in names:
@@ -395,21 +494,13 @@ def _read(path, ctype, query, limit, offset, sheet, header_row, filters, member,
             elif "word/document.xml" in names:
                 raise ValueError("a Word document, not a data file: read it with read_document")
             else:
-                members = [n for n in names if n.lower().endswith((".csv", ".txt", ".tsv", ".xlsx", ".json"))]
-                if member is None and len(members) != 1:
-                    raise ValueError(f"a ZIP with {len(members)} data files: pick one with member; they are {members[:50]}")
-                m = member = member if member is not None else members[0]
-                if m not in names:
-                    raise KeyError(f"no file {m!r} in this ZIP; the data files are {members[:50]}")
-                if m.lower().endswith((".xlsx", ".json")):
-                    _in_memory(z.getinfo(m).file_size, "file")
-                    body = z.read(m)
-                    if m.lower().endswith(".xlsx"):
-                        fmt, (sheet, sheets, out) = "xlsx", _xlsx_scan(body, sheet, scan)
-                    else:
-                        fmt, out = "json", scan(json_rows(body), 1)
-                else:
-                    fmt, out = "csv", _scan_csv(lambda: z.open(m), scan)
+                member, members = _pick_member([f.filename for f in z.infolist() if not f.is_dir()], member, "ZIP")
+                info = z.getinfo(member)
+                if info.flag_bits & 1:
+                    raise ValueError("encrypted ZIP archive: use an unencrypted CSV, XLSX or JSON version")
+                if (info.external_attr >> 16) & 0o170000 == 0o120000:
+                    raise ValueError("archive member is not a regular file")
+                fmt, out, sheet, sheets = _scan_member(lambda: z.open(member), member, info.file_size, sheet, scan)
     elif "json" in ctype or head.lstrip()[:1] in (b"[", b"{"):
         _in_memory(path.stat().st_size, "JSON file")
         fmt, out = "json", scan(json_rows(path.read_bytes()), 1)
@@ -434,7 +525,7 @@ def _cached_table(did):
 
 def table_row(did, row, parts=()):
     """One row of a table read before, from our cached copy, as a /bron/rij/ citation shows it: the header and that
-    row. parts: the ZIP member and/or Excel sheet the citation names, member first."""
+    row. parts: the archive member and/or Excel sheet the citation names, member first."""
     path, meta = _cached_table(did)
     fmt, out, sheet, _, member, members = _read(path, meta["content_type"], None, 1, 0, parts[-1] if parts else None,
                                                 None, None, parts[0] if parts else None, row)
@@ -453,7 +544,7 @@ def table_file(did):
         with open(path, "rb") as f:
             head = f.read(2048)
         ext = ("xlsx" if "xl/workbook.xml" in zipfile.ZipFile(path).namelist() else "zip") if head[:2] == b"PK" \
-            else "json" if head.lstrip()[:1] in (b"[", b"{") else "csv"
+            else "7z" if head.startswith(SEVENZIP_MAGIC) else "json" if head.lstrip()[:1] in (b"[", b"{") else "csv"
         name = f"{urllib.parse.urlsplit(meta['file_url']).hostname or 'bestand'}-{did[:8]}.{ext}"
     return path, name, meta["content_type"]
 

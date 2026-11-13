@@ -78,7 +78,11 @@ dat search_woo niet doorzoekt: list_links op https://puc.overheid.nl/zoeken/resu
 (spaties als %20; volgende pagina: zet /p/2 erachter; nieuwste eerst: s/datumdocument-wt_desc). Een resultaat is een pagina \
 /doc/PUC_…: list_links daarop geeft de PDF('s), lees die met read_document.
 11. Open data: search_cbs, dan describe_cbs_table (codes van gemeenten en perioden opzoeken met dimension en query) en get_cbs. \
-search_datasets en get_dataset voor data.overheid.nl; read_table leest een CSV-, Excel- of JSON-bestand. Een CBS-waarde met een symbol \
+search_datasets en get_dataset voor data.overheid.nl; read_table leest een CSV-, Excel- of JSON-bestand, ook in ZIP- en 7z-archieven. \
+Bij meerdere databestanden kies je member uit de vermelde bestanden; voor een samenvatting van het hele archief lees je elk databestand. \
+Als lezen mislukt, benoem dat en doe geen uitspraken over de \
+inhoud van het ongelezen bestand. Een verwant rapport geeft achtergrond, maar bewijst niet welke correcties of records in het archief staan. \
+Een CBS-waarde met een symbol \
 is geen 0 maar onbekend of geheim: zeg dat. Een periode met * is voorlopig. Zoek je een code (KvK-nummer, AGB-code, diagnose), gebruik \
 dan filters op die kolom in read_table, niet query: query vindt het getal ook in bedragen.
 12. Zorgdata zonder eigen zoektool; begin op deze pagina's:
@@ -508,7 +512,7 @@ const tools = {
   }),
   read_table: tool({
     description:
-      "Rows of a CSV, Excel (.xlsx) or JSON file by URL (also inside a ZIP: member, listed in members), values verbatim, each with its row number. filters: {column: [values]}, exact match on that column: use it for a code (KvK number, AGB code, diagnosis or product code, with its leading zeros as in the file); query keeps rows containing every word anywhere, so a code can also hit an amount. The header row is detected (title rows above it are in title_rows); header_row overrides it; sheet picks an Excel sheet (all are in sheets). rows_total and rows_matched say how much there is: page with offset before saying something is not in the file. sort: a column to order the matched rows by as numbers, '-COL' for the largest first: for a top or 'most common' question, never page through everything to rank it yourself. Large files (up to 1 GB) are read in full: about a minute for 10 million rows, and the first read also downloads the file (a few minutes); use filters to keep the result small. Cite a row as row_cite followed by its row number (row_cite + 12 for row 12).",
+      "Rows of a CSV, Excel (.xlsx) or JSON file by URL (also inside ZIP or 7z: member, listed in members), values verbatim, each with its row number. filters: {column: [values]}, exact match on that column: use it for a code (KvK number, AGB code, diagnosis or product code, with its leading zeros as in the file); query keeps rows containing every word anywhere, so a code can also hit an amount. The header row is detected (title rows above it are in title_rows); header_row overrides it; sheet picks an Excel sheet (all are in sheets). rows_total and rows_matched say how much there is: page with offset before saying something is not in the file. sort: a column to order the matched rows by as numbers, '-COL' for the largest first: for a top or 'most common' question, never page through everything to rank it yourself. Large CSV files (up to 1 GB uncompressed; Excel/JSON up to 80 MB) are read in full: about a minute for 10 million rows, and the first read also downloads the file (a few minutes); use filters to keep the result small. Cite a row as row_cite followed by its row number (row_cite + 12 for row 12).",
     inputSchema: z.object({
       url: z.string().url().max(2000),
       query: z.string().max(200).optional(),

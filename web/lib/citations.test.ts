@@ -97,6 +97,10 @@ test("the tools hand out cites that parse back to the same row or value", () => 
   assert.deepEqual(parseHref(xlsx), { kind: "row", tableId: id, parts: ["MSZ VJ2024"], row: 964 });
   const zip = rowCite({ id, member: "data/k.csv", format: "csv", sheet: null }) + "3";
   assert.deepEqual(parseHref(zip), { kind: "row", tableId: id, parts: ["data/k.csv"], row: 3 });
+  const member = "Nalevering Kraam & Co (2022).XLSX";
+  const sevenZip = rowCite({ id, member, format: "xlsx", sheet: "Blad1" }) + "2";
+  assert.deepEqual(parseHref(sevenZip), { kind: "row", tableId: id, parts: [member, "Blad1"], row: 2 });
+  assert.equal(parseCitations(`[rij 2](${sevenZip} "0011")`)[0].kind, "row");
   const row = { TypeMaatwerkvoorziening: "T001024 = Totaal", RegioS: "GM0546 = Leiden", Perioden: "2024JJ00 = 2024", WmoClienten_1: 8575 };
   const cite = cbsCite("86050NED", row, { WmoClienten_1: "Wmo-cliënten (aantal)" });
   assert.equal(cite, "/bron/cbs/86050NED/T001024/GM0546/2024JJ00");

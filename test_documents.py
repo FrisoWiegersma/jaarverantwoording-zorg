@@ -14,6 +14,10 @@ import tempfile
 import time
 import urllib.error
 import zipfile
+from dataclasses import replace
+from unittest.mock import patch
+
+import py7zr
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp()  # before digimv is imported: caches go to a scratch directory
 
@@ -39,6 +43,14 @@ def zipped(files):
     with zipfile.ZipFile(buf, "w") as z:
         for name, text in files.items():
             z.writestr(name, text)
+    return buf.getvalue()
+
+
+def sevenzipped(files, **kwargs):
+    buf = io.BytesIO()
+    with py7zr.SevenZipFile(buf, "w", **kwargs) as z:
+        for name, body in files.items():
+            z.writestr(body, name)
     return buf.getvalue()
 
 
@@ -100,6 +112,8 @@ assert "robots.txt" in raises(ValueError, d._allowed, "https://puc.overheid.nl/i
 assert d.kind_of(b"%PDF-1.7 ...") == "pdf"
 assert d.kind_of(zipped({"word/document.xml": "<w:document/>"})) == "docx"
 assert "read_table" in raises(ValueError, d.kind_of, zipped({"xl/workbook.xml": "<workbook/>"}))
+assert "read_table" in raises(ValueError, d.kind_of, b"7z\xbc\xaf\x27\x1c rest")
+assert "read_table" in raises(ValueError, d.kind_of, zipped({"data.csv": "a,b\n1,2\n"}))
 assert d.kind_of(b"  <!DOCTYPE html><html>", "application/octet-stream") == "html"
 assert d.kind_of(b"<?xml version='1.0'?><regeling/>") == "xml"
 assert d.kind_of(b"plain", "text/plain") == "text"
@@ -204,12 +218,16 @@ assert d._safe_url("http://www.opendisdata.nl/download/csv/01_DBC.csv") == "http
 _, links = d.page_links(
     b"<a href='/services/file/get?key=abc'>Openbaar databestand Wijkverpleging verslagjaar 2024 Excel file 1.1 MB</a>"
     b"<a href='/services/file/get?key=def'>Rapport 2022 PDF file 157.7 KB</a>"
+    b"<a href='/services/file/get?key=ghi'>Naleveringen 2022 7-Zip archive 47.7 KB</a>"
+    b"<a href='/data.7z'>Naleveringen</a>"
     b"<a href='/up/Zorgthermometer 2026.pdf'>Zorgthermometer</a>"
     b"<a href='/over'>Over de PDF</a>",
     "https://www.zorginzicht.nl/algemeen/open-data-wijkverpleging")
 assert [(x["type"], x["url"]) for x in links] == [
     ("xlsx", "https://www.zorginzicht.nl/services/file/get?key=abc"),
     ("pdf", "https://www.zorginzicht.nl/services/file/get?key=def"),
+    ("7z", "https://www.zorginzicht.nl/services/file/get?key=ghi"),
+    ("7z", "https://www.zorginzicht.nl/data.7z"),
     ("pdf", "https://www.zorginzicht.nl/up/Zorgthermometer%202026.pdf"),
     ("page", "https://www.zorginzicht.nl/over"),
 ]
@@ -381,6 +399,93 @@ assert "member" in raises(ValueError, datasets.read_table, "https://x.example/tw
 assert datasets.read_table("https://x.example/two.zip", member="b.json")["rows"] == [{"row": 1, "x": 2}]
 raises(KeyError, datasets.read_table, "https://x.example/two.zip", member="c.csv")
 
+# Both archive formats use the same selection and parsers, without treating an archive path as a local path.
+for pack in (zipped, sevenzipped):
+    serve(pack({"data/kwaliteit.tsv": "AGB\tWaarde\n0011\t12\n0011\t7\n0022\t20\n"}))
+    t = datasets.read_table("https://x.example/archive", filters={"AGB": ["0011"]}, sort="-Waarde", offset=1)
+    assert t["member"] == "data/kwaliteit.tsv" and t["rows"] == [{"row": 3, "AGB": "0011", "Waarde": "7"}], t
+    assert t["rows_matched"] == 2 and t["rows_total"] == 3
+    serve(pack({"data/Workbook.XLSX": xlsx, "b.json": '[{"x": 2}]'}))
+    assert "member" in raises(ValueError, datasets.read_table, "https://x.example/archive")
+    t = datasets.read_table("https://x.example/archive", member="data/Workbook.XLSX", sheet="Subsidies", query="overweeghuis")
+    assert t["rows"][0]["Bedrag"] == 95000 and t["sheet"] == "Subsidies", t
+    assert datasets.read_table("https://x.example/archive", member="b.json")["rows"] == [{"row": 1, "x": 2}]
+    raises(KeyError, datasets.read_table, "https://x.example/archive", member="missing.csv")
+    serve(pack({"a.pdf": "PDF"}))
+    assert "0 data files" in raises(ValueError, datasets.read_table, "https://x.example/archive")
+    assert "unsupported" in raises(ValueError, datasets.read_table, "https://x.example/archive", member="a.pdf")
+    serve(pack({"a.csv": "x\n1\n"}))
+    real_max = datasets.TABLE_MAX
+    datasets.TABLE_MAX = 3
+    assert "limit" in raises(ValueError, datasets.read_table, "https://x.example/archive")
+    datasets.TABLE_MAX = real_max
+    serve(pack({"a.xlsx": xlsx}))
+    real_max = d.MAX_BYTES
+    d.MAX_BYTES = 10
+    error = raises(ValueError, datasets.read_table, "https://x.example/archive")
+    assert "limit" in error or "too large" in error, error
+    d.MAX_BYTES = real_max
+
+for name in ("../a.csv", "/a.csv", "data/../../a.csv", "C:/a.csv", "data\\a.csv"):
+    assert "unsafe" in raises(ValueError, datasets._pick_member, [name], name, "archive")
+assert "duplicate" in raises(ValueError, datasets._pick_member, ["a.csv", "a.csv"], "a.csv", "archive")
+serve(sevenzipped({"a.csv": "x\n1\n"}, password="test-only"))
+assert "encrypted" in raises(ValueError, datasets.read_table, "https://x.example/private.7z")
+serve(sevenzipped({"a.csv": "x\n1\n"}, password="test-only", header_encryption=True))
+assert "encrypted" in raises(ValueError, datasets.read_table, "https://x.example/private.7z")
+serve(sevenzipped({"a.csv": "x\n1\n"})[:-15])
+assert "7-Zip" in raises(ValueError, datasets.read_table, "https://x.example/corrupt.7z")
+serve(b"PK broken zip")
+assert "corrupt" in raises(ValueError, datasets.read_table, "https://x.example/corrupt.zip")
+serve(sevenzipped({"a.xlsx": b"PK broken workbook"}))
+assert "corrupt" in raises(ValueError, datasets.read_table, "https://x.example/corrupt-workbook.7z")
+# The library's runtime bound applies even if the advertised size passes the initial check.
+serve(sevenzipped({"a.csv": "x\n" + "1\n" * 100}))
+real_list = py7zr.SevenZipFile.list
+real_temp = tempfile.NamedTemporaryFile
+temporary_paths = []
+
+
+def record_temp(*a, **kw):
+    f = real_temp(*a, **kw)
+    temporary_paths.append(pathlib.Path(f.name))
+    return f
+
+
+with patch.object(py7zr.SevenZipFile, "list", lambda z: [replace(f, uncompressed=1) for f in real_list(z)]), \
+        patch.object(datasets, "TABLE_MAX", 10), patch.object(tempfile, "NamedTemporaryFile", record_temp):
+    assert "limit" in raises(ValueError, datasets.read_table, "https://x.example/bomb.7z")
+assert temporary_paths and all(not p.exists() for p in temporary_paths), "failed extraction removes its temporary file"
+serve(sevenzipped({"a.csv": "x\n1\n"}))
+with patch.object(tempfile, "NamedTemporaryFile", record_temp):
+    datasets.read_table("https://x.example/good.7z")
+assert all(not p.exists() for p in temporary_paths), "successful extraction removes its temporary file"
+
+# Symlinks cannot supply a table, even when their name has a supported extension.
+with tempfile.TemporaryDirectory() as folder:
+    (pathlib.Path(folder) / "target.csv").write_text("x\n1\n")
+    link = pathlib.Path(folder) / "link.csv"
+    link.symlink_to("target.csv")
+    buf = io.BytesIO()
+    with py7zr.SevenZipFile(buf, "w") as z:
+        z.write(link, "link.csv")
+    serve(buf.getvalue())
+    assert "regular file" in raises(ValueError, datasets.read_table, "https://x.example/link.7z")
+buf = io.BytesIO()
+with zipfile.ZipFile(buf, "w") as z:
+    info = zipfile.ZipInfo("link.csv")
+    info.external_attr = 0o120777 << 16
+    z.writestr(info, "target.csv")
+serve(buf.getvalue())
+assert "regular file" in raises(ValueError, datasets.read_table, "https://x.example/link.zip")
+# The output writer also enforces limits during extraction, even if metadata lies.
+with tempfile.TemporaryFile() as f:
+    w = datasets._TableWriter(f, 4)
+    w.write(b"1234")
+    assert "limit" in raises(ValueError, w.write, b"5") and w.size() == 4
+    w.seek(0)
+    assert w.read() == b"1234"
+
 # A /bron/rij/ citation opens one row of our cached copy, by its number in the file, in the sheet or member it names
 tables = d.PUB / "tables"
 tables.mkdir(parents=True, exist_ok=True)
@@ -408,6 +513,12 @@ cached("c" * 20, zipped({"a.csv": "x\n1\n", "b.json": '[{"x": 2}]'}), "applicati
 r = datasets.table_row("c" * 20, 1, ["b.json"])
 assert (r["row"], r["member"], r["format"]) == ({"row": 1, "x": 2}, "b.json", "json"), r
 raises(ValueError, datasets.table_row, "c" * 20, 1)  # two data files, the citation names none
+cached("d" * 20, sevenzipped({"data/Workbook.XLSX": xlsx}), "application/octet-stream", "https://x.example/services/file/get?key=abc")
+r = datasets.table_row("d" * 20, 4, ["data/Workbook.XLSX", "Subsidies"])
+assert (r["row"]["Bedrag"], r["member"], r["sheet"], r["file_name"]) == \
+    (95000, "data/Workbook.XLSX", "Subsidies", "x.example-dddddddd.7z"), r
+cached("e" * 20, sevenzipped({"data/a.csv": "AGB;Waarde\n0011;7\n"}), "application/x-7z-compressed", "https://x.example/data.7z")
+assert datasets.table_row("e" * 20, 2, ["data/a.csv"])["row"] == {"row": 2, "AGB": "0011", "Waarde": "7"}
 for bad in ["../../etc/passwd", "0" * 20, "A" * 20]:
     raises(KeyError, datasets.table_row, bad, 1)
 

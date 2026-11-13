@@ -297,7 +297,9 @@ def read_table(url: str, query: str | None = None, limit: int = 50, offset: int 
                member: str | None = None, sort: str | None = None) -> dict:
     """Rows of a CSV, Excel (.xlsx) or JSON file by URL, values verbatim, each with its row number. filters:
     {column: [values]}, exact match on that column (use it for codes such as a KvK number, AGB code or diagnosis code:
-    query also matches amounts). member picks a file inside a ZIP (listed in `members`). query keeps rows
+    query also matches amounts). ZIP and 7z archives are supported: member picks a file (listed in `members`).
+    To summarize a whole archive, read each data member.
+    If reading fails, report the limitation; a related report does not establish the archive's contents. query keeps rows
     containing every word (an AGB code, a name, a municipality). The header is detected (title rows above it are
     in title_rows); header_row overrides it. sheet picks an Excel sheet (all are in `sheets`). rows_total and
     rows_matched say how much there is: page with offset before saying something is not in the file. sort: a column

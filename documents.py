@@ -222,13 +222,15 @@ def _gazette_pdf(url):
 def kind_of(body, ctype=""):
     if body[:5] == b"%PDF-":
         return "pdf"
+    if body.startswith(b"7z\xbc\xaf\x27\x1c"):
+        raise ValueError("a 7-Zip archive: read its data files with read_table")
     if body[:2] == b"PK":
         names = zipfile.ZipFile(io.BytesIO(body)).namelist()
         if "word/document.xml" in names:
             return "docx"
         if "xl/workbook.xml" in names:
             raise ValueError("this is a spreadsheet: read it with read_table")
-        raise ValueError("a zip archive, not a document")
+        raise ValueError("a ZIP archive: read its data files with read_table")
     head = body[:2000].lstrip().lower()
     if "html" in ctype or head.startswith((b"<!doctype html", b"<html")):
         return "html"
@@ -418,7 +420,7 @@ def read(url, pages="1-5", refresh=False, db=None):
             "scope": SCOPE["read"]}
 
 
-FILE_TYPES = {"pdf", "doc", "docx", "odt", "xls", "xlsx", "ods", "csv", "json", "xml", "zip", "ppt", "pptx"}
+FILE_TYPES = {"pdf", "doc", "docx", "odt", "xls", "xlsx", "ods", "csv", "json", "xml", "zip", "7z", "ppt", "pptx"}
 
 
 class _Anchors(HTMLParser):
@@ -466,8 +468,8 @@ def page_links(body, base):
             kind = ext
         else:
             # portals like zorginzicht.nl serve files at query endpoints without an extension, typing them in the link text
-            m = re.search(r"(?i)\b(PDF|Excel|CSV|ZIP|Word)[ -](file|bestand)\b", text)
-            kind = {"pdf": "pdf", "excel": "xlsx", "csv": "csv", "zip": "zip", "word": "docx"}.get(m.group(1).lower(), "page") if m else "page"
+            m = re.search(r"(?i)\b(PDF|Excel|CSV|ZIP|7-Zip|7z|Word)[ -](file|bestand|archive|archief)\b", text)
+            kind = {"pdf": "pdf", "excel": "xlsx", "csv": "csv", "zip": "zip", "7-zip": "7z", "7z": "7z", "word": "docx"}.get(m.group(1).lower(), "page") if m else "page"
         out.append({"text": text, "url": url, "type": kind})
     return " ".join(p.title.split()), out
 
