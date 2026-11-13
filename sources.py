@@ -250,19 +250,22 @@ _kvk_last = [float("-inf")]
 
 def _kvk_get(kvk):
     """The open-data record, or None on 404. ponytail: one global lock spaces the calls a minute apart, as KVK asks;
-    several numbers in one question wait their turn."""
+    several numbers in one question wait their turn. KVK also refuses (429) about half the calls on a shared limit for
+    all users (measured 2026-11-13), so a refusal is retried once, a minute later."""
     with _kvk_slot:
-        time.sleep(max(0.0, _kvk_last[0] + KVK_SPACING - time.monotonic()))
-        try:
-            return _json(f"{KVK_OPEN}/{kvk}")
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return None
-            if e.code == 429:
-                raise RuntimeError("KVK open data allows one lookup per minute; try again in a minute") from e
-            raise RuntimeError(f"KVK open data answered HTTP {e.code} for {kvk}") from e
-        finally:
-            _kvk_last[0] = time.monotonic()
+        for attempt in (1, 2):
+            time.sleep(max(0.0, _kvk_last[0] + KVK_SPACING - time.monotonic()))
+            try:
+                return _json(f"{KVK_OPEN}/{kvk}")
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    return None
+                if e.code != 429:
+                    raise RuntimeError(f"KVK open data answered HTTP {e.code} for {kvk}") from e
+                if attempt == 2:
+                    raise RuntimeError("KVK open data is busy (one lookup per minute, shared by all users); try again later") from e
+            finally:
+                _kvk_last[0] = time.monotonic()
 
 
 def kvk_basics(kvk, refresh=False, db=None):

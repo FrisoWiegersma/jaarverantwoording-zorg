@@ -430,11 +430,13 @@ def kvk():
     assert (r["datumAanvang"], r["insolventie"]) == (None, "faillissement"), r  # zeros are an unknown date
     r = sources.kvk_basics("41150213", db=db)
     assert r["found"] is False and "alleen BV's en NV's" in r["note"], r  # not "does not exist"
-    try:  # rate-limited: an error, never "not found"
+    n = len(calls)
+    try:  # rate-limited twice: an error, never "not found"
         sources.kvk_basics("12345678", db=db)
         raise AssertionError("429 read as an answer")
     except RuntimeError:
         pass
+    assert len(calls) == n + 2, calls  # retried once
     assert db.execute("SELECT count(*) FROM kvk_open WHERE kvk='12345678'").fetchone()[0] == 0
 
 
