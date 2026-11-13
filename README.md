@@ -19,8 +19,9 @@ It reads the public [DigiMV archive](https://digimv13.desan.nl/archive/search), 
 - **Export** an answer's table to Excel, with numeric cells and links to the sources, or copy it into a spreadsheet.
 - **Look past the annual report.** The chat also reads the care-provider register (permits, AGB codes, branches), what municipalities, youth-care regions, provinces and water boards spend per policy area (CBS Iv3), and court rulings. An Iv3 amount links to its cell.
 - **Find the buried PDF.** It searches Woo releases, gazettes and parliamentary papers, local regulations and EU tenders, follows links on any public site (insurers' purchasing policies, IZA regional plans, council portals), reads the PDF and quotes the page. Open data too: data.overheid.nl, CSV/Excel files and every CBS StatLine table.
-- **Work in projects.** Signed-in consultants can upload PDFs and notes, keep context and conversations together, and inspect evidence from public and private sources. Private material is sent to Gemini only after enabling that project’s permission; see [project setup and privacy](docs/projects.md).
+- **Work in projects.** Upload PDFs and notes, keep context and conversations together, save the sources an answer cites into one or more projects, and inspect evidence from public and private sources. Private material is sent to Gemini only after enabling that project’s permission; see [project setup and privacy](docs/projects.md).
 - **Pick up later.** Conversations are saved, an answer keeps running if the connection drops, and the bell tells you when it is done.
+- **Your own account.** Everyone signs in with email and password, or through Cloudflare Access, and their conversations and projects are theirs alone.
 
 The same retrieval tools work from a CLI, an HTTP API and an MCP server ([reference](docs/reference.md)).
 
@@ -33,11 +34,11 @@ cp .env.example .env   # set GEMINI_API_KEY
 docker compose up -d --build --wait
 ```
 
-Open **http://localhost:3210**. The first start builds the archive index in the background; let it finish before you ask anything. Try:
+Open **http://localhost:3210** and create an account. The first start builds the archive index in the background; let it finish before you ask anything. Try:
 
 > Toon de omzet van Stichting Basalt van 2021 tot en met 2024 in een grafiek.
 
-Chat and OCR of scanned pages use the Gemini API. Search, caching and PDF text extraction run locally. The [Docker guide](docs/docker.md) covers indexing, configuration, updates and backups.
+Chat and OCR of scanned pages use the Gemini API. Search, caching and PDF text extraction run locally. The [Docker guide](docs/docker.md) covers indexing, configuration, sign-in through Cloudflare Access instead of the built-in login, updates and backups. To work on the code without Docker, see [web/README.md](web/README.md).
 
 ## How it works
 
@@ -59,7 +60,8 @@ The model finds the organisation, reads its filing and answers with sourced rows
 - The model and OCR can be wrong. Check the source, especially the unit, the year and whether a figure is for the whole group.
 - A citation match is a text check, not an audit.
 - A first read can be slow while a document downloads and converts, and it needs DigiMV and Gemini to be up.
-- Conversations are saved on the server. A local setup shares one identity between everyone who uses it.
+- Conversations are saved on the server, per account.
+- The built-in login does not verify email addresses. On a public address, close sign-up once everyone has an account (`AUTH_ALLOW_SIGNUP=false`).
 - Excel files are checked programmatically; pasting into Microsoft Excel still needs checking by hand.
 
 ## Repository
@@ -67,7 +69,7 @@ The model finds the organisation, reads its filing and answers with sourced rows
 | Path | Contents |
 | --- | --- |
 | `api/` | Python: DigiMV indexing and extraction (`digimv.py`), the other public sources (`sources.py`, `documents.py`, `datasets.py`), projects, and HTTP (`main.py`) and MCP (`mcp_server.py`) on top |
-| `web/` | The Next.js app: chat, organisation pages, comparisons, sources and Excel export |
+| `web/` | The Next.js app: login, chat, organisation pages, comparisons, projects, sources and Excel export |
 | `tests/`, `web/lib/*.test.ts` | Offline tests, run in [CI](.github/workflows/checks.yml) with lint, type checks and a build |
 | `deploy/` | The systemd timer that deploys `main` once its checks pass |
 | `docs/` | Architecture, data sources, Docker, projects and the API/CLI/MCP reference |
