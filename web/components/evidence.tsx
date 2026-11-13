@@ -8,7 +8,7 @@ import { Mark as Marker, MarkerText } from "@/components/kokonutui/marker-text";
 import { type Citation, pathSegment } from "@/lib/citations";
 import { parseNumber } from "@/lib/excel";
 import { cn } from "@/lib/utils";
-import { SaveToProject } from "@/components/save-to-project";
+import { type SaveFile, SaveToProject } from "@/components/save-to-project";
 
 /** A document's name for the evidence heading. Public documents (kind doc) also carry the original URL and its site. */
 export type DocMeta = { org: string; type: string; url?: string };
@@ -712,9 +712,20 @@ function CbsEvidence({ c, value }: { c: CbsCitation; value: CbsCell | "error" | 
   );
 }
 
-/** One citation's evidence, as the panel and the standalone /bron page show it. */
-export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocMeta> }) {
+/** A public PDF or data file that can be copied into a project; its key matches the server's, so pages of one file are one file. */
+function saveable(c: Citation, docs: Record<string, DocMeta>): SaveFile | null {
+  if (c.kind === "row") return c.projectId ? null : { href: c.href, key: `table/${c.tableId}`, label: "Databestand" };
+  if (c.kind !== "page" && c.kind !== "doc") return null;
+  const meta = docs[docKey(c)];
+  const label = [meta?.org, meta?.type ?? (c.kind === "page" ? "Jaarverslag" : "PDF"), c.kind === "page" && c.year].filter(Boolean).join(" · ");
+  return { href: c.href, key: c.kind === "doc" ? `public/${c.docId}` : `digimv/${c.year}/${c.docId}`, label };
+}
+
+/** One citation's evidence, as the panel and the standalone /bron page show it. `all` is every citation of the answer. */
+export function SourceView({ c, docs, all = [] }: { c: Citation; docs: Record<string, DocMeta>; all?: Citation[] }) {
   const value = useLoaded(c, true);
+  const file = saveable(c, docs);
+  const files = [...new Map(all.map((a) => saveable(a, docs)).filter((f) => f !== null).map((f) => [f.key, f])).values()];
   return (
     <div className="flex flex-col gap-5">
       {c.kind === "project" ? (
@@ -732,7 +743,7 @@ export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocM
       ) : (
         <FigureEvidence c={c} filed={value as Filed | "error" | null} />
       )}
-      {(c.kind === "page" || c.kind === "doc" || (c.kind === "row" && !c.projectId)) && <SaveToProject key={c.href} href={c.href} />}
+      {file && <SaveToProject all={files} file={file} key={file.key} />}
     </div>
   );
 }
@@ -763,7 +774,7 @@ function EvidenceBody({ citations, index, onIndex, docs }: Omit<EvidenceProps, "
 
   return (
     <div className="flex flex-col gap-5">
-      <SourceView c={c} docs={docs} />
+      <SourceView all={citations} c={c} docs={docs} />
       {citations.length > 1 && (
         <nav aria-label="Bronnen van dit antwoord" className="flex items-center justify-between gap-2 border-t pt-4">
           <StepButton disabled={index === 0} onClick={() => onIndex(index - 1)}>
