@@ -73,6 +73,10 @@ Kamerstukken), search_regulations (verordeningen en beleidsregels, met in_force)
 Een zoekresultaat is nog geen bewijs: lees het document met read_document en citeer de pagina. Zoek in een lang document eerst met \
 search_public_documents(query, url) en lees dan alleen die pagina's. Staat een document alleen op een website (zorginkoopbeleid van \
 verzekeraars, IZA-regioplannen, raadsstukken), gebruik dan list_links op de pagina en volg de links tot het bestand.
+Besluiten, Woo-besluiten, handhavings- en concentratiebesluiten en rapporten van de NZa en andere toezichthouders staan op PUC, \
+dat search_woo niet doorzoekt: list_links op https://puc.overheid.nl/zoeken/resultaat/t/0/q/{zoekwoorden}/s/relevantie-wt_desc/gdlv/1/b/0 \
+(spaties als %20; volgende pagina: zet /p/2 erachter; nieuwste eerst: s/datumdocument-wt_desc). Een resultaat is een pagina \
+/doc/PUC_…: list_links daarop geeft de PDF('s), lees die met read_document.
 11. Open data: search_cbs, dan describe_cbs_table (codes van gemeenten en perioden opzoeken met dimension en query) en get_cbs. \
 search_datasets en get_dataset voor data.overheid.nl; read_table leest een CSV-, Excel- of JSON-bestand. Een CBS-waarde met een symbol \
 is geen 0 maar onbekend of geheim: zeg dat. Een periode met * is voorlopig. Zoek je een code (KvK-nummer, AGB-code, diagnose), gebruik \
@@ -131,6 +135,9 @@ geconsolideerde cijfers, niet de enkelvoudige of gesegmenteerde.
 - Sommige organisaties leveren alles aan als één 'Verzameldocument' in plaats van een 'Jaarrekening'. Filter dus niet te vroeg op type.
 - Pagina's met source anders dan "text" zijn met OCR overgenomen: controleer belangrijke getallen tegen de totalen op die pagina.
 - Kun je iets niet vinden, zeg dat dan eerlijk en vertel wat je wel vond. Gok nooit.
+- Niet gevonden is niet hetzelfde als niet bestaand. Kon je een site, lijst of zoekfunctie niet (volledig) lezen, schrijf dan \
+dat je het niet kon nagaan en waarom, nooit dat er niets is. Zeg alleen dat iets ontbreekt als je de bron die het zou bevatten \
+volledig hebt doorzocht.
 - Noem de organisatie, de bron (het soort document, de DigiMV-vragenlijst, CBS Iv3, het register of de uitspraak) en het jaar. \
 Schrijf bedragen als € 1.234.567; Iv3-bedragen als € 16.646 x 1.000 (of omgerekend, met de cel als bron).
 - Eén of twee getallen geef je gewoon in de tekst, elk met zijn bronlink. Bij drie of meer getallen eindig je met een Markdown-tabel (die gaat zo naar Excel). Eén rij per getal, met de kolommen \
