@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mutationAllowed, projectApi } from "./project-server.ts";
 import { record, replay, startAnswer, stopAnswer } from "./streams.ts";
+import { entryFiles } from "./projects.ts";
 
 test("project mutations reject cross-site requests", () => {
   const before = process.env.APP_ORIGIN;
@@ -47,4 +48,18 @@ test("streams with the same chat ID stay isolated by owner", async () => {
   assert.notEqual(bobStream, null);
   await bobStream!.cancel();
   stopAnswer("same-id", "bob");
+});
+
+test("dropped folders yield every nested file, across readEntries batches", async () => {
+  const file = (name: string) => ({ isFile: true, file: (ok: (f: File) => void) => ok(new File(["x"], name)) });
+  const folder = (children: object[]) => ({ isFile: false, createReader: () => {
+    const batches = [children.slice(0, 100), children.slice(100), []]; // the browser hands back at most 100 per call
+    return { readEntries: (ok: (e: object[]) => void) => ok(batches.shift() || []) };
+  } });
+  const many = Array.from({ length: 150 }, (_, i) => file(`${i}.pdf`));
+  const tree = folder([file("a.pdf"), folder([file("b.md"), folder([])]), ...many]);
+  const names = (await entryFiles(tree as unknown as FileSystemEntry)).map((f) => f.name);
+  assert.equal(names.length, 152);
+  assert.deepEqual(names.slice(0, 2), ["a.pdf", "b.md"]);
+  assert.deepEqual(await entryFiles(null), []);
 });

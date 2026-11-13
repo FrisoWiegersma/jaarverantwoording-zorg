@@ -10,3 +10,13 @@ export async function projectRequest(path: string, method = "GET", body?: unknow
   if (!response.ok) throw new Error(data?.detail ? (typeof data.detail === "string" ? data.detail : "Controleer de ingevulde velden.") : "Aanvraag mislukt");
   return data;
 }
+
+// Every file in a dropped file or folder, recursively. readEntries returns at most 100 entries per call, so read until it is empty.
+export async function entryFiles(entry: FileSystemEntry | null): Promise<File[]> {
+  if (!entry) return [];
+  if (entry.isFile) return [await new Promise<File>((ok, fail) => (entry as FileSystemFileEntry).file(ok, fail))];
+  const reader = (entry as FileSystemDirectoryEntry).createReader();
+  const files: File[] = [];
+  for (let batch; (batch = await new Promise<FileSystemEntry[]>((ok, fail) => reader.readEntries(ok, fail))).length;) files.push(...(await Promise.all(batch.map(entryFiles))).flat());
+  return files;
+}

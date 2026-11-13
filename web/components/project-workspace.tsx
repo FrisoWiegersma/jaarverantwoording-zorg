@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import type { UIMessage } from "ai";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, FolderOpen, MessageSquare, Plus, SlidersHorizontal, Upload, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { FileText, FolderOpen, FolderUp, MessageSquare, Plus, SlidersHorizontal, Upload, X } from "lucide-react";
 import SmoothTab from "@/components/kokonutui/smooth-tab";
 import AI_Prompt from "@/components/kokonutui/ai-prompt";
 import SwitchButton from "@/components/kokonutui/switch-button";
@@ -15,7 +15,7 @@ import { Logo } from "@/components/logo";
 import { ChatPage } from "@/components/chat";
 import { conversationId, rememberConversation } from "@/lib/chat-session";
 import { citationKey, type Citation } from "@/lib/citations";
-import { projectRequest, type Project, type ProjectDocument } from "@/lib/projects";
+import { entryFiles, projectRequest, type Project, type ProjectDocument } from "@/lib/projects";
 
 const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-4 text-sm hover:bg-muted disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 const input = "w-full rounded-xl border bg-background px-3 py-2.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
@@ -37,6 +37,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [uploading, setUploading] = useState("");
   const refreshDocs = useCallback(() => projectRequest(`/${id}/documents`).then(setDocuments), [id]);
   const refreshChats = useCallback(async () => {
     const r = await fetch(`/digimv/chats?project_id=${id}`, { cache: "no-store" });
@@ -71,7 +72,25 @@ export function ProjectWorkspace({ id }: { id: string }) {
   }, [processing, refreshDocs]);
   const run = async (fn: () => Promise<void>) => { setBusy(true); setError(""); try { await fn(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } };
 
-  const addFile = async (file: File) => { const data = new FormData(); data.append("file", file); await projectRequest(`/${id}/documents`, "POST", data); await refreshDocs(); setAdding(false); };
+  // One request per file, in order: the API takes a single file per upload. Every file is reported, so nothing in a folder is dropped silently.
+  const addFiles = async (picked: File[] | Promise<File[]>) => {
+    const all = (await picked).filter((f) => !f.name.startsWith(".")); // .DS_Store, ._name.pdf
+    const files = all.filter((f) => /\.(pdf|md)$/i.test(f.name));
+    const skipped = all.filter((f) => !/\.(pdf|md)$/i.test(f.name)).map((f) => f.name);
+    const failed: string[] = [];
+    try {
+      for (const [i, f] of files.entries()) {
+        setUploading(`Uploaden… ${i + 1} van ${files.length}`);
+        const data = new FormData(); data.append("file", f);
+        await projectRequest(`/${id}/documents`, "POST", data).catch((e: Error) => failed.push(`${f.name} (${e.message})`));
+      }
+    } finally { setUploading(""); }
+    await refreshDocs();
+    const list = (names: string[]) => names.slice(0, 5).join("; ") + (names.length > 5 ? ` en ${names.length - 5} meer` : "");
+    if (!files.length) throw new Error(skipped.length ? `Geen PDF- of Markdown-bestanden gevonden. Overgeslagen: ${list(skipped)}.` : "Geen bestanden gevonden.");
+    if (failed.length || skipped.length) throw new Error([`${files.length - failed.length} van ${all.length} bestanden toegevoegd.`, skipped.length ? `Overgeslagen, alleen PDF en Markdown: ${list(skipped)}.` : "", failed.length ? `Mislukt: ${list(failed)}.` : ""].filter(Boolean).join(" "));
+    setAdding(false);
+  };
   const visible = documents.filter((d) => !d.archived);
   return <div className={active ? "flex h-dvh flex-col" : "min-h-dvh"}>
     <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-4 sm:px-8"><Link className="inline-flex min-h-11 items-center" href="/"><Logo /></Link><div className="flex items-center gap-3"><Link className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground" href="/">Chat</Link><Link className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground" href="/projecten">Projecten</Link><SwitchButton /></div></header>
@@ -88,23 +107,26 @@ export function ProjectWorkspace({ id }: { id: string }) {
       ]} /></div>
     </main>}
     <Drawer handleOnly open={settings} onOpenChange={setSettings}><DrawerContent className={modal}><div className="mb-4 flex items-center justify-between"><DrawerTitle className="text-xl font-semibold">Projectinstructies</DrawerTitle><button className="size-11 rounded-full hover:bg-muted" aria-label="Sluit instructies" onClick={() => setSettings(false)}><X className="mx-auto size-4" /></button></div><DrawerDescription className="mb-4 text-muted-foreground">Context voor de gesprekken in dit project.</DrawerDescription>{settingsDraft && <form className="space-y-4 overflow-y-auto" onSubmit={(e) => { e.preventDefault(); run(async () => { const p = await projectRequest(`/${id}`, "PUT", settingsDraft); setProject(p); await refreshDocs(); setSettings(false); setNotice("Instructies opgeslagen"); }); }}><label className="block space-y-2"><span className="text-sm">Projectnaam</span><input className={input} required maxLength={200} value={settingsDraft.name} onChange={(e) => setSettingsDraft({ ...settingsDraft, name: e.target.value })} /></label><label className="block space-y-2"><span className="text-sm">Wat moet de assistent weten?</span><Textarea rows={6} maxLength={20000} value={settingsDraft.context} onChange={(e) => setSettingsDraft({ ...settingsDraft, context: e.target.value })} placeholder="Achtergrond, je onderzoeksvraag en hoe je geholpen wilt worden…" /></label><label className="flex items-start gap-3 text-sm"><input className="mt-1 size-4 shrink-0" type="checkbox" checked={settingsDraft.allow_private} onChange={(e) => setSettingsDraft({ ...settingsDraft, allow_private: e.target.checked })} /><span>Projectcontext en bronnen gebruiken met Gemini<span className="mt-1 block text-xs text-muted-foreground">Sta toe dat relevante tekst en scans naar Gemini gaan voor antwoorden en OCR. Uitgeschakeld blijft je materiaal lokaal doorzoekbaar. Eerder verzonden tekst kan niet worden teruggehaald.</span></span></label><div className="flex justify-end"><button disabled={busy} className="min-h-11 rounded-full bg-primary px-5 text-primary-foreground">Opslaan</button></div></form>}</DrawerContent></Drawer>
-    <AddSources key={String(adding)} error={error} open={adding} onClose={() => setAdding(false)} busy={busy} onFile={(f) => run(() => addFile(f))} onNote={(title, text) => run(async () => { await projectRequest(`/${id}/notes`, "POST", { title, text }); await refreshDocs(); setAdding(false); })} />
+    <AddSources key={String(adding)} error={error} open={adding} onClose={() => setAdding(false)} busy={busy} uploading={uploading} onFiles={(f) => run(() => addFiles(f))} onNote={(title, text) => run(async () => { await projectRequest(`/${id}/notes`, "POST", { title, text }); await refreshDocs(); setAdding(false); })} />
     <Drawer direction="right" open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null); }}><DrawerContent className="w-full! max-w-[min(40rem,100vw)]! overflow-y-auto p-5"><div className="mb-4 flex items-center justify-between"><DrawerTitle>Projectbron</DrawerTitle><button className="size-11 rounded-full hover:bg-muted" aria-label="Sluit bron" onClick={() => setSelected(null)}><X className="mx-auto size-4" /></button></div><DrawerDescription className="sr-only">De originele tekst en pagina van de projectbron.</DrawerDescription>{selected && <>{selected.kind === "project" && <label className="mb-4 flex items-center gap-3 text-sm">Pagina<input type="number" className="w-20 rounded-lg border bg-background p-2" min={1} max={documents.find((d) => d.id === selected.documentId)?.pages || 1} value={selected.page} onChange={(e) => { const page = Number(e.target.value); if (page >= 1) { const href = `/bron/project/${id}/${selected.documentId}/${page}`; setSelected({ ...selected, page, href, key: citationKey(href, "") }); } }} /></label>}<SourceView c={selected} docs={{}} /><LocalSearch id={id} onSelect={setSelected} /></>}</DrawerContent></Drawer>
     <span className="sr-only" role="status">{notice}</span>
   </div>;
 }
 
-function AddSources({ error, open, onClose, busy, onFile, onNote }: { error: string; open: boolean; onClose: () => void; busy: boolean; onFile: (file: File) => void; onNote: (title: string, text: string) => void }) {
+function AddSources({ error, open, onClose, busy, uploading, onFiles, onNote }: { error: string; open: boolean; onClose: () => void; busy: boolean; uploading: string; onFiles: (files: File[] | Promise<File[]>) => void; onNote: (title: string, text: string) => void }) {
   const file = useRef<HTMLInputElement>(null);
+  const folder = useRef<HTMLInputElement>(null);
+  const pick = (e: ChangeEvent<HTMLInputElement>) => { const files = Array.from(e.target.files || []); e.target.value = ""; if (files.length) onFiles(files); };
   const [paste, setPaste] = useState(false);
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
-  return <Drawer handleOnly open={open} onOpenChange={(value) => { if (!value) onClose(); }}><DrawerContent className={modal}><div className="mb-5 flex items-center justify-between"><DrawerTitle className="text-xl font-semibold">Bronnen toevoegen</DrawerTitle><button aria-label="Sluit bronnen toevoegen" className="size-11 rounded-full hover:bg-muted" onClick={onClose}><X className="mx-auto size-4" /></button></div><DrawerDescription className="sr-only">Upload een PDF of Markdown-bestand, of plak tekst als projectcontext.</DrawerDescription>
+  return <Drawer handleOnly open={open} onOpenChange={(value) => { if (!value) onClose(); }}><DrawerContent className={modal}><div className="mb-5 flex items-center justify-between"><DrawerTitle className="text-xl font-semibold">Bronnen toevoegen</DrawerTitle><button aria-label="Sluit bronnen toevoegen" className="size-11 rounded-full hover:bg-muted" onClick={onClose}><X className="mx-auto size-4" /></button></div><DrawerDescription className="sr-only">Upload PDF- of Markdown-bestanden of een hele map, of plak tekst als projectcontext.</DrawerDescription>
     {error && <p role="alert" className="mb-3 text-sm">{error}</p>}
-    <input ref={file} type="file" accept="application/pdf,.pdf,text/markdown,.md" className="sr-only" tabIndex={-1} aria-label="PDF of Markdown kiezen" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
+    <input ref={file} type="file" multiple accept="application/pdf,.pdf,text/markdown,.md" className="sr-only" tabIndex={-1} aria-label="PDF- of Markdown-bestanden kiezen" onChange={pick} />
+    <input ref={folder} type="file" {...{ webkitdirectory: "" }} className="sr-only" tabIndex={-1} aria-label="Map kiezen" onChange={pick} />
     {paste ? <form className="space-y-4 overflow-y-auto" onSubmit={(e) => { e.preventDefault(); onNote(title, text); }}><input aria-label="Titel van tekstbron" className={input} required placeholder="Titel, bijvoorbeeld context.md" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} /><Textarea aria-label="Brontekst" required rows={8} maxLength={100000} placeholder="Plak je tekst…" value={text} onChange={(e) => setText(e.target.value)} /><div className="flex justify-between"><button className={button} type="button" onClick={() => setPaste(false)}>Terug</button><button disabled={busy} className="min-h-11 rounded-full bg-primary px-5 text-primary-foreground">Toevoegen</button></div></form> : <>
-      <button disabled={busy} className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed text-muted-foreground hover:bg-muted" onClick={() => file.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f && !busy) onFile(f); }}><FileText className="size-7" /><span>{busy ? "Uploaden…" : "Sleep bestanden hierheen"}</span><span className="text-xs">PDF · Markdown (.md)</span></button>
-      <div className="mt-4 grid grid-cols-2 gap-3"><button className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl bg-muted text-sm" disabled={busy} onClick={() => file.current?.click()}><Upload className="size-5" />Uploaden</button><button className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl bg-muted text-sm" disabled={busy} onClick={() => setPaste(true)}><FileText className="size-5" />Tekst plakken</button></div>
+      <button disabled={busy} className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed text-muted-foreground hover:bg-muted" onClick={() => file.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (busy) return; const entries = Array.from(e.dataTransfer.items, (i) => i.webkitGetAsEntry()); onFiles(Promise.all(entries.map(entryFiles)).then((f) => f.flat())); }}><FileText className="size-7" /><span>{busy ? uploading || "Uploaden…" : "Sleep bestanden of mappen hierheen"}</span><span className="text-xs">PDF · Markdown (.md)</span></button>
+      <div className="mt-4 grid grid-cols-3 gap-3"><button className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl bg-muted text-sm" disabled={busy} onClick={() => file.current?.click()}><Upload className="size-5" />Bestanden</button><button className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl bg-muted text-sm" disabled={busy} onClick={() => folder.current?.click()}><FolderUp className="size-5" />Map</button><button className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl bg-muted text-sm" disabled={busy} onClick={() => setPaste(true)}><FileText className="size-5" />Tekst plakken</button></div>
     </>}
   </DrawerContent></Drawer>;
 }
