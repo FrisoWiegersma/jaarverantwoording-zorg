@@ -6,7 +6,7 @@ import { memo, type ReactNode, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useCitationPreview } from "@/components/citation-preview";
-import { useCheck } from "@/components/evidence";
+import { checkOf, type PrivatePage, useLoaded } from "@/components/evidence";
 import { citationAction, citationKey, citationLabel, parseHref } from "@/lib/citations";
 import { copyRows, readTable, toRows } from "@/lib/excel";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,12 @@ export function CitationChip({
     return source && { ...source, key: citationKey(href, quote), href, quote: quote ?? "" };
   }, [href, quote]);
   // ponytail: every chip loads its source up front (cached, and what a click shows anyway); fine for answers of tens
-  const check = useCheck(citation ?? undefined);
+  const value = useLoaded(citation ?? undefined);
+  const check = checkOf(citation ?? undefined, value);
+  // A project chip names its file once the page text is in: "Projectbron" says nothing about which upload it is.
+  const project = citation?.kind === "project" ? citation : null;
+  const file = project && value && value !== "error" ? (value as PrivatePage) : null;
+  const shown = file ? (file.documentKind === "pdf" ? `${file.filename} · p. ${project?.page}` : file.filename) : label;
   return (
     <button
       aria-describedby={preview.openKey === key ? preview.id : undefined}
@@ -57,9 +62,10 @@ export function CitationChip({
       onFocus={(e) => citation && e.currentTarget.matches(":focus-visible") && preview.show(e.currentTarget, citation, true)}
       onPointerEnter={(e) => citation && e.pointerType === "mouse" && preview.show(e.currentTarget, citation)}
       onPointerLeave={(e) => e.pointerType === "mouse" && preview.hide()}
+      title={file ? shown : undefined}
       type="button"
     >
-      {label}
+      <span className={file ? "max-w-[16rem] truncate" : undefined}>{shown}</span>
       {check && (
         <span className="-mr-1.5 ml-1.5 inline-flex h-full items-center gap-1 rounded-r-[5px] bg-amber-50 px-1.5 font-semibold text-amber-800 ring-1 ring-amber-500/50 ring-inset dark:bg-amber-950 dark:text-amber-300">
           <AlertTriangle aria-hidden="true" className="size-3" />

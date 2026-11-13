@@ -9,7 +9,7 @@
 
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { type CbsCell, cellCited, PrivateSource, type PrivatePage, type DocMeta, docKey, type Filed, formatCbs, formatFiled, formatIv3, type Iv3Cell, pageWindow, type Shot, type TableRow, type TextPart, useCheck, useLoaded } from "@/components/evidence";
+import { type CbsCell, cellCited, PrivateSource, type PrivatePage, type DocMeta, docKey, type Filed, formatCbs, formatFiled, formatIv3, type Iv3Cell, pageWindow, type Shot, type TableRow, type TextPart, checkOf, useLoaded } from "@/components/evidence";
 import type { Citation } from "@/lib/citations";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -160,7 +160,7 @@ export function CitationPreviewProvider({ docs, children }: { docs: Record<strin
 
 function PreviewBody({ c, doc }: { c: Citation; doc?: DocMeta }) {
   const value = useLoaded(c);
-  const check = useCheck(c);
+  const check = checkOf(c, value);
   const paged = c.kind === "page" || c.kind === "doc";
   const shot = paged && value && value !== "error" ? (value as Shot) : null;
   const filed = c.kind === "figure" && value && value !== "error" ? (value as Filed) : null;

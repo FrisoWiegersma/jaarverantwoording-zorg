@@ -130,17 +130,29 @@ async function fetchCbs(c: CbsCitation): Promise<CbsCell> {
 
 // ponytail: session-long cache, object URLs never revoked; fine for a few hundred page images
 const loaded = new Map<string, Promise<Loaded>>();
-async function fetchPrivate(c: PrivateCitation): Promise<PrivatePage> {
+async function fetchPrivate(c: PrivateCitation, withShot: boolean): Promise<PrivatePage> {
   const r = await fetch(`${pagePath(c)}/pages/${c.page}`, { cache: "no-store" });
   if (!r.ok) throw new Error("Privébron niet beschikbaar");
   const d = await r.json();
   return { kind: "project", filename: d.filename, text: d.text, source: d.source, documentKind: d.kind,
-    shot: d.kind === "pdf" ? await fetchShot(c) : null };
+    shot: withShot && d.kind === "pdf" ? await fetchShot(c) : null };
 }
 
-function load(c: Citation): Promise<Loaded> {
-  // Private material is never retained in the shared session cache.
-  if (c.kind === "project") return fetchPrivate(c).catch(() => "error" as const);
+// Private material is never retained in the shared session cache. Chips and previews need only a page's text, and
+// the chips of one answer (re)mount together while it streams, so concurrent asks share one request until it settles.
+const privateText = new Map<string, Promise<Loaded>>();
+function loadPrivateText(c: PrivateCitation): Promise<Loaded> {
+  let p = privateText.get(c.key);
+  if (!p) {
+    p = fetchPrivate(c, false).catch((): Loaded => "error").finally(() => privateText.delete(c.key));
+    privateText.set(c.key, p);
+  }
+  return p;
+}
+
+/** A citation's source. `shot`: also render a private PDF page, which only the opened panel shows. */
+function load(c: Citation, shot = false): Promise<Loaded> {
+  if (c.kind === "project") return shot ? fetchPrivate(c, true).catch(() => "error" as const) : loadPrivateText(c);
   let p = loaded.get(c.key);
   if (!p) {
     const get: Promise<Loaded> = c.kind === "page" || c.kind === "doc" ? fetchShot(c) : c.kind === "iv3" ? fetchIv3(c)
@@ -154,13 +166,13 @@ function load(c: Citation): Promise<Loaded> {
   return p;
 }
 
-export function useLoaded(c: Citation | undefined) {
+export function useLoaded(c: Citation | undefined, shot = false) {
   const [state, setState] = useState<{ key: string; value: Loaded } | null>(null);
   useEffect(() => {
     if (!c) return;
     let live = true;
     let privateUrl: string | undefined;
-    load(c).then((value) => {
+    load(c, shot).then((value) => {
       if (value !== "error" && value.kind === "project") privateUrl = value.shot?.src;
       if (live) setState({ key: c.key, value });
       else if (privateUrl) URL.revokeObjectURL(privateUrl);
@@ -169,7 +181,7 @@ export function useLoaded(c: Citation | undefined) {
       live = false;
       if (privateUrl) URL.revokeObjectURL(privateUrl);
     };
-  }, [c]);
+  }, [c, shot]);
   return c && state?.key === c.key ? state.value : null;
 }
 
@@ -353,8 +365,7 @@ function numberInRow(d: NonNullable<TableRow["data"]>, quote: string) {
 
 /** Whether the source says something else than the answer: a quote not (all) on its page, or a filed value that
  * differs from the number quoted. Null while it loads, or when the source could not be loaded. */
-export function useCheck(c: Citation | undefined) {
-  const value = useLoaded(c);
+export function checkOf(c: Citation | undefined, value: Loaded | null) {
   if (!c?.quote || !value || value === "error") return null;
   if (value.kind === "project") return !value.text.replace(/\s+/g, " ").includes(c.quote.replace(/\s+/g, " "));
   if (value.kind === "page" || value.kind === "text") return value.found !== "all";
@@ -694,7 +705,7 @@ function CbsEvidence({ c, value }: { c: CbsCitation; value: CbsCell | "error" | 
 
 /** One citation's evidence, as the panel and the standalone /bron page show it. */
 export function SourceView({ c, docs }: { c: Citation; docs: Record<string, DocMeta> }) {
-  const value = useLoaded(c);
+  const value = useLoaded(c, true);
   return (
     <div className="flex flex-col gap-5">
       {c.kind === "project" ? (
