@@ -85,6 +85,26 @@ docker compose up -d --build --wait
 
 For tagged local releases, use the same `APP_VERSION` when building and starting. Keep the previous source revision and images to roll back with `APP_VERSION=<previous-tag> docker compose up -d --no-build --wait`. Preserve the data volume when changing releases.
 
+## Deploy main automatically
+
+`deploy/auto-deploy.sh` deploys a git checkout at `~/jaarverantwoording-zorg` whenever `origin/main` moves and all GitHub checks on the new commit have passed. Each release is tagged with its short commit hash. If the build or health check fails, it rolls back to the previous commit and skips the bad one until a newer commit lands. It keeps the running images plus the four newest older tags. Install the timer once on the Docker host, as the user that owns the checkout:
+
+```sh
+cd ~/jaarverantwoording-zorg
+systemctl --user link "$PWD/deploy/jaarverantwoording-deploy.service"
+systemctl --user enable --now "$PWD/deploy/jaarverantwoording-deploy.timer"
+loginctl enable-linger "$USER"   # keep user timers running without a login session
+```
+
+Push to `main` and the new commit is live within about two minutes of the checks passing. Watch or trigger a run with:
+
+```sh
+journalctl --user -u jaarverantwoording-deploy -f
+systemctl --user start jaarverantwoording-deploy
+```
+
+After a failed deploy, the unit shows as failed in `systemctl --user --failed`. To retry the same commit, delete `.git/deploy-failed`. After changing the unit files, run `systemctl --user daemon-reload`.
+
 ## Back up the data
 
 Stop both services so the archive contains a consistent database and document cache. The backup is written to your current directory; keep it somewhere private and copy it off the Docker host.

@@ -1,0 +1,7 @@
+[Unit]
+Description=Deploy jaarverantwoording-zorg main once its checks pass
+
+[Service]
+Type=oneshot
+ExecStart=%h/jaarverantwoording-zorg/deploy/auto-deploy.sh
+TimeoutStartSec=30min
