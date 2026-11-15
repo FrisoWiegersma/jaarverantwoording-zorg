@@ -18,11 +18,11 @@ const causeOf = (e: Error) => {
   return c ? ` (cause: ${cut(c.code ?? c.message ?? String(c), 300)})` : "";
 };
 
-/** One failure with what's needed to reproduce it: the tool, its input and the error. Project tools keep their input private. */
+/** One failure with what's needed to reproduce it: the tool, its input and the error. Project and MCP plugin tools keep their input private. */
 export function errorEntry(chat: Chat, step: number | null, tool: string | null, input: unknown, error: unknown) {
   return {
     at: new Date().toISOString(), chat: chat.id, model: chat.model, effort: chat.effort, step, tool,
-    input: tool && !tool.includes("_project_") ? cut(input) : undefined,
+    input: tool && !tool.includes("_project_") && !tool.startsWith("mcp__") ? cut(input) : undefined,
     error: error instanceof Error ? `${error.name}: ${cut(error.message)}${causeOf(error)}` : cut(error),
     status: (error as { statusCode?: number } | null)?.statusCode,
   };

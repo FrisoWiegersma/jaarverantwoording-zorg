@@ -24,4 +24,6 @@ test("a failed tool call is appended with its input; project tools keep input ou
   assert.match(long.error, /summary too short$/, "the reason at the end of a long validation error is kept");
   const net = errorEntry(chat, 2, "read_table", {}, new TypeError("fetch failed", { cause: Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" }) }));
   assert.equal(net.error, "TypeError: fetch failed (cause: UND_ERR_SOCKET)");
+  const mcpErr = errorEntry(chat, 5, "mcp__canva__create_presentation", { slides: ["geheim"] }, new Error("MCP timeout"));
+  assert.equal(mcpErr.input, undefined);
 });

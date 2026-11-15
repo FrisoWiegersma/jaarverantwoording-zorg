@@ -5,6 +5,7 @@ import type { UIMessage } from "ai";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { FileText, FolderOpen, FolderUp, MessageSquare, Plus, SlidersHorizontal, Upload, X } from "lucide-react";
 import SmoothTab from "@/components/kokonutui/smooth-tab";
+import AIPluginSelector from "@/components/kokonutui/ai-plugin-selector";
 import AI_Prompt from "@/components/kokonutui/ai-prompt";
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,13 +16,14 @@ import { Logo } from "@/components/logo";
 import { ChatPage } from "@/components/chat";
 import { conversationId, rememberConversation } from "@/lib/chat-session";
 import { citationKey, type Citation } from "@/lib/citations";
-import { entryFiles, projectRequest, type Project, type ProjectDocument } from "@/lib/projects";
+import { extractPluginMentions, type Plugin, type PluginPreset, pluginRequest } from "@/lib/plugins";
+import { entryFiles, MAX_PROJECT_FILE_BYTES, projectRequest, type Project, type ProjectDocument } from "@/lib/projects";
 
 const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-4 text-sm hover:bg-muted disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 const input = "w-full rounded-xl border bg-background px-3 py-2.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 const modal = "project-modal mx-auto max-w-xl px-6 pb-6 pt-4 sm:bottom-auto! sm:top-1/2! sm:-translate-y-1/2! sm:rounded-2xl!";
 type Saved = { id: string; title: string; updated: string };
-type Conversation = { id: string; messages: UIMessage[]; initialQuestion?: string };
+type Conversation = { id: string; messages: UIMessage[]; initialQuestion?: string; initialPlugins?: string[] };
 const states: Record<string, string> = { queued: "In wachtrij", processing: "Verwerken…", needs_ocr: "OCR-toestemming nodig", error: "Verwerking mislukt" };
 
 export function ProjectWorkspace({ id }: { id: string }) {
@@ -38,6 +40,27 @@ export function ProjectWorkspace({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [uploading, setUploading] = useState("");
+  const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [presets, setPresets] = useState<PluginPreset[]>([]);
+  const [selectedPlugins, setSelectedPlugins] = useState<string[]>([]);
+  const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
+  const [pluginMenuTab, setPluginMenuTab] = useState<"active" | "add">("active");
+  const refreshPlugins = useCallback(() => {
+    pluginRequest("").then(setPlugins).catch(() => {});
+    pluginRequest("/presets").then(setPresets).catch(() => {});
+  }, []);
+  const togglePlugin = useCallback((handle: string) => {
+    setSelectedPlugins((prev) => (prev.includes(handle) ? prev.filter((h) => h !== handle) : [...prev, handle]));
+  }, []);
+  const activePlugins = Array.from(
+    new Set([
+      ...selectedPlugins,
+      ...extractPluginMentions(
+        question,
+        plugins.map((p) => p.handle)
+      ),
+    ])
+  );
   const refreshDocs = useCallback(() => projectRequest(`/${id}/documents`).then(setDocuments), [id]);
   const refreshChats = useCallback(async () => {
     const r = await fetch(`/digimv/chats?project_id=${id}`, { cache: "no-store" });
@@ -56,6 +79,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
     } catch (e) { setError((e as Error).message); }
   }, [id]);
   useEffect(() => {
+    refreshPlugins();
     projectRequest(`/${id}`).then((p) => {
       setProject(p);
       refreshDocs().catch((e) => setError(e.message));
@@ -63,7 +87,7 @@ export function ProjectWorkspace({ id }: { id: string }) {
       const chatId = conversationId(new URL(window.location.href));
       if (chatId) openChat(chatId);
     }).catch((e) => setError(e.message));
-  }, [id, refreshDocs, refreshChats, openChat]);
+  }, [id, refreshDocs, refreshChats, openChat, refreshPlugins]);
   const processing = documents.some((d) => !d.archived && ["queued", "processing"].includes(d.status));
   useEffect(() => {
     if (!processing) return;
@@ -75,11 +99,12 @@ export function ProjectWorkspace({ id }: { id: string }) {
   // One request per file, in order: the API takes a single file per upload. Every file is reported, so nothing in a folder is dropped silently.
   const addFiles = async (picked: File[] | Promise<File[]>) => {
     const all = (await picked).filter((f) => !f.name.startsWith(".")); // .DS_Store, ._name.pdf
-    const files = all.filter((f) => /\.(pdf|md)$/i.test(f.name));
-    const skipped = all.filter((f) => !/\.(pdf|md)$/i.test(f.name)).map((f) => f.name);
+    const files = all.filter((f) => /\.(pdf|md|pptx|docx|xlsx|csv|txt)$/i.test(f.name));
+    const skipped = all.filter((f) => !/\.(pdf|md|pptx|docx|xlsx|csv|txt)$/i.test(f.name)).map((f) => f.name);
     const failed: string[] = [];
     try {
       for (const [i, f] of files.entries()) {
+        if (f.size > MAX_PROJECT_FILE_BYTES) { failed.push(`${f.name} (Maximaal 25 MB per bestand)`); continue; }
         setUploading(`Uploaden… ${i + 1} van ${files.length}`);
         const data = new FormData(); data.append("file", f);
         await projectRequest(`/${id}/documents`, "POST", data).catch((e: Error) => failed.push(`${f.name} (${e.message})`));
@@ -87,8 +112,8 @@ export function ProjectWorkspace({ id }: { id: string }) {
     } finally { setUploading(""); }
     await refreshDocs();
     const list = (names: string[]) => names.slice(0, 5).join("; ") + (names.length > 5 ? ` en ${names.length - 5} meer` : "");
-    if (!files.length) throw new Error(skipped.length ? `Geen PDF- of Markdown-bestanden gevonden. Overgeslagen: ${list(skipped)}.` : "Geen bestanden gevonden.");
-    if (failed.length || skipped.length) throw new Error([`${files.length - failed.length} van ${all.length} bestanden toegevoegd.`, skipped.length ? `Overgeslagen, alleen PDF en Markdown: ${list(skipped)}.` : "", failed.length ? `Mislukt: ${list(failed)}.` : ""].filter(Boolean).join(" "));
+    if (!files.length) throw new Error(skipped.length ? `Geen ondersteunde bestanden gevonden. Overgeslagen: ${list(skipped)}.` : "Geen bestanden gevonden.");
+    if (failed.length || skipped.length) throw new Error([`${files.length - failed.length} van ${all.length} bestanden toegevoegd.`, skipped.length ? `Niet ondersteund: ${list(skipped)}.` : "", failed.length ? `Mislukt: ${list(failed)}.` : ""].filter(Boolean).join(" "));
     setAdding(false);
   };
   const visible = documents.filter((d) => !d.archived);
@@ -97,10 +122,52 @@ export function ProjectWorkspace({ id }: { id: string }) {
     {error && <p role="alert" className="mx-auto my-3 w-full max-w-3xl rounded-xl border p-3 text-sm">{error}</p>}
     {!project ? <p className="p-8 text-center">{error ? "Project niet beschikbaar" : "Project laden…"}</p> : active ? <>
       <div className="mx-auto flex w-full max-w-4xl shrink-0 items-center justify-between gap-2 border-b px-4 py-3"><button className="min-w-0 truncate text-left font-medium" onClick={() => { rememberConversation(null); setActive(null); refreshChats().catch((e) => setError(e.message)); }}><FolderOpen className="mr-2 inline size-4" />{project.name}</button><div className="flex shrink-0 items-center gap-2"><History projectId={id} current={active.id} onOpen={(messages, chatId) => { rememberConversation(chatId); setActive({ id: chatId, messages }); }} /><button className={button} onClick={() => { rememberConversation(null); setActive(null); }}><Plus className="size-4" />Nieuw gesprek</button></div></div>
-      <div className="min-h-0 flex-1"><ChatPage key={active.id} projectId={id} projectName={project.name} conversation={active} initialQuestion={active.initialQuestion} onSaved={() => { refreshChats().catch((e) => setError(e.message)); }} /></div>
+      <div className="min-h-0 flex-1"><ChatPage key={active.id} projectId={id} projectName={project.name} projectDocuments={documents} conversation={active} initialQuestion={active.initialQuestion} initialPlugins={active.initialPlugins} onSaved={() => { refreshChats().catch((e) => setError(e.message)); }} /></div>
     </> : <main className="mx-auto w-full max-w-3xl px-4 pt-8 pb-16 sm:px-8 sm:pt-16">
       <div className="mb-7 flex items-center justify-between gap-3"><h1 className="flex min-w-0 items-center gap-3 text-2xl font-medium"><FolderOpen aria-hidden="true" className="size-7 shrink-0" /><span className="truncate">{project.name}</span></h1><button className={button} aria-label="Projectinstructies" onClick={() => { setSettingsDraft(project); setSettings(true); }}><SlidersHorizontal className="size-4" /><span className="hidden sm:inline">Instructies</span></button></div>
-      <AI_Prompt value={question} onValueChange={setQuestion} busy={false} onStop={() => {}} placeholder="Stel een vraag binnen dit project…" onSubmit={(text) => { setActive({ id: crypto.randomUUID(), messages: [], initialQuestion: text }); setQuestion(""); }} />
+      <AI_Prompt
+        value={question}
+        onValueChange={setQuestion}
+        busy={false}
+        onStop={() => {}}
+        placeholder="Stel een vraag (typ @ voor projectbestanden en apps)…"
+        documents={documents}
+        plugins={plugins}
+        selectedPlugins={activePlugins}
+        onTogglePlugin={togglePlugin}
+        onAddPluginRequest={() => {
+          setPluginMenuTab("add");
+          setPluginMenuOpen(true);
+        }}
+        footer={
+          <AIPluginSelector
+            defaultTab={pluginMenuTab}
+            onChanged={refreshPlugins}
+            onOpenChange={(next) => {
+              setPluginMenuOpen(next);
+              if (!next) setPluginMenuTab("active");
+            }}
+            onToggle={togglePlugin}
+            open={pluginMenuOpen}
+            plugins={plugins}
+            presets={presets}
+            selected={activePlugins}
+          />
+        }
+        onSubmit={(text) => {
+          const pluginsForTurn = Array.from(
+            new Set([
+              ...selectedPlugins,
+              ...extractPluginMentions(
+                text,
+                plugins.map((p) => p.handle)
+              ),
+            ])
+          );
+          setActive({ id: crypto.randomUUID(), messages: [], initialQuestion: text, initialPlugins: pluginsForTurn });
+          setQuestion("");
+        }}
+      />
       <div className="mt-8"><SmoothTab label="Projectinhoud" items={[
         { id: "chats", title: "Gesprekken", content: <div className="pt-4"><ul className="divide-y">{chats.map((c) => <li key={c.id}><button className="flex w-full items-center gap-3 rounded-xl px-2 py-4 text-left hover:bg-muted" disabled={busy} onClick={() => openChat(c.id)}><MessageSquare className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{c.title}</span><span className="shrink-0 text-xs text-muted-foreground">{new Date(c.updated).toLocaleDateString("nl-NL")}</span></button></li>)}</ul>{!chats.length && <p className="py-8 text-center text-sm text-muted-foreground">Je gesprekken verschijnen hier.</p>}</div> },
         { id: "sources", title: `Bronnen${visible.length ? ` (${visible.length})` : ""}`, content: <div className="pt-5" data-no-swipe><button className={button} onClick={() => setAdding(true)}><Plus className="size-4" />Bronnen toevoegen</button><ul className="mt-4 divide-y">{visible.map((d) => <li className="flex items-center gap-3 py-4" key={d.id}><FileText className="size-4 shrink-0 text-muted-foreground" /><button className="min-w-0 flex-1 text-left" onClick={() => { const href = `/bron/project/${id}/${d.id}/1`; setSelected({ kind: "project", projectId: id, documentId: d.id, page: 1, href, quote: "", key: citationKey(href, "") }); }}><span className="block truncate">{d.filename}</span><span className="text-xs text-muted-foreground">{states[d.status] || `${d.pages} ${d.kind === "markdown" ? "kennisbestand" : d.kind === "note" ? "tekstbron" : "pagina’s"}`}</span></button>{["error", "needs_ocr"].includes(d.status) && <button className={button} onClick={() => run(async () => { await projectRequest(`/${id}/documents/${d.id}/retry`, "POST"); await refreshDocs(); })}>Opnieuw</button>}<button className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted" aria-label={`Archiveer ${d.filename}`} onClick={() => run(async () => { await projectRequest(`/${id}/documents/${d.id}/archive`, "POST"); await refreshDocs(); })}><X className="size-4" /></button></li>)}</ul>{!visible.length && <p className="py-8 text-center text-sm text-muted-foreground">Voeg bestanden of tekst toe als context voor dit project.</p>}</div> },
@@ -120,12 +187,12 @@ function AddSources({ error, open, onClose, busy, uploading, onFiles, onNote }: 
   const [paste, setPaste] = useState(false);
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
-  return <Drawer handleOnly open={open} onOpenChange={(value) => { if (!value) onClose(); }}><DrawerContent className={modal}><div className="mb-5 flex items-center justify-between"><DrawerTitle className="text-xl font-semibold">Bronnen toevoegen</DrawerTitle><button aria-label="Sluit bronnen toevoegen" className="size-11 rounded-full hover:bg-muted" onClick={onClose}><X className="mx-auto size-4" /></button></div><DrawerDescription className="sr-only">Upload PDF- of Markdown-bestanden of een hele map, of plak tekst als projectcontext.</DrawerDescription>
+  return <Drawer handleOnly open={open} onOpenChange={(value) => { if (!value) onClose(); }}><DrawerContent className={modal}><div className="mb-5 flex items-center justify-between"><DrawerTitle className="text-xl font-semibold">Bronnen toevoegen</DrawerTitle><button aria-label="Sluit bronnen toevoegen" className="size-11 rounded-full hover:bg-muted" onClick={onClose}><X className="mx-auto size-4" /></button></div><DrawerDescription className="sr-only">Upload PDF-, Office-, Markdown- of tekstbestanden of een hele map, of plak tekst als projectcontext.</DrawerDescription>
     {error && <p role="alert" className="mb-3 text-sm">{error}</p>}
-    <input ref={file} type="file" multiple accept="application/pdf,.pdf,text/markdown,.md" className="sr-only" tabIndex={-1} aria-label="PDF- of Markdown-bestanden kiezen" onChange={pick} />
+    <input ref={file} type="file" multiple accept=".pdf,.md,.pptx,.docx,.xlsx,.csv,.txt" className="sr-only" tabIndex={-1} aria-label="Projectbestanden kiezen" onChange={pick} />
     <input ref={folder} type="file" {...{ webkitdirectory: "" }} className="sr-only" tabIndex={-1} aria-label="Map kiezen" onChange={pick} />
     {paste ? <form className="space-y-4 overflow-y-auto" onSubmit={(e) => { e.preventDefault(); onNote(title, text); }}><input aria-label="Titel van tekstbron" className={input} required placeholder="Titel, bijvoorbeeld context.md" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} /><Textarea aria-label="Brontekst" required rows={8} maxLength={100000} placeholder="Plak je tekst…" value={text} onChange={(e) => setText(e.target.value)} /><div className="flex justify-between"><button className={button} type="button" onClick={() => setPaste(false)}>Terug</button><button disabled={busy} className="min-h-11 rounded-full bg-primary px-5 text-primary-foreground">Toevoegen</button></div></form> : <>
-      <button disabled={busy} className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed text-muted-foreground hover:bg-muted" onClick={() => file.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (busy) return; const entries = Array.from(e.dataTransfer.items, (i) => i.webkitGetAsEntry()); onFiles(Promise.all(entries.map(entryFiles)).then((f) => f.flat())); }}><FileText className="size-7" /><span>{busy ? uploading || "Uploaden…" : "Sleep bestanden of mappen hierheen"}</span><span className="text-xs">PDF · Markdown (.md)</span></button>
+      <button disabled={busy} className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed text-muted-foreground hover:bg-muted" onClick={() => file.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (busy) return; const entries = Array.from(e.dataTransfer.items, (i) => i.webkitGetAsEntry()); onFiles(Promise.all(entries.map(entryFiles)).then((f) => f.flat())); }}><FileText className="size-7" /><span>{busy ? uploading || "Uploaden…" : "Sleep bestanden of mappen hierheen"}</span><span className="text-xs">PDF · PowerPoint · Word · Excel · CSV · Tekst · Markdown</span></button>
       <div className="mt-4 grid grid-cols-3 gap-3"><button className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl bg-muted text-sm" disabled={busy} onClick={() => file.current?.click()}><Upload className="size-5" />Bestanden</button><button className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl bg-muted text-sm" disabled={busy} onClick={() => folder.current?.click()}><FolderUp className="size-5" />Map</button><button className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl bg-muted text-sm" disabled={busy} onClick={() => setPaste(true)}><FileText className="size-5" />Tekst plakken</button></div>
     </>}
   </DrawerContent></Drawer>;

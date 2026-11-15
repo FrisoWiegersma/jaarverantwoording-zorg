@@ -3,8 +3,9 @@
 import { useChat } from "@ai-sdk/react";
 import { generateId, getToolName, isToolUIPart, type UIMessage } from "ai";
 import Link from "next/link";
-import { Copy, SquarePen } from "lucide-react";
+import { Copy, FolderOpen, SquarePen } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { AccountMenu } from "@/components/account-menu";
 import { Answer, DrawnCheck } from "@/components/answer";
 import { CitationPreviewProvider } from "@/components/citation-preview";
@@ -15,6 +16,8 @@ import { History } from "@/components/history";
 import AILoadingState, { type AgentStep } from "@/components/kokonutui/ai-loading";
 import AIContextMeter from "@/components/kokonutui/ai-context-meter";
 import AIModelSelector from "@/components/kokonutui/ai-model-selector";
+import AIPluginSelector from "@/components/kokonutui/ai-plugin-selector";
+import { AIPluginCard, AIPluginViewer } from "@/components/kokonutui/ai-plugin-viewer";
 import AI_Prompt from "@/components/kokonutui/ai-prompt";
 import CommandButton from "@/components/kokonutui/command-button";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
@@ -28,12 +31,29 @@ import { hidePartialLink, parseCitations } from "@/lib/citations";
 import { missingAnswer, SKIPPED } from "@/lib/chat-policy";
 import { conversationId, reconnectOnReturn, rememberConversation } from "@/lib/chat-session";
 import { type AnswerMeta, answerLabel, MODELS, type ModelOption, type ModelSelection, pickModel } from "@/lib/models";
+import {
+  extractPluginArtifacts,
+  mergePluginArtifacts,
+  extractPluginMentions,
+  parseMcpToolKey,
+  type Plugin,
+  type PluginArtifact,
+  type PluginPreset,
+  pluginRequest,
+} from "@/lib/plugins";
 import { EXAMPLES } from "@/lib/sources";
 import { cn } from "@/lib/utils";
+import type { ProjectDocument } from "@/lib/projects";
 
 const richOf = (m: UIMessage) => m.parts.filter(isToolUIPart).flatMap((p) =>
   getToolName(p) === "present_answer" && p.state === "output-available" ? [p.output as ReturnType<typeof presentAnswer>] : []
 );
+
+const pluginArtifactsOf = (m: UIMessage): PluginArtifact[] =>
+  mergePluginArtifacts(m.parts
+    .filter(isToolUIPart)
+    .flatMap((p) => (p.state === "output-available" ? extractPluginArtifacts(p.toolCallId, getToolName(p), p.output) : []))
+  );
 
 const textOf = (m: UIMessage) =>
   m.parts
@@ -190,11 +210,25 @@ function stepsOf(m: UIMessage, live: boolean): AgentStep[] {
       case "read_project_page":
         label = out ? "Projectpagina gelezen" : "Projectpagina lezen";
         break;
+      case "read_project_table": {
+        const r = out as Out | null;
+        label = r ? `${r.rows_matched} van ${r.rows_total} rijen uit projectbestand` : "Projecttabel lezen";
+        break;
+      }
       case "present_answer":
         label = out ? "Cijfers en bronnen klaargezet" : "Cijfers overzichtelijk maken";
         break;
-      default:
-        label = getToolName(p);
+      default: {
+        const mcp = parseMcpToolKey(getToolName(p));
+        if (mcp) {
+          const r = out as Out | null;
+          const who = r?.plugin_name ? `${r.plugin_name} (@${mcp.handle})` : `@${mcp.handle}`;
+          label = r ? `${who} · ${mcp.tool} uitgevoerd` : `${who} · ${mcp.tool} uitvoeren`;
+          detail = r?.text ? [String(r.text).slice(0, 160)] : [`MCP-plugin @${mcp.handle} aanroepen…`];
+        } else {
+          label = getToolName(p);
+        }
+      }
     }
     if (p.state === "output-error") label = `${label}: ${skipped ? "overgeslagen" : "mislukt"}`;
     return { id: p.toolCallId, label, status, detail };
@@ -305,7 +339,7 @@ function AnswerBody({ children, done, meta, text }: { children: ReactNode; done:
 }
 
 type Conversation = { id: string; messages: UIMessage[] };
-type ChatProps = { projectId?: string; projectName?: string; conversation?: Conversation; initialQuestion?: string; onSaved?: () => void };
+type ChatProps = { projectId?: string; projectName?: string; projectDocuments?: ProjectDocument[]; conversation?: Conversation; initialQuestion?: string; initialPlugins?: string[]; onSaved?: () => void };
 
 export function ChatPage(props: ChatProps) {
   const [session, setSession] = useState<Conversation | null>(props.conversation ?? null);
@@ -335,20 +369,37 @@ export function ChatPage(props: ChatProps) {
   }} />;
 }
 
-function ChatSession({ projectId, projectName, conversation, initialQuestion, onSaved, onOpen }: ChatProps & { conversation: Conversation; onOpen: (messages: UIMessage[], id: string) => void }) {
+function ChatSession({ projectId, projectName, projectDocuments, conversation, initialQuestion, initialPlugins, onSaved, onOpen }: ChatProps & { conversation: Conversation; onOpen: (messages: UIMessage[], id: string) => void }) {
   // resume: a dropped connection (a phone that locked) picks the answer up again when the page is back in view.
+  const artifactKey = (a: PluginArtifact) => `${a.id}:${a.revision ?? a.thumbnailUrl ?? ""}`;
+  const seenArtifacts = useRef<Set<string>>(
+    new Set(conversation.messages.flatMap((m) => pluginArtifactsOf(m).map(artifactKey)))
+  );
   const chat = useChat({
     resume: true,
     id: conversation.id,
     messages: conversation.messages,
-    onFinish: ({ messages, isAbort, isError }) => {
-      const question = messages.findLast((m) => m.role === "user");
+    onFinish: ({ messages: finished, isAbort, isError }) => {
+      const question = finished.findLast((m) => m.role === "user");
       if (question && !isAbort && !isError) announceAnswer(textOf(question));
+      for (const m of finished) {
+        for (const art of pluginArtifactsOf(m)) {
+          const key = artifactKey(art);
+          if (!seenArtifacts.current.has(key)) {
+            seenArtifacts.current.add(key);
+            if (art.embedUrl || art.thumbnailUrl) {
+              setEvidence(null);
+              setActiveArtifact(art);
+            }
+          }
+        }
+      }
       onSaved?.();
     },
   });
   const { messages, sendMessage, status, stop, error, regenerate, resumeStream } = chat;
   const [evidence, setEvidence] = useState<{ messageId: string; key: string } | null>(null);
+  const [activeArtifact, setActiveArtifact] = useState<PluginArtifact | null>(null);
   const busy = status === "submitted" || status === "streaming";
   const statusRef = useRef(status);
   useEffect(() => { statusRef.current = status; }, [status]);
@@ -381,11 +432,33 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
       })
       .catch(() => {});
   }, []);
+  const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [presets, setPresets] = useState<PluginPreset[]>([]);
+  const [selectedPlugins, setSelectedPlugins] = useState<string[]>(initialPlugins ?? []);
+  const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
+  const [pluginMenuTab, setPluginMenuTab] = useState<"active" | "add">("active");
+  const refreshPlugins = useCallback(() => {
+    pluginRequest("").then(setPlugins).catch(() => {});
+    pluginRequest("/presets").then(setPresets).catch(() => {});
+  }, []);
+  useEffect(() => {
+    refreshPlugins();
+  }, [refreshPlugins]);
+  const togglePlugin = useCallback((handle: string) => {
+    setSelectedPlugins((prev) => (prev.includes(handle) ? prev.filter((h) => h !== handle) : [...prev, handle]));
+  }, []);
+  const activePlugins = useMemo(() => {
+    const mentioned = extractPluginMentions(
+      draft,
+      plugins.map((p) => p.handle)
+    );
+    return Array.from(new Set([...selectedPlugins, ...mentioned]));
+  }, [draft, plugins, selectedPlugins]);
   const choose = (next: ModelSelection) => {
     setChoice(next);
     try { localStorage.setItem("model", JSON.stringify(next)); } catch {}
   };
-  const body = { projectId, ...choice };
+  const body = { projectId, plugins: activePlugins, ...choice };
   const context = messages.map((m) => (m.metadata as AnswerMeta | undefined)?.context).findLast(Boolean);
 
   const shownMessage = evidence ? messages.find((m) => m.id === evidence.messageId) : undefined;
@@ -394,8 +467,17 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
   const index = Math.max(0, citations.findIndex((c) => c.key === evidence?.key));
 
   const ask = (text: string) => {
+    const pluginsForTurn = Array.from(
+      new Set([
+        ...selectedPlugins,
+        ...extractPluginMentions(
+          text,
+          plugins.map((p) => p.handle)
+        ),
+      ])
+    );
     rememberConversation(chat.id);
-    return sendMessage({ text }, { body });
+    return sendMessage({ text }, { body: { projectId, plugins: pluginsForTurn, ...choice } });
   };
   // The answer runs on even when the connection drops, so Stop tells the server too.
   const halt = () => {
@@ -415,8 +497,9 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
     if (!q || asked.current) return;
     asked.current = true;
     rememberConversation(chat.id);
-    stop().then(() => sendMessage({ text: q }, { body: { projectId, ...choice } }));
-  }, [stop, sendMessage, projectId, initialQuestion, chat.id, choice]);
+    const pluginsForTurn = Array.from(new Set([...(initialPlugins ?? []), ...extractPluginMentions(q)]));
+    stop().then(() => sendMessage({ text: q }, { body: { projectId, plugins: pluginsForTurn, ...choice } }));
+  }, [stop, sendMessage, projectId, initialQuestion, initialPlugins, chat.id, choice]);
   const onIndex = useCallback(
     (i: number) => evidence && setEvidence({ messageId: evidence.messageId, key: citations[i].key }),
     [evidence, citations]
@@ -435,10 +518,10 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
     <CitationPreviewProvider docs={docs}>
       <div className={projectId ? "flex h-full min-h-0" : "flex h-dvh"}>
         <div className="flex min-w-0 flex-1 flex-col">
-          {!projectId && <header className="@container flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-8">
+          {!projectId && <header className="@container flex h-16 shrink-0 items-center justify-between gap-2 px-3 sm:gap-4 sm:px-8">
             <Logo />
-            <div className="flex items-center gap-2">
-              {!projectId && <Link className="raised rounded-full px-4 py-3" href="/projecten">Projecten</Link>}
+            <div className="flex items-center gap-1 sm:gap-2">
+              {!projectId && <Button asChild className="size-11 shrink-0 rounded-full @2xl:w-auto @2xl:px-4" size="icon" variant="secondary"><Link href="/projecten"><FolderOpen aria-hidden="true" className="size-[18px] @2xl:hidden" /><span className="sr-only @2xl:not-sr-only">Projecten</span></Link></Button>}
               <OrgSearch />
               {/* ponytail: phones only notify through a service worker, so the bell is for desktops */}
               <NotifyBell className="hidden md:inline-flex" />
@@ -447,13 +530,13 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
               {messages.length > 0 && (
                 <CommandButton
                   aria-label="Nieuwe vraag"
-                  className="min-w-11 shrink-0 justify-center whitespace-nowrap font-normal @2xl:pl-4"
-                  keysClassName="hidden @2xl:flex"
+                  className="min-w-11 shrink-0 justify-center whitespace-nowrap font-normal @5xl:pl-4"
+                  keysClassName="hidden @5xl:flex"
                   onClick={() => load([], generateId())}
                   shortcut="mod+shift+o"
                 >
-                  <SquarePen aria-hidden="true" className="size-[18px] @2xl:hidden" />
-                  <span className="hidden @2xl:inline">Nieuwe vraag</span>
+                  <SquarePen aria-hidden="true" className="size-[18px] @5xl:hidden" />
+                  <span className="hidden @5xl:inline">Nieuwe vraag</span>
                 </CommandButton>
               )}
               <AccountMenu />
@@ -498,24 +581,42 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
                     }
                     const thinking = streaming && !text && !steps.some((s) => s.status === "running");
                     const rich = richOf(m);
+                    const artifacts = pluginArtifactsOf(m);
                     return (
                       // The last turn fills the screen, so its question can sit at the top while the answer streams.
                       <section className={cn("mt-5", isLastTurn && "min-h-[calc(100dvh-20rem)]")} key={m.id}>
                         {steps.length > 0 && <AILoadingState className="mb-5" completed={!streaming && !missingAnswer(m)} steps={steps} />}
                         {thinking && <Thinking />}
                         {incomplete && <div className="my-4 rounded-xl border p-4" role="status"><p>{incomplete}</p><button className="mt-3 min-h-11 rounded-full px-4 ring-1 ring-border" disabled={busy} onClick={() => ask("Ga verder met de oorspronkelijke vraag en gebruik de al gevonden bronnen. Geef een antwoord met wat je hebt en benoem wat nog ontbreekt.")}>Ga verder met de gevonden bronnen</button></div>}
-                        <AnswerBody done={!streaming && Boolean(text || rich.length)} meta={m.metadata as AnswerMeta | undefined} text={textOf(m)}>
+                        <AnswerBody done={!streaming && Boolean(text || rich.length || artifacts.length)} meta={m.metadata as AnswerMeta | undefined} text={textOf(m)}>
+                          {artifacts.map((art) => (
+                            <AIPluginCard
+                              active={activeArtifact?.id === art.id}
+                              artifact={art}
+                              key={art.id}
+                              onOpenSideViewer={(next) => {
+                                setEvidence(null);
+                                setActiveArtifact(next);
+                              }}
+                            />
+                          ))}
                           {text && (
                             <Answer
                               activeKey={evidence?.messageId === m.id ? evidence.key : null}
-                              onCite={(key) => setEvidence({ messageId: m.id, key })}
+                              onCite={(key) => {
+                                setActiveArtifact(null);
+                                setEvidence({ messageId: m.id, key });
+                              }}
                               question={messages[i - 1] ? textOf(messages[i - 1]) : ""}
                               text={text}
                             />
                           )}
                           {rich.map((data, j) => (
                             <RichAnswer activeKey={evidence?.messageId === m.id ? evidence.key : null} data={data} key={j}
-                              onCite={(key) => setEvidence({ messageId: m.id, key })}
+                              onCite={(key) => {
+                                setActiveArtifact(null);
+                                setEvidence({ messageId: m.id, key });
+                              }}
                               question={messages[i - 1] ? textOf(messages[i - 1]) : ""} />
                           ))}
                         </AnswerBody>
@@ -547,19 +648,41 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
           <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8">
             <div className="mx-auto max-w-[46rem]">
               <AI_Prompt
+                documents={projectDocuments}
+                placeholder={projectId ? "Stel een vraag (typ @ voor projectbestanden en apps)…" : undefined}
                 busy={busy}
                 examples={messages.length || projectId ? undefined : EXAMPLES}
                 footer={<>
                   {choice && models.length > 0 && <AIModelSelector models={models} onChange={choose} value={choice} />}
+                  <AIPluginSelector
+                    defaultTab={pluginMenuTab}
+                    onChanged={refreshPlugins}
+                    onOpenChange={(next) => {
+                      setPluginMenuOpen(next);
+                      if (!next) setPluginMenuTab("active");
+                    }}
+                    onToggle={togglePlugin}
+                    open={pluginMenuOpen}
+                    plugins={plugins}
+                    presets={presets}
+                    selected={activePlugins}
+                  />
                   {context && <AIContextMeter className="ml-auto" limit={(models.find((m) => m.id === choice?.model) ?? MODELS[0]).contextWindow} segments={[
                     { id: "prompt", label: "Instructies en gesprek", tokens: context.prompt, color: "bg-muted-foreground/50" },
                     { id: "sources", label: "Gelezen bronnen", tokens: context.sources, color: "bg-(--series-1)" },
                   ]} />}
                 </>}
+                onAddPluginRequest={() => {
+                  setPluginMenuTab("add");
+                  setPluginMenuOpen(true);
+                }}
                 onStop={halt}
                 onSubmit={ask}
+                onTogglePlugin={togglePlugin}
                 onValueChange={setDraft}
+                plugins={plugins}
                 ref={promptRef}
+                selectedPlugins={activePlugins}
                 value={draft}
               />
               <p className="mt-2 text-center text-[0.85rem] text-muted-foreground">
@@ -577,6 +700,7 @@ function ChatSession({ projectId, projectName, conversation, initialQuestion, on
           onIndex={onIndex}
           open={Boolean(evidence && citations.length)}
         />
+        <AIPluginViewer artifact={activeArtifact} onClose={() => setActiveArtifact(null)} />
       </div>
     </CitationPreviewProvider>
   );

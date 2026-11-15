@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { generateText, isStepCount, tool, type UIMessage } from "ai";
+import { generateText, isStepCount, tool, type ToolSet, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
-import { finalAnswerStep, finishWhenPresented, MAX_STEPS, missingAnswer, outOfBudget, progressTitle, RESEARCH_STEPS, RESEARCH_TOKENS, researchEnd } from "./chat-policy.ts";
+import { finalAnswerStep, finishWhenPresented, MAX_STEPS, PLUGIN_FINISH_STEPS, missingAnswer, outOfBudget, progressTitle, RESEARCH_STEPS, RESEARCH_TOKENS, researchEnd } from "./chat-policy.ts";
 import { presentAnswer, richAnswerSchema } from "./rich-answer.ts";
 
 const answer = { summary: "Bronnen gecontroleerd. ".repeat(1000), view: "table" as const,
@@ -91,4 +91,30 @@ test("the token budget ends research early, and the final steps count from there
   assert.equal(outOfBudget({ steps: over }), false);
   assert.equal(outOfBudget({ steps: [...over, ...steps(10, 10)] }), true);
   assert.equal(researchEnd(steps(undefined as unknown as number)), RESEARCH_STEPS);  // a provider without usage: steps only
+});
+
+test("research token exhaustion preserves Canva status and export tools for a bounded finish phase", async () => {
+  const names = ["mcp__canva__get-create-design-async-job", "mcp__canva__get-export-formats", "mcp__canva__export-design"];
+  const extra = Object.fromEntries(names.map((name) => [name, tool({ inputSchema: z.object({}), execute: async () => ({ status: "completed" }) })]));
+  const completionTools: ToolSet = { ...tools, ...extra };
+  const expected = ["lookup", ...names, names[0], names[0], names[0], "present_answer"];
+  let calls = 0;
+  const model = new MockLanguageModelV4({ doGenerate: async (options) => {
+    const name = expected[calls];
+    const offered = options.tools?.map((t) => "name" in t ? t.name : "");
+    if (calls > 0 && calls <= PLUGIN_FINISH_STEPS) {
+      assert.deepEqual(offered, names, "finish steps retain status/export and exclude research and presentation");
+    }
+    return { content: [{ type: "tool-call", toolCallId: `finish-${calls++}`, toolName: name, input: JSON.stringify(name === "present_answer" ? answer : {}) }],
+      finishReason, usage: { ...usage, inputTokens: { total: RESEARCH_TOKENS, noCache: RESEARCH_TOKENS, cacheRead: 0, cacheWrite: 0 } }, warnings: [] };
+  } });
+  const result = await generateText({ model, tools: completionTools, prompt: "Maak een PowerPoint",
+    prepareStep: ({ stepNumber, steps }) => finalAnswerStep(stepNumber, "", steps, names),
+    stopWhen: [(context) => outOfBudget(context, names), finishWhenPresented] });
+  assert.equal(calls, PLUGIN_FINISH_STEPS + 2);
+  assert.equal(finishWhenPresented(result), true);
+  const steps = Array.from({ length: 1 + PLUGIN_FINISH_STEPS + 3 }, () => ({ usage: { inputTokens: RESEARCH_TOKENS } }));
+  assert.equal(outOfBudget({ steps: steps.slice(0, -1) }, names), false);
+  assert.equal(outOfBudget({ steps }, names), true);
+  assert.deepEqual(finalAnswerStep(1 + PLUGIN_FINISH_STEPS + 2, "", steps, names).activeTools, []);
 });

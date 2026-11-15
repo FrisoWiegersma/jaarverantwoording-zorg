@@ -173,14 +173,14 @@ export function OrgSearch() {
       <button
         aria-haspopup="dialog"
         aria-keyshortcuts="Meta+K Control+K"
-        className="raised inline-flex size-11 shrink-0 items-center justify-center gap-2 rounded-full transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring @3xl:w-auto @3xl:pr-2.5 @3xl:pl-4"
+        className="raised inline-flex size-11 shrink-0 items-center justify-center gap-2 rounded-full transition-[filter] hover:brightness-[1.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring @5xl:w-auto @5xl:pr-2.5 @5xl:pl-4"
         onClick={() => setOpen(true)}
         ref={trigger}
         type="button"
       >
         <Search aria-hidden="true" className="size-[18px] shrink-0" />
-        <span className="sr-only @3xl:not-sr-only @3xl:whitespace-nowrap">Zoek organisatie</span>
-        <span aria-hidden="true" className="ml-1 hidden gap-0.5 @3xl:flex">
+        <span className="sr-only @5xl:not-sr-only @5xl:whitespace-nowrap">Zoek organisatie</span>
+        <span aria-hidden="true" className="ml-1 hidden gap-0.5 @5xl:flex">
           <Kbd>{isMac ? "⌘" : "Ctrl"}</Kbd>
           <Kbd>K</Kbd>
         </span>

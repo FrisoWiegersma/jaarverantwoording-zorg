@@ -4,6 +4,7 @@ export const RESEARCH_STEPS = 24;
 /** The UI's text for a call to a tool that wasn't offered (Gemini still asks for one after research ended): never run, so not failed. */
 export const SKIPPED = "Niet uitgevoerd: het onderzoek was al afgerond.";
 export const MAX_STEPS = RESEARCH_STEPS + 3;
+export const PLUGIN_FINISH_STEPS = 6;
 /** Input tokens over all steps, the cost of an answer: every step resends the conversation. With parallel tool calls a
  * step can read a lot, so research also ends here. ponytail: fixed; the dearest answers in the 2026-11-11 eval used
  * 0.3M (fte of 7 UMCs) and 1.5M (an open-ended 7-UMC search). Tune from the input field of chat.finish. */
@@ -22,8 +23,8 @@ export function researchEnd(steps: Steps) {
 }
 
 /** Two tries at present_answer, then one in plain text, counted from where research ended. */
-export function outOfBudget({ steps }: { steps: Steps }) {
-  return steps.length >= researchEnd(steps) + 3;
+export function outOfBudget({ steps }: { steps: Steps }, finishTools: readonly string[] = []) {
+  return steps.length >= researchEnd(steps) + (finishTools.length ? PLUGIN_FINISH_STEPS : 0) + 3;
 }
 
 /** Failed calls must remain in the loop so the model can correct their input. */
@@ -31,8 +32,14 @@ export function finishWhenPresented({ steps }: { steps: ReadonlyArray<{ toolResu
   return steps.at(-1)?.toolResults.some((result) => result.toolName === "present_answer") ?? false;
 }
 
-export function finalAnswerStep(stepNumber: number, instructions: string, steps: Steps = []) {
-  const end = researchEnd(steps);
+export function finalAnswerStep<T extends string = never>(stepNumber: number, instructions: string, steps: Steps = [], finishTools: readonly T[] = []) {
+  const research = researchEnd(steps);
+  const end = research + (finishTools.length ? PLUGIN_FINISH_STEPS : 0);
+  if (stepNumber >= research && stepNumber < end) return {
+    activeTools: [...finishTools],
+    toolChoice: "auto" as const,
+    instructions: instructions + "\nZoek geen nieuwe cijfers of bronnen op en start geen nieuw ontwerp. Rond de bestaande plugin-taak af: controleer de status en exporteer het voltooide ontwerp in het gevraagde bestandsformaat. Geef daarna de werkelijk verkregen resultaatlink. Als dit niet lukt, benoem kort wat ontbreekt; een tabel of slide-indeling is geen voltooid bestand.",
+  };
   if (stepNumber < end) return {};
   const plainTextFallback = stepNumber >= end + 2;
   return {
