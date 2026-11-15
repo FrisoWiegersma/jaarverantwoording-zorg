@@ -40,6 +40,12 @@ main() {
     echo "Saved in $dir/.env. Ollama or another OpenAI-compatible server: see the comments there."
   fi
 
+  if ! grep -qE '^PRESENTON_PASSWORD=.+' .env; then
+    local presenton_password
+    presenton_password=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+    (umask 077 && printf '\nPRESENTON_PASSWORD=%s\n' "$presenton_password" >>.env)
+  fi
+
   echo
   echo "Building and starting; the first run takes a few minutes."
   docker compose up -d --build --wait

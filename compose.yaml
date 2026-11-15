@@ -6,12 +6,17 @@ services:
     environment:
       DATA_DIR: /app/data
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3210}
+      PRESENTON_URL: http://presenton
+      PRESENTON_PASSWORD: ${PRESENTON_PASSWORD:?Set a random PRESENTON_PASSWORD in .env}
     volumes:
       - digimv-data:/app/data
     # OCR on a vision model served from the host, such as Ollama (OCR_MODEL=compatible:...).
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped
+    depends_on:
+      presenton:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 30s
@@ -44,7 +49,30 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+  presenton:
+    image: ghcr.io/presenton/presenton@sha256:dd444e4384df0caeb7cb96a26bfa7543a12d2be19c83d661446b2087d09aed54
+    environment:
+      LLM: google
+      AUTH_USERNAME: integration
+      AUTH_PASSWORD: ${PRESENTON_PASSWORD:?Set a random PRESENTON_PASSWORD in .env}
+      GOOGLE_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_MODEL: ${PRESENTON_MODEL:-gemini-3.8-flash}
+      CAN_CHANGE_KEYS: "false"
+      DISABLE_ANONYMOUS_TRACKING: "true"
+      DISABLE_IMAGE_GENERATION: "true"
+      MEM0_ENABLED: "false"
+      PRESENTON_COMMUNITY_ENABLED: "false"
+    volumes:
+      - presenton-data:/app_data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1/api/v1/auth/status', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 volumes:
   digimv-data:
   web-logs:
   web-data:
+  presenton-data:

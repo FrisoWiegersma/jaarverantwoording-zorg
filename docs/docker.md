@@ -18,7 +18,7 @@ Clone the repository and, from its root:
 cp .env.example .env
 ```
 
-Edit `.env` and set the key of your provider (see [Configuration](#configuration)). Leave `APP_ORIGIN=http://localhost:3210` for a local installation.
+Edit `.env` and set the key of your provider (see [Configuration](#configuration)). Before the first Compose start, also append the private presentation-engine password with `printf '\nPRESENTON_PASSWORD=%s\n' "$(openssl rand -hex 32)" >> .env`. The installer does this automatically. Presentations use `GEMINI_API_KEY`; see [Presenton setup and limits](presentations.md). Leave `APP_ORIGIN=http://localhost:3210` for a local installation.
 
 ```sh
 docker compose up -d --build --wait
@@ -123,20 +123,23 @@ journalctl --user -u jaarverantwoording-deploy -f
 systemctl --user start jaarverantwoording-deploy
 ```
 
+Before deploying the release that introduces Presenton to an existing installation, add `PRESENTON_PASSWORD` once as described above. Keep it in `.env` across updates.
+
 After a failed deploy, the unit shows as failed in `systemctl --user --failed`. To retry the same commit, delete `.git/deploy-failed`. After changing the unit files, run `systemctl --user daemon-reload`.
 
 ## Back up the data
 
-Stop both services so the archive contains a consistent database and document cache. The backup is written to your current directory; keep it somewhere private and copy it off the Docker host.
+Stop the services so the archive contains a consistent database and document cache. The backup is written to your current directory; keep it somewhere private and copy it off the Docker host.
 
 ```sh
-docker compose stop web api
+docker compose stop web api presenton
 docker compose run --rm --no-deps -T api .venv/bin/python -c "import sys,tarfile; t=tarfile.open(fileobj=sys.stdout.buffer,mode='w|gz'); t.add('/app/data',arcname='data'); t.close()" > digimv-backup.tar.gz
 docker compose run --rm --no-deps -T web cat /app/data/auth.db > auth-backup.db
+docker compose run --rm --no-deps -T --user root --entrypoint tar presenton -czf - -C /app_data . > presenton-backup.tar.gz
 docker compose up -d --wait
 ```
 
-The first archive holds the API's data volume; `auth-backup.db` holds the accounts of the built-in login (skip that line with `AUTH_MODE=cloudflare`). To restore the accounts, put the file back in an empty `web-data` volume with `docker compose run --rm --no-deps -T web sh -c 'cat > /app/data/auth.db' < auth-backup.db`. Neither contains `.env`. Back up the environment file separately using your normal secret-storage process. Do not copy a live SQLite database alone while its WAL is being written.
+The first archive holds the API's data volume; `auth-backup.db` holds the accounts of the built-in login (skip that line with `AUTH_MODE=cloudflare`). To restore the accounts, put the file back in an empty `web-data` volume with `docker compose run --rm --no-deps -T web sh -c 'cat > /app/data/auth.db' < auth-backup.db`. The Presenton archive holds the presentation engine’s own database, source objects and assets. Restore it only into an empty `presenton-data` volume, with the services stopped. None of these backups contains `.env`. Back up the environment file separately using your normal secret-storage process. Do not copy a live SQLite database alone while its WAL is being written.
 
 ## Restore without overwriting the old volume
 

@@ -27,6 +27,7 @@ The same by hand:
 ```sh
 git clone https://github.com/FrisoWiegersma/jaarverantwoording-zorg.git && cd jaarverantwoording-zorg
 cp .env.example .env   # set your provider's key
+printf '\nPRESENTON_PASSWORD=%s\n' "$(openssl rand -hex 32)" >> .env
 docker compose up -d --build --wait
 ```
 
@@ -39,9 +40,10 @@ Set as many providers in `.env` as you like, including Ollama, OpenRouter or any
 - **Look an organisation up** with ⌘K or Ctrl K and read its key figures over the years, straight from DigiMV, without the model.
 - **Compare** two to four organisations on shared chart scales, with the filed values in a table beneath.
 - **Export** an answer's table to Excel, with numeric cells and links to the sources, or copy it into a spreadsheet.
+- **Make presentations.** Ask for a PowerPoint, or mention `@presenton`. The built-in, self-hosted engine creates slides, shows them beside the chat, exports PPTX/PDF, and edits individual slides through follow-up requests. It uses your Gemini key; Canva is optional. See [presentations](docs/presentations.md) for setup and export limits.
 - **Find the buried PDF.** It searches Woo releases, gazettes and parliamentary papers, local regulations, EU tenders and regulators' decisions, follows links on any public site (insurers' purchasing policies, IZA regional plans, council portals), reads the PDF and quotes the page.
 - **Read open data.** CSV, Excel and JSON files, also inside ZIP and 7z archives, filtered on a column or ranked for a top-N question, with a citation per row. Every CBS StatLine table too.
-- **Work in projects.** Upload PDFs, Markdown notes or a whole folder, keep instructions and conversations together, and save the files an answer cites into one or more projects, so later chats can still read them when the public link has expired. Private material is sent to the AI provider only after you allow it for that project; see [projects and privacy](docs/projects.md).
+- **Work in projects.** Upload PDF, PowerPoint (.pptx), Word (.docx), Excel (.xlsx), CSV, text or Markdown files, or a whole folder. Mention a project file with `@` to use it as a source or style reference. PowerPoint imports retain slide text and available theme colours and fonts; they do not reproduce an editable template exactly. Keep instructions and conversations together, and save cited files into projects. Private material is sent to the AI provider only after you allow it for that project; see [projects and privacy](docs/projects.md).
 - **Pick up later.** Conversations are saved, an answer keeps running if the connection drops, and the bell tells you when it is done.
 - **Your own account.** Sign in with email and password, or through Cloudflare Access. Conversations and projects belong to their owner.
 
