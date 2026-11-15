@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mutationAllowed, projectApi } from "./project-server.ts";
 import { record, replay, startAnswer, stopAnswer } from "./streams.ts";
-import { entryFiles } from "./projects.ts";
+import { entryFiles, projectFileMention, mentionedProjectFiles, projectRequest, type ProjectDocument } from "./projects.ts";
 
 test("project mutations reject cross-site requests", () => {
   const before = process.env.APP_ORIGIN;
@@ -12,6 +12,31 @@ test("project mutations reject cross-site requests", () => {
     assert.equal(mutationAllowed(new Request("https://zorg.example/api/chat", { headers: { origin: "https://zorg.example" } })), true);
     assert.equal(mutationAllowed(new Request("https://zorg.example/api/chat", { headers: { "sec-fetch-site": "cross-site" } })), false);
   } finally { if (before === undefined) delete process.env.APP_ORIGIN; else process.env.APP_ORIGIN = before; }
+});
+
+test("quoted file mentions preserve spaces and resolve only within the active project", () => {
+  const file: ProjectDocument = { id: "one", filename: "Presentation 2021.pptx", kind: "pptx", status: "ready", pages: 5, processed: 5, archived: 0, error: "" };
+  const text = `Maak met @canva een presentatie in de stijl van ${projectFileMention(file)}`;
+  assert.equal(projectFileMention(file), '@"Presentation 2021.pptx"');
+  assert.deepEqual(mentionedProjectFiles(text, [file]), [file]);
+  assert.deepEqual(mentionedProjectFiles(text, [{ ...file, archived: 1 }]), []);
+  assert.deepEqual(mentionedProjectFiles(text, [{ ...file, filename: "Other.pptx" }]), []);
+});
+
+test("uploads have a timeout and report size limits instead of generic proxy failures", async () => {
+  const original = globalThis.fetch;
+  const upload = new FormData();
+  upload.set("file", new Blob(["test"]), "test.pptx");
+  try {
+    globalThis.fetch = async (_url, init) => {
+      assert.ok(init?.signal instanceof AbortSignal);
+      assert.equal(init?.body, upload);
+      return new Response("", { status: 413 });
+    };
+    await assert.rejects(projectRequest("/p/documents", "POST", upload), /25 MB/);
+    globalThis.fetch = async () => { throw new DOMException("timeout", "TimeoutError"); };
+    await assert.rejects(projectRequest("/p/documents", "POST", upload), /Controleer bij Bronnen/);
+  } finally { globalThis.fetch = original; }
 });
 
 test("project requests require identity and forward it to the private API", async () => {

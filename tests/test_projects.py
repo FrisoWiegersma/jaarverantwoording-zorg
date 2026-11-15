@@ -103,6 +103,7 @@ class ProjectsTest(unittest.TestCase):
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/documents/{did}/pages/1?for_model=true").status_code, 403)
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/search?q=eigen&for_model=true").status_code, 403)
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/documents/{did}/pages/2").status_code, 404)
+
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/documents/{did}/pages/1.png?quote=108.256").headers["x-found"], "all")
         scan = self.upload(self.pdf(scanned=True)).json()["id"]
         with patch.object(digimv, "ocr", side_effect=AssertionError("No consent")):
@@ -116,6 +117,28 @@ class ProjectsTest(unittest.TestCase):
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/model-context").status_code, 200)
         self.call("PUT", f"/projects/{self.pid}", json={**p, "allow_private": False})
         self.assertEqual(self.call("GET", f"/projects/{self.pid}/model-context").status_code, 403)
+
+    def test_office_and_text_uploads_are_searchable_private_and_downloadable(self):
+        try:
+            from test_project_imports import office
+        except ModuleNotFoundError:
+            from tests.test_project_imports import office
+
+        word = office(
+            {
+                "word/document.xml": '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Omzet 2025: 123 euro</w:t></w:r></w:p></w:document>'
+            }
+        )
+        for name, data in [("Verslag.docx", word), ("Omzet.csv", b"jaar;omzet\n2025;123"), ("Interview.txt", b"Omzet 2025: 123 euro")]:
+            result = self.call("POST", f"/projects/{self.pid}/documents", files={"file": (name, data, "application/octet-stream")})
+            self.assertEqual(result.status_code, 201, result.text)
+            did = result.json()["id"]
+            path = f"/projects/{self.pid}/documents/{did}"
+            self.assertEqual(self.call("GET", path + "/original").content, data)
+            self.assertEqual(self.call("GET", path + "/original", headers=self.bob).status_code, 404)
+            self.assertEqual(self.call("GET", path + "/pages/1?for_model=true").status_code, 403)
+            self.assertIn("123", self.call("GET", path + "/pages/1").json()["text"])
+        self.assertEqual(self.call("POST", f"/projects/{self.pid}/documents", files={"file": ("Broken.pptx", b"not a zip")}).status_code, 400)
 
     def test_existing_chat_database_migrates_without_losing_history(self):
         import sqlite3

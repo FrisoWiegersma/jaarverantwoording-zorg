@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 
 import digimv
+import project_imports
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
@@ -182,6 +183,29 @@ async def upload(pid: str, request: Request, file: UploadFile = File(...)):
         if len(data) > MAX_FILE:
             raise HTTPException(413, "Maximaal 25 MB per bestand")
     filename = (file.filename or "Document.pdf").replace("\\", "/").split("/")[-1][:200]
+    kind = filename.rsplit(".", 1)[-1].lower()
+    if kind in project_imports.FORMATS:
+        try:
+            pages = project_imports.extract(bytes(data), kind)
+        except Exception as e:
+            raise HTTPException(400, f"Bestand kon niet worden gelezen. Gebruik een geldig {kind.upper()}-bestand zonder wachtwoord.") from e
+        did = uuid.uuid4().hex
+        target = path_for(did)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        try:
+            with database() as db:
+                project(db, pid, owner(request))
+                db.execute(
+                    "INSERT INTO project_documents(id,project_id,filename,kind,pages,status,created) VALUES (?,?,?,?,?,'ready',?)",
+                    (did, pid, filename, kind, len(pages), now()),
+                )
+                for number, text in enumerate(pages, 1):
+                    store_page(db, did, number, text, kind)
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
+        return {"id": did}
     if filename.lower().endswith(".md"):
         try:
             text = bytes(data).decode("utf-8-sig")
@@ -472,6 +496,8 @@ def download_source(pid: str, did: str, request: Request):
         d = document(db, pid, did)
         if d["kind"] == "pdf":
             return FileResponse(path_for(did), media_type="application/pdf", filename=d["filename"])
+        if d["kind"] in project_imports.MEDIA_TYPES:
+            return FileResponse(path_for(did), media_type=project_imports.MEDIA_TYPES[d["kind"]], filename=d["filename"])
         text = db.execute("SELECT text FROM project_pages WHERE document_id=? AND page=1", (did,)).fetchone()[0]
         name = d["filename"] if d["kind"] == "markdown" else d["filename"] + ".txt"
         return Response(

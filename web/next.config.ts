@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
+  // Project files allow 25 MiB; include room for the multipart form headers.
+  experimental: { proxyClientMaxBodySize: "26mb" },
   turbopack: {
     rules: {
       "*.css": {
