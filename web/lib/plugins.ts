@@ -171,10 +171,19 @@ export function mergePluginArtifacts(items: PluginArtifact[]): PluginArtifact[] 
   return Array.from(merged.values());
 }
 
+const NON_DELIVERABLE_TOOLS =
+  /^(?:search|list|find|browse|start[-_]editing|perform[-_]editing|cancel[-_]editing|copy[-_]design|move[-_]item|create[-_]folder|create[-_]comment|reply[-_]to[-_]comment|resolve[-_]comment|upload[-_]asset|get[-_]upload[-_]asset|get[-_](?:assets|brand|export[-_]formats|design[-_](?:pages|content|thumbnail|thumbnails)|presenter[-_]notes|slide))(?:$|[-_])/i;
+
+function canvaDesignId(o: Record<string, unknown>): string | undefined {
+  if (typeof o.id === "string" && /^D[\w-]{10}$/.test(o.id)) return o.id;
+  if (typeof o.design_id === "string" && /^D[\w-]{10}$/.test(o.design_id)) return o.design_id;
+  return undefined;
+}
+
 /** Design IDs connect Canva short links, metadata and exported files into one deliverable. */
 export function extractPluginArtifacts(toolCallId: string, toolName: string, output: unknown): PluginArtifact[] {
   const mcp = parseMcpToolKey(toolName);
-  if (!mcp || !output || typeof output !== "object") return [];
+  if (!mcp || NON_DELIVERABLE_TOOLS.test(mcp.tool) || !output || typeof output !== "object") return [];
   const rec = output as Record<string, unknown>;
   const pluginName = typeof rec.plugin_name === "string" ? rec.plugin_name : mcp.handle;
   const objects = pluginObjects(output);
@@ -190,44 +199,96 @@ export function extractPluginArtifacts(toolCallId: string, toolName: string, out
       revision: typeof a.revision === "string" ? a.revision : undefined,
     }];
   }
-  const design = objects.find((o) => typeof o.id === "string" && /^D[\w-]{10}$/.test(o.id));
-  const designId = design?.id as string | undefined;
+  const design = objects.find((o) => Boolean(canvaDesignId(o)));
+  const designId = design ? canvaDesignId(design) : undefined;
   const title = typeof design?.title === "string" ? design.title : undefined;
   const thumbnail = design?.thumbnail as { url?: string } | undefined;
   const thumbnailUrl = thumbnail?.url || objects.map((o) => o.thumbnail_url || o.thumbnailUrl).find((u): u is string => typeof u === "string");
   const items: PluginArtifact[] = [];
-  const add = (raw: unknown, label?: string) => {
+  const add = (raw: unknown, label?: string, localObj?: Record<string, unknown>) => {
     if (typeof raw !== "string") return;
     try {
       const url = new URL(raw.trim());
       if (!["http:", "https:"].includes(url.protocol)) return;
-      if (/\.(png|jpe?g|webp|gif|svg)$/i.test(url.pathname) || /^(media\.canva\.com|.*canva-static.*)$/.test(url.hostname) || url.pathname.includes("thumbnail")) return;
+      if (/\.(png|jpe?g|webp|gif|svg)$/i.test(url.pathname) || /^(media\.canva\.com|design\.canva\.ai|.*canva-static.*)$/.test(url.hostname) || url.pathname.includes("thumbnail")) return;
       const isDownload = /\.(pptx|pdf|docx|xlsx|zip)$/i.test(url.pathname);
-      const id = designId || (/canva\.com$/.test(url.hostname) ? /\/(D[\w-]{10})(?:\/|$)/.exec(url.pathname)?.[1] : undefined);
+      const localId = localObj ? canvaDesignId(localObj) : undefined;
+      const id = localId || designId || (/canva\.com$/.test(url.hostname) ? /\/(D[\w-]{10})(?:\/|$)/.exec(url.pathname)?.[1] : undefined);
       const canonical = mcp.handle === "canva" && id ? `https://www.canva.com/design/${id}/view` : url.href;
       const normalized = canonical.replace(/\/(edit|view)\/?$/, "/view");
+      const localThumb = (localObj?.thumbnail as { url?: string } | undefined)?.url;
       items.push({
         id: id ? `${mcp.handle}:${id}` : `${toolCallId}-${items.length}`,
         plugin: mcp.handle, pluginName, tool: mcp.tool,
-        title: title || label || `${pluginName}-ontwerp`,
+        title: label || title || `${pluginName}-ontwerp`,
         url: id ? canonical : normalized,
-        embedUrl: toEmbedUrl(normalized), thumbnailUrl, designId: id,
+        embedUrl: toEmbedUrl(normalized), thumbnailUrl: localThumb || thumbnailUrl, designId: id,
         ...(isDownload ? { downloadUrl: url.href, format: url.pathname.split(".").at(-1)?.toLowerCase() } : {}),
       });
     } catch { /* Invalid links are not deliverables. */ }
   };
   for (const obj of objects) {
+    if (typeof obj.width === "number" && typeof obj.height === "number" && !canvaDesignId(obj) && typeof obj.title !== "string") continue;
     for (const [key, value] of Object.entries(obj)) {
-      if (/^(url|uri|edit_url|view_url|href|link|web_url|design_url)$/.test(key)) add(value, typeof obj.title === "string" ? obj.title : typeof obj.name === "string" ? obj.name : undefined);
-      if (key === "urls" && Array.isArray(value)) value.forEach((url) => add(url));
+      if (/^(url|uri|edit_url|view_url|href|link|web_url|design_url)$/.test(key)) add(value, typeof obj.title === "string" ? obj.title : typeof obj.name === "string" ? obj.name : undefined, obj);
+      if (key === "urls" && Array.isArray(value)) value.forEach((url) => add(url, undefined, obj));
       if (key === "text" && typeof value === "string") {
         try { JSON.parse(value); continue; } catch { /* Plain text may contain Markdown links. */ }
-        for (const match of value.matchAll(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g)) add(match[2], match[1]);
-        for (const match of value.matchAll(/https?:\/\/[^\s)"'<>]+/g)) add(match[0]);
+        for (const match of value.matchAll(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g)) add(match[2], match[1], obj);
+        for (const match of value.matchAll(/https?:\/\/[^\s)"'<>]+/g)) add(match[0], undefined, obj);
       }
     }
   }
   return mergePluginArtifacts(items);
+}
+
+/** Extract merged deliverables from all tool calls in a message, excluding uncommitted design copies. */
+export function extractMessagePluginArtifacts(
+  parts: ReadonlyArray<{ toolCallId: string; toolName: string; state?: string; output?: unknown }>
+): PluginArtifact[] {
+  const uncommittedCopies = new Set<string>();
+  const validArtifacts: PluginArtifact[] = [];
+  for (const p of parts) {
+    if (p.state !== "output-available") continue;
+    const mcp = parseMcpToolKey(p.toolName);
+    if (!mcp) continue;
+    if (/^copy[-_]design$/i.test(mcp.tool)) {
+      for (const obj of pluginObjects(p.output)) {
+        const id = canvaDesignId(obj);
+        if (id) uncommittedCopies.add(`${mcp.handle}:${id}`);
+      }
+      continue;
+    }
+    if (/^(commit[-_]editing[-_]transaction|export[-_]design|get[-_]export[-_]design[-_]async[-_]job)$/i.test(mcp.tool)) {
+      uncommittedCopies.clear();
+    }
+    for (const art of extractPluginArtifacts(p.toolCallId, p.toolName, p.output)) {
+      if (!uncommittedCopies.has(art.id)) validArtifacts.push(art);
+    }
+  }
+  return mergePluginArtifacts(validArtifacts);
+}
+
+/** Compact MCP tool output for the model context so duplicate content blocks do not blow up token budgets. */
+export function mcpToolModelOutput(output: unknown) {
+  let text = "";
+  if (!output || typeof output !== "object") {
+    text = String(output ?? "");
+  } else {
+    const rec = output as Record<string, unknown>;
+    if (rec.structuredContent !== undefined) {
+      const plainText = typeof rec.text === "string" && rec.text && !rec.text.trim().startsWith("{") ? rec.text.slice(0, 60_000) : undefined;
+      text = JSON.stringify({ ...(plainText ? { text: plainText } : {}), structuredContent: rec.structuredContent }).slice(0, 120_000);
+    } else if (typeof rec.text === "string") {
+      text = rec.text.slice(0, 120_000);
+    } else {
+      text = JSON.stringify(output).slice(0, 120_000);
+    }
+  }
+  return {
+    type: "content" as const,
+    value: [{ type: "text" as const, text }],
+  };
 }
 
 /** Space repeated status checks for the same async job; ordinary tool calls run immediately. */

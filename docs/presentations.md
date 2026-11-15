@@ -17,6 +17,16 @@ Keep the password across updates. Presenton bootstraps its internal service acco
 
 Outside Compose, set `PRESENTON_URL` and `PRESENTON_PASSWORD` on the API, and configure the private Presenton instance with `AUTH_USERNAME=integration` and the same `AUTH_PASSWORD`. Never put the internal URL or password into a user-created remote MCP plugin: that separate plugin path continues to reject private addresses.
 
+## Design
+
+New decks use the app's own Presenton templates `jaarverslag-licht` (default: reports, boards, print) and `jaarverslag-donker` (on screen). Both are generated from one set of eleven layouts in `presenton/build_templates.py`: cover, statement, one large figure, three figures, chart with findings, multi-year trend, comparison, breakdown, table, points and closing slide. Compose mounts `presenton/templates/` into the Presenton container, which imports the templates at startup. Edit the generator, run `uv run python presenton/build_templates.py`, and restart Presenton; `tests/test_presenton_templates.py` fails when the committed JSON is out of date or a text slot cannot hold its `max_length`.
+
+The 16 built-in Presenton templates stay available by name. After generation the API applies the deck palette (`palette` or `accent_color`, with brighter accents on dark), highlights one bar per chart, tidies tables and adds a footer with the real `/bron/` links from the supplied content. `general` also gets layout fixes; other built-in templates keep their own colours.
+
+`review_presentation` reports `unsourced_number` for any figure on a slide that is not in the supplied content and is not a sum, difference or percentage of figures in it. It cannot catch invented explanations or wrong labels.
+
+To judge a design change by eye, run `scripts/render_samples.py` in the API container (see its docstring); it renders fictitious sample decks and deletes them again.
+
 ## Files and privacy
 
 The adapter stores owner-scoped local presentation IDs, remote task IDs, revisions and up to twenty source snapshots for undo in `DATA_DIR/chats.db`. Original Presenton data lives in `presenton-data`; downloaded exports live in `DATA_DIR/presentations/`. Back up both volumes and `.env`. No engine credentials, internal URLs or remote presentation IDs are sent to the browser. Metadata, thumbnails, PPTX and PDF routes all check the signed-in owner. Presentations created with private project permission are also bound to that project; revoking permission prevents subsequent file and tool access. In-flight provider requests cannot be recalled.
@@ -34,7 +44,7 @@ Run `PYTHONPATH=api uv run python tests/test_presentations.py` for ownership, co
 | Tool | Control |
 | --- | --- |
 | `create_presentation` | Generate a new deck or one-slide infographic from supplied facts |
-| `review_presentation` | Send actual rendered slide images to the chat model, with warnings for placeholders, small body text and missing visible sources; check every slide before delivery |
+| `review_presentation` | Send actual rendered slide images to the chat model, with warnings for placeholders, small body text, missing visible sources and unsourced figures; check every slide before delivery |
 | `get_presentation_async_job` | Wait on an existing generation task |
 | `get_presentation` / `list_presentations` | Read the deck or find earlier work |
 | `get_slide` | Read one complete slide, including its structured UI tree |

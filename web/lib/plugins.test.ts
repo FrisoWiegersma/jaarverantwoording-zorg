@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createPluginPollDelay,
+  extractMessagePluginArtifacts,
   extractPluginArtifacts,
   extractPluginMentions,
   findActiveMention,
   mcpToolKey,
+  mcpToolModelOutput,
   mergePluginArtifacts,
   parseMcpToolKey,
   toEmbedUrl,
@@ -112,4 +114,88 @@ test("Presenton uses one private artifact for preview and PPTX, rejecting foreig
   assert.equal(merged[0].pages?.length, 1);
   assert.equal(merged[0].downloadUrl, `${root}/file.pptx`);
   assert.deepEqual(extractPluginArtifacts("bad", "mcp__presenton__get_presentation", { artifact: { ...artifact, url: "https://evil.test/file.pdf" } }), []);
+});
+
+test("search, copy, transaction tools and uncommitted copies never produce deliverable cards", () => {
+  const searchOutput = {
+    plugin_name: "Canva",
+    text: JSON.stringify({
+      items: [
+        {
+          design_id: "DAHa_1lmP0I",
+          title: "LUMC bedrijfsopbrengsten 2025",
+          edit_url: "https://www.canva.com/d/edit-1",
+          thumbnail: { width: 450, height: 253, url: "https://design.canva.ai/thumb-1" },
+        },
+      ],
+    }),
+  };
+  assert.deepEqual(extractPluginArtifacts("s1", "mcp__canva__search-designs", searchOutput), []);
+  assert.deepEqual(extractPluginArtifacts("c1", "mcp__canva__copy-design", {
+    plugin_name: "Canva",
+    text: JSON.stringify({ design: { id: "DAHbArulGL4", title: "LUMC bedrijfsopbrengsten 2025", urls: { edit_url: "https://www.canva.com/d/edit-2" } } }),
+  }), []);
+  assert.deepEqual(extractPluginArtifacts("tx1", "mcp__canva__start-editing-transaction", searchOutput), []);
+  assert.deepEqual(extractPluginArtifacts("op1", "mcp__canva__perform-editing-operations", searchOutput), []);
+
+  // An uncommitted copy inspected via get-design must not become a deliverable card until committed or exported.
+  const copyPart = {
+    toolCallId: "copy",
+    toolName: "mcp__canva__copy-design",
+    state: "output-available",
+    output: { text: JSON.stringify({ design: { id: "DAHbArulGL4", title: "LUMC bedrijfsopbrengsten 2025" } }) },
+  };
+  const getPart = {
+    toolCallId: "get",
+    toolName: "mcp__canva__get-design",
+    state: "output-available",
+    output: {
+      plugin_name: "Canva",
+      text: JSON.stringify({
+        design: {
+          id: "DAHbArulGL4",
+          title: "LUMC bedrijfsopbrengsten 2025",
+          thumbnail: { width: 450, height: 253, url: "https://design.canva.ai/thumb-copy" },
+          urls: { view_url: "https://www.canva.com/d/view-copy" },
+        },
+      }),
+    },
+  };
+  assert.deepEqual(extractMessagePluginArtifacts([copyPart, getPart]), []);
+
+  const commitPart = {
+    toolCallId: "commit",
+    toolName: "mcp__canva__commit-editing-transaction",
+    state: "output-available",
+    output: { text: JSON.stringify({ status: "committed" }) },
+  };
+  const getAfterCommit = {
+    ...getPart,
+    toolCallId: "get-after",
+    output: {
+      plugin_name: "Canva",
+      text: JSON.stringify({
+        design: {
+          id: "DAHbArulGL4",
+          title: "Gemeente Leiden – Financiën Wmo-begeleiding 2025",
+          urls: { view_url: "https://www.canva.com/d/view-copy" },
+        },
+      }),
+    },
+  };
+  const committed = extractMessagePluginArtifacts([copyPart, getPart, commitPart, getAfterCommit]);
+  assert.equal(committed.length, 1);
+  assert.equal(committed[0].designId, "DAHbArulGL4");
+  assert.equal(committed[0].title, "Gemeente Leiden – Financiën Wmo-begeleiding 2025");
+});
+
+test("mcpToolModelOutput strips duplicate content blocks from model context", () => {
+  const out = mcpToolModelOutput({
+    plugin: "canva",
+    plugin_name: "Canva",
+    tool: "start-editing-transaction",
+    text: '{"transaction_id":"tx-1"}',
+    content: [{ type: "text", text: '{"transaction_id":"tx-1"}' }],
+  });
+  assert.deepEqual(out, { type: "content", value: [{ type: "text", text: '{"transaction_id":"tx-1"}' }] });
 });

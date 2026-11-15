@@ -4,6 +4,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy DATA_DIR=/app/data PYTHONPATH=/app/a
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY api/ api/
+COPY presenton/ presenton/
 COPY tests/ tests/
 RUN for t in tests/test_*.py; do .venv/bin/python "$t" || exit 1; done
 RUN useradd --uid 10001 --create-home app && mkdir /app/data && chown app:app /app/data

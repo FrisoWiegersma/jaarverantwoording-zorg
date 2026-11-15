@@ -302,6 +302,152 @@ class PresentationsTest(unittest.TestCase):
             self.assertEqual(len(self.calls), before)
         self.assertIsNone(presentations.NoRedirect().redirect_request(None, None, 302, "redirect", {}, "http://evil.test"))
 
+    def test_style_deck_removes_ai_defaults_and_adds_editorial_palette(self):
+        deck = {
+            "title": "Wmo-begeleiding",
+            "content": "Bron: CBS Iv3 · 45071NED · Leiden",
+            "slides": [
+                {
+                    "index": 0,
+                    "speaker_note": "",
+                    "ui": {
+                        "id": "title_intro",
+                        "components": [
+                            {"id": "image_showcase_card", "position": {"x": 88.0, "y": 208.0}, "elements": [{"type": "image", "data": "/static/images/placeholder.jpg"}]},
+                            {
+                                "id": "right_text_panel",
+                                "position": {"x": 672.0, "y": 163.0},
+                                "elements": [
+                                    {"type": "text", "name": "headline_text", "font": {"size": 60.0, "color": "#111827", "bold": True}, "runs": [{"text": "VOORBEELDGEGEVENS"}]},
+                                    {"type": "vector", "points": [{"x": 0.0, "y": 144.0}, {"x": 80.0, "y": 144.0}, {"x": 80.0, "y": 148.0}, {"x": 0.0, "y": 148.0}], "fill": {"color": "#9333EA"}},
+                                    {"type": "text", "name": "body_copy", "font": {"size": 16.0, "color": "#4B5563"}, "runs": [{"text": "Korte samenvatting."}]},
+                                ],
+                            },
+                        ],
+                    },
+                },
+                {
+                    "index": 1,
+                    "speaker_note": "Bron: CBS Iv3 45071NED",
+                    "ui": {
+                        "id": "title_description_chart_cards",
+                        "components": [
+                            {
+                                "id": "large_chart_card",
+                                "position": {"x": 80.0, "y": 192.0},
+                                "elements": [
+                                    {
+                                        "type": "chart",
+                                        "chart_type": "bar",
+                                        "colors": ["#3B82F6", "#EF4444", "#10B981"],
+                                        "grid_color": "#A855F7",
+                                        "legend": True,
+                                        "categories": ["2024", "2025"],
+                                        "series": [{"name": "Omzet", "values": [100, 120]}],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                },
+            ],
+        }
+        before = {i["problem"] for i in presentations.quality_issues(deck)}
+        self.assertEqual(before, {"placeholder_images", "small_body_text", "ai_template_colors", "no_visible_source_label"})
+        self.assertTrue(presentations.style_deck(deck, palette="warm_paper", accent_color="#9F1239"))
+        self.assertEqual(presentations.quality_issues(deck), [])
+        chart = deck["slides"][1]["ui"]["components"][0]["elements"][0]
+        self.assertEqual(chart["colors"], [presentations._PALETTES["warm_paper"]["context"], "#9F1239"])
+        self.assertFalse(chart["legend"])
+        self.assertEqual(chart["data_labels"], "top")
+        self.assertEqual(deck["slides"][0]["ui"]["components"][0]["elements"][0]["runs"][0]["text"], "Voorbeeldgegevens")
+
+    def test_style_deck_keeps_card_values_visible_and_sources_real(self):
+        card = {
+            "type": "group",
+            "name": "metric_block",
+            "children": [
+                {"type": "text", "name": "metric_value", "runs": [{"text": "€ 98,3 mln"}]},
+                {"type": "vector", "points": [{"x": 0.0, "y": 0.0}, {"x": 10.0, "y": 10.0}], "fill": {"color": "#9333EA"}},
+                {"type": "text", "name": "metric_description", "runs": [{"text": "Opbrengsten 2024. Bron: Verzonnen jaarverslag"}]},
+            ],
+        }
+        deck = {
+            "title": "Basalt",
+            "content": "- Opbrengsten 2024: € 98,3 mln. Bron: /bron/digimv/basalt/2025/opbrengsten\n- Resultaat: € 6,8 mln. Bron: /bron/digimv/basalt/2025/resultaat",
+            "slides": [
+                {"index": 0, "ui": {"components": [{"id": "x", "elements": [{"type": "text", "runs": [{"text": "Titel"}]}]}]}},
+                {
+                    "index": 1,
+                    "speaker_note": "Zie /bron/jaarverslag-basalt-2025.",
+                    "ui": {"components": [{"id": "three_metric_grid", "elements": [{"type": "grid", "children": [card]}]}]},
+                },
+            ],
+        }
+        presentations.style_deck(deck)
+        group = deck["slides"][1]["ui"]["components"][0]["elements"][0]["children"][0]
+        self.assertEqual(group["children"][0]["type"], "vector")
+        self.assertEqual(presentations._text_of(group["children"][2]), "Opbrengsten 2024.")
+        footer = next(c for c in deck["slides"][1]["ui"]["components"] if c["id"] == "editorial_footer")
+        self.assertEqual(presentations._text_of(footer["elements"][1]), "Bron: /bron/digimv/basalt/2025/opbrengsten")
+
+    def test_fit_text_shrinks_before_clipping(self):
+        node = {"type": "text", "size": {"width": 280.0, "height": 60.0}, "font": {"size": 24.0, "line_height": 1.2}, "runs": [{"text": "Een lange ondertitel die bij vierentwintig pixels niet in twee regels past"}]}
+        presentations._fit_text(node, min_size=16.0, grow=False)
+        self.assertLess(node["font"]["size"], 24.0)
+
+    def test_unsourced_numbers_are_flagged_but_derived_ones_pass(self):
+        deck = {
+            "content": "- Personeel: 1.012 fte (2024: 968 fte). Bron: /bron/x/fte\n- Opbrengsten: € 108,2 mln (2024: € 98,3 mln). Bron: /bron/x/omzet",
+            "slides": [
+                {"index": 0, "ui": {"components": [{"id": "a", "elements": [
+                    {"type": "text", "name": "kicker", "runs": [{"text": "Basalt · 2025"}]},
+                    {"type": "text", "name": "body", "runs": [{"text": "Groei van +€ 9,9 mln (10,1%) en +44 fte naar 1.012 fte. Bron: x"}]},
+                    {"type": "chart", "name": "c", "series": [{"name": "fte", "values": [968, 1012]}]},
+                ]}]}},
+                {"index": 1, "ui": {"components": [{"id": "b", "elements": [
+                    {"type": "text", "name": "body", "runs": [{"text": "Begroting 2025: € 112,4 mln. Bron: x"}]},
+                    {"type": "chart", "name": "c", "series": [{"name": "omzet", "values": [98.3, 104.0]}]},
+                ]}]}},
+            ],
+        }
+        issues = [i for i in presentations.quality_issues(deck) if i["problem"] == "unsourced_number"]
+        self.assertEqual(issues, [{"slide": 2, "problem": "unsourced_number", "values": ["112,4", "104"]}])
+
+    def test_own_dark_template_gets_dark_palette_highlight_and_footer(self):
+        deck = {
+            "content": "- Baten: Zvw € 99,96 mln; overig € 5,92 mln. Bron: /bron/x/baten",
+            "theme": {"data": {"colors": {"primary": "#2EC4B6", "background": "#0E1217"}}},
+            "slides": [
+                {"index": 0, "ui": {"components": [{"id": "x", "elements": [{"type": "text", "name": "title", "runs": [{"text": "Titel"}]}]}]}},
+                {"index": 1, "ui": {"components": [{"id": "b", "elements": [
+                    {"type": "text", "name": "highlight_value", "font": {"size": 72, "color": "#2EC4B6"}, "size": {"width": 308, "height": 90}, "runs": [{"text": "93%"}]},
+                    {"type": "chart", "name": "breakdown_chart", "chart_type": "horizontal_bar", "colors": ["#3A4A5A", "#2EC4B6"],
+                     "categories": ["Overig", "Zvw"], "series": [{"name": "Baten", "values": [5.92, 99.96]}]},
+                ]}]}},
+            ],
+        }
+        self.assertTrue(presentations.style_deck(deck, "warm_paper", None, "jaarverslag-donker"))
+        amber = presentations._DARK_ACCENTS["warm_paper"]
+        els = deck["slides"][1]["ui"]["components"][0]["elements"]
+        self.assertEqual(els[0]["font"]["color"], amber)
+        self.assertEqual(els[1]["colors"], [presentations._DARK_NEUTRALS["context"], amber])
+        self.assertEqual(deck["theme"]["data"]["colors"]["primary"], amber)
+        footer = next(c for c in deck["slides"][1]["ui"]["components"] if c["id"] == "editorial_footer")
+        self.assertEqual(presentations._text_of(footer["elements"][1]), "Bron: /bron/x/baten")
+        self.assertEqual(footer["elements"][1]["font"]["color"], presentations._DARK_NEUTRALS["muted"])
+
+    def test_builtin_templates_keep_their_own_colours(self):
+        deck = {
+            "theme": {"data": {"colors": {"background": "#171717"}}},
+            "slides": [{"index": 1, "ui": {"components": [{"id": "a", "elements": [
+                {"type": "text", "name": "body", "font": {"size": 22, "color": "#FFFFFF"}, "runs": [{"text": "Wit op zwart"}]},
+            ]}]}}],
+        }
+        presentations.style_deck(deck, None, None, "dynamic")
+        self.assertEqual(deck["slides"][0]["ui"]["components"][0]["elements"][0]["font"]["color"], "#FFFFFF")
+        self.assertEqual(deck["theme"]["data"]["colors"]["background"], "#171717")
+
 
 if __name__ == "__main__":
     unittest.main()
