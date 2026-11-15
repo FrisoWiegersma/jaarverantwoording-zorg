@@ -49,7 +49,10 @@ class PresentonTemplatesTest(unittest.TestCase):
 
     def test_families_share_slots_so_styling_and_checks_apply(self):
         def slots(t):
-            return {layout["id"]: sorted({el["name"] for el, _, _ in elements(layout) if el.get("type") == "text" and not el["decorative"]}) for layout in t["layouts"]}
+            return {
+                layout["id"]: sorted({el["name"] for el, _, _ in elements(layout) if el.get("type") == "text" and not el["decorative"]})
+                for layout in t["layouts"]
+            }
 
         reference = slots(self.templates["jaarverslag-licht"])
         for template_id, t in self.templates.items():

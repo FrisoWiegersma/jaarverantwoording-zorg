@@ -55,6 +55,7 @@ def extract(data: bytes, kind: str) -> list[str]:
             if b"<!entity" in raw.lower():
                 raise ValueError("Externe of interne XML-entiteiten zijn niet toegestaan.")
             return ET.fromstring(raw)
+
         if kind == "docx":
             root = xml("word/document.xml")
             return chunks(

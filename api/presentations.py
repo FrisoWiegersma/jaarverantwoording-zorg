@@ -381,8 +381,22 @@ OWN_TEMPLATE_INFO = json.loads(_MANIFEST.read_text(encoding="utf-8")) if _MANIFE
 OWN_TEMPLATES = tuple(OWN_TEMPLATE_INFO)
 DEFAULT_TEMPLATE = "jaarverslag-licht" if "jaarverslag-licht" in OWN_TEMPLATES else "general"
 BUILTIN_TEMPLATES = (
-    "general", "modern", "standard", "swift", "civic", "dynamic", "editorial", "executive",
-    "horizon", "landmark", "momentum", "mosaic", "nova", "pulse", "signal", "verdant",
+    "general",
+    "modern",
+    "standard",
+    "swift",
+    "civic",
+    "dynamic",
+    "editorial",
+    "executive",
+    "horizon",
+    "landmark",
+    "momentum",
+    "mosaic",
+    "nova",
+    "pulse",
+    "signal",
+    "verdant",
 )
 TEMPLATES = OWN_TEMPLATES + BUILTIN_TEMPLATES
 _ART_PALETTE_RE = re.compile(r"-(" + "|".join(_DARK_ACCENTS) + r")\.svg$")
@@ -458,6 +472,8 @@ def _resolve_light_palette(deck=None, palette_name=None, accent_color=None):
             pal["accent"] = hex_match.group(1).upper()
             pal["series"] = [pal["accent"], *pal["series"][1:]]
     return pal
+
+
 _ACRONYMS = {
     "WMO": "Wmo",
     "PGB": "PGB",
@@ -688,7 +704,11 @@ def _extract_source_label(slide, deck, visible_text=""):
         cites = [m.group(0).rstrip(".,;:") for m in re.finditer(r"/bron/[^\s)\]]+", line)]
         trusted.update(cites)
         if cites:
-            numbers = {n for n in _NUMBER_RE.findall(_INLINE_SOURCE_RE.sub("", line)) if len(n.replace(".", "").replace(",", "")) >= 2 and not re.fullmatch(r"(?:19|20)\d\d", n)}
+            numbers = {
+                n
+                for n in _NUMBER_RE.findall(_INLINE_SOURCE_RE.sub("", line))
+                if len(n.replace(".", "").replace(",", "")) >= 2 and not re.fullmatch(r"(?:19|20)\d\d", n)
+            }
             by_line.append((numbers, cites))
     visible_numbers = set(_NUMBER_RE.findall(visible_text))
     sources = []
@@ -741,13 +761,7 @@ def _style_chart(node, pal):
 def _style_table(node, pal):
     cols = node.get("columns") or []
     rows = node.get("rows") or []
-    numeric_cols = {
-        c_idx
-        for r in rows
-        if isinstance(r, list)
-        for c_idx, cell in enumerate(r)
-        if c_idx > 0 and re.search(r"\d", _text_of(cell))
-    }
+    numeric_cols = {c_idx for r in rows if isinstance(r, list) for c_idx, cell in enumerate(r) if c_idx > 0 and re.search(r"\d", _text_of(cell))}
     for c_idx, cell in enumerate(cols):
         if isinstance(cell, dict):
             cell["color"] = {"color": pal["ink"], "opacity": 1.0}
@@ -1071,7 +1085,15 @@ def _style_own_deck(deck, pal, template):
                             run["text"] = run["text"].upper()
                 elif name not in ("source_footer", "page_number"):
                     _strip_inline_source(node)
-                minimum = {"metric_value": 40.0, "value": 40.0, "left_value": 40.0, "right_value": 40.0, "highlight_value": 40.0, "title": 32.0, "statement": 32.0}.get(name, 16.0)
+                minimum = {
+                    "metric_value": 40.0,
+                    "value": 40.0,
+                    "left_value": 40.0,
+                    "right_value": 40.0,
+                    "highlight_value": 40.0,
+                    "title": 32.0,
+                    "statement": 32.0,
+                }.get(name, 16.0)
                 _fit_text(node, min_size=minimum, grow=False, pal=pal)
 
         _walk(ui, fix)
@@ -1322,7 +1344,7 @@ def _allowed_figures(content):
 def _figure_known(value, decimals, allowed):
     if decimals == 0 and (value <= 12 or (1900 <= value <= 2100)):
         return True  # counts, slide numbers and years
-    tol = 0.5 * 10 ** -decimals + abs(value) * 1e-9
+    tol = 0.5 * 10**-decimals + abs(value) * 1e-9
     i = bisect.bisect_left(allowed, value - tol)
     return i < len(allowed) and allowed[i] <= value + tol
 
@@ -1451,8 +1473,14 @@ class Create(BaseModel):
             "Een ingebouwd Presenton-template (" + ", ".join(BUILTIN_TEMPLATES) + ") alleen als de gebruiker daar expliciet om vraagt."
         ),
     )
-    palette: str | None = Field(default=None, pattern="^(editorial_teal|warm_paper|civic_navy|forest_ink|burgundy_editorial)$", description="Optioneel kleurpalet afgestemd op het onderwerp of de organisatie.")
-    accent_color: str | None = Field(default=None, pattern="^#[0-9A-Fa-f]{6}$", description="Optionele eigen hoofdkleur (#RRGGBB), bijvoorbeeld uit een geüploade PowerPoint of huisstijl.")
+    palette: str | None = Field(
+        default=None,
+        pattern="^(editorial_teal|warm_paper|civic_navy|forest_ink|burgundy_editorial)$",
+        description="Optioneel kleurpalet afgestemd op het onderwerp of de organisatie.",
+    )
+    accent_color: str | None = Field(
+        default=None, pattern="^#[0-9A-Fa-f]{6}$", description="Optionele eigen hoofdkleur (#RRGGBB), bijvoorbeeld uit een geüploade PowerPoint of huisstijl."
+    )
 
 
 class Edit(BaseModel):

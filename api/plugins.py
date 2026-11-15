@@ -234,8 +234,7 @@ def unpack(row) -> dict:
     d["has_token"] = bool(token)
     d["header_keys"] = sorted(headers.keys())
     d["tools"] = [
-        {**t, "inputSchema": _normalize_schema(t.get("inputSchema"))} if isinstance(t, dict) else t
-        for t in (tools if isinstance(tools, list) else [])
+        {**t, "inputSchema": _normalize_schema(t.get("inputSchema"))} if isinstance(t, dict) else t for t in (tools if isinstance(tools, list) else [])
     ]
     return d
 

@@ -313,14 +313,32 @@ class PresentationsTest(unittest.TestCase):
                     "ui": {
                         "id": "title_intro",
                         "components": [
-                            {"id": "image_showcase_card", "position": {"x": 88.0, "y": 208.0}, "elements": [{"type": "image", "data": "/static/images/placeholder.jpg"}]},
+                            {
+                                "id": "image_showcase_card",
+                                "position": {"x": 88.0, "y": 208.0},
+                                "elements": [{"type": "image", "data": "/static/images/placeholder.jpg"}],
+                            },
                             {
                                 "id": "right_text_panel",
                                 "position": {"x": 672.0, "y": 163.0},
                                 "elements": [
-                                    {"type": "text", "name": "headline_text", "font": {"size": 60.0, "color": "#111827", "bold": True}, "runs": [{"text": "VOORBEELDGEGEVENS"}]},
-                                    {"type": "vector", "points": [{"x": 0.0, "y": 144.0}, {"x": 80.0, "y": 144.0}, {"x": 80.0, "y": 148.0}, {"x": 0.0, "y": 148.0}], "fill": {"color": "#9333EA"}},
-                                    {"type": "text", "name": "body_copy", "font": {"size": 16.0, "color": "#4B5563"}, "runs": [{"text": "Korte samenvatting."}]},
+                                    {
+                                        "type": "text",
+                                        "name": "headline_text",
+                                        "font": {"size": 60.0, "color": "#111827", "bold": True},
+                                        "runs": [{"text": "VOORBEELDGEGEVENS"}],
+                                    },
+                                    {
+                                        "type": "vector",
+                                        "points": [{"x": 0.0, "y": 144.0}, {"x": 80.0, "y": 144.0}, {"x": 80.0, "y": 148.0}, {"x": 0.0, "y": 148.0}],
+                                        "fill": {"color": "#9333EA"},
+                                    },
+                                    {
+                                        "type": "text",
+                                        "name": "body_copy",
+                                        "font": {"size": 16.0, "color": "#4B5563"},
+                                        "runs": [{"text": "Korte samenvatting."}],
+                                    },
                                 ],
                             },
                         ],
@@ -392,7 +410,12 @@ class PresentationsTest(unittest.TestCase):
         self.assertEqual(presentations._text_of(footer["elements"][1]), "Bron: /bron/digimv/basalt/2025/opbrengsten")
 
     def test_fit_text_shrinks_before_clipping(self):
-        node = {"type": "text", "size": {"width": 280.0, "height": 60.0}, "font": {"size": 24.0, "line_height": 1.2}, "runs": [{"text": "Een lange ondertitel die bij vierentwintig pixels niet in twee regels past"}]}
+        node = {
+            "type": "text",
+            "size": {"width": 280.0, "height": 60.0},
+            "font": {"size": 24.0, "line_height": 1.2},
+            "runs": [{"text": "Een lange ondertitel die bij vierentwintig pixels niet in twee regels past"}],
+        }
         presentations._fit_text(node, min_size=16.0, grow=False)
         self.assertLess(node["font"]["size"], 24.0)
 
@@ -400,15 +423,35 @@ class PresentationsTest(unittest.TestCase):
         deck = {
             "content": "- Personeel: 1.012 fte (2024: 968 fte). Bron: /bron/x/fte\n- Opbrengsten: € 108,2 mln (2024: € 98,3 mln). Bron: /bron/x/omzet",
             "slides": [
-                {"index": 0, "ui": {"components": [{"id": "a", "elements": [
-                    {"type": "text", "name": "kicker", "runs": [{"text": "Basalt · 2025"}]},
-                    {"type": "text", "name": "body", "runs": [{"text": "Groei van +€ 9,9 mln (10,1%) en +44 fte naar 1.012 fte. Bron: x"}]},
-                    {"type": "chart", "name": "c", "series": [{"name": "fte", "values": [968, 1012]}]},
-                ]}]}},
-                {"index": 1, "ui": {"components": [{"id": "b", "elements": [
-                    {"type": "text", "name": "body", "runs": [{"text": "Begroting 2025: € 112,4 mln. Bron: x"}]},
-                    {"type": "chart", "name": "c", "series": [{"name": "omzet", "values": [98.3, 104.0]}]},
-                ]}]}},
+                {
+                    "index": 0,
+                    "ui": {
+                        "components": [
+                            {
+                                "id": "a",
+                                "elements": [
+                                    {"type": "text", "name": "kicker", "runs": [{"text": "Basalt · 2025"}]},
+                                    {"type": "text", "name": "body", "runs": [{"text": "Groei van +€ 9,9 mln (10,1%) en +44 fte naar 1.012 fte. Bron: x"}]},
+                                    {"type": "chart", "name": "c", "series": [{"name": "fte", "values": [968, 1012]}]},
+                                ],
+                            }
+                        ]
+                    },
+                },
+                {
+                    "index": 1,
+                    "ui": {
+                        "components": [
+                            {
+                                "id": "b",
+                                "elements": [
+                                    {"type": "text", "name": "body", "runs": [{"text": "Begroting 2025: € 112,4 mln. Bron: x"}]},
+                                    {"type": "chart", "name": "c", "series": [{"name": "omzet", "values": [98.3, 104.0]}]},
+                                ],
+                            }
+                        ]
+                    },
+                },
             ],
         }
         issues = [i for i in presentations.quality_issues(deck) if i["problem"] == "unsourced_number"]
@@ -420,11 +463,33 @@ class PresentationsTest(unittest.TestCase):
             "theme": {"data": {"colors": {"primary": "#2EC4B6", "background": "#0E1217"}}},
             "slides": [
                 {"index": 0, "ui": {"components": [{"id": "x", "elements": [{"type": "text", "name": "title", "runs": [{"text": "Zvw levert €99,96 mln"}]}]}]}},
-                {"index": 1, "ui": {"components": [{"id": "b", "elements": [
-                    {"type": "text", "name": "highlight_value", "font": {"size": 72, "color": "#2EC4B6"}, "size": {"width": 308, "height": 90}, "runs": [{"text": "93%"}]},
-                    {"type": "chart", "name": "breakdown_chart", "chart_type": "horizontal_bar", "colors": ["#3A4A5A", "#2EC4B6"],
-                     "categories": ["Overig", "Zvw"], "series": [{"name": "Baten", "values": [5.92, 99.96]}]},
-                ]}]}},
+                {
+                    "index": 1,
+                    "ui": {
+                        "components": [
+                            {
+                                "id": "b",
+                                "elements": [
+                                    {
+                                        "type": "text",
+                                        "name": "highlight_value",
+                                        "font": {"size": 72, "color": "#2EC4B6"},
+                                        "size": {"width": 308, "height": 90},
+                                        "runs": [{"text": "93%"}],
+                                    },
+                                    {
+                                        "type": "chart",
+                                        "name": "breakdown_chart",
+                                        "chart_type": "horizontal_bar",
+                                        "colors": ["#3A4A5A", "#2EC4B6"],
+                                        "categories": ["Overig", "Zvw"],
+                                        "series": [{"name": "Baten", "values": [5.92, 99.96]}],
+                                    },
+                                ],
+                            }
+                        ]
+                    },
+                },
             ],
         }
         self.assertTrue(presentations.style_deck(deck, "warm_paper", None, "jaarverslag-donker"))
@@ -451,9 +516,21 @@ class PresentationsTest(unittest.TestCase):
     def test_builtin_templates_keep_their_own_colours(self):
         deck = {
             "theme": {"data": {"colors": {"background": "#171717"}}},
-            "slides": [{"index": 1, "ui": {"components": [{"id": "a", "elements": [
-                {"type": "text", "name": "body", "font": {"size": 22, "color": "#FFFFFF"}, "runs": [{"text": "Wit op zwart"}]},
-            ]}]}}],
+            "slides": [
+                {
+                    "index": 1,
+                    "ui": {
+                        "components": [
+                            {
+                                "id": "a",
+                                "elements": [
+                                    {"type": "text", "name": "body", "font": {"size": 22, "color": "#FFFFFF"}, "runs": [{"text": "Wit op zwart"}]},
+                                ],
+                            }
+                        ]
+                    },
+                }
+            ],
         }
         presentations.style_deck(deck, None, None, "dynamic")
         self.assertEqual(deck["slides"][0]["ui"]["components"][0]["elements"][0]["font"]["color"], "#FFFFFF")
