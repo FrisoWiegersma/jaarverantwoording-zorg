@@ -1,0 +1,112 @@
+{
+ "jaarverslag-licht": {
+  "family": "jaarverslag",
+  "dark": false,
+  "bg": "#FFFFFF",
+  "accent": "#087F8C",
+  "accent_soft": "#E1F0F1",
+  "palette": "editorial_teal",
+  "body_font": "Inter",
+  "kicker_upper": false,
+  "description": "Rustig en helder: grote kerncijfers, één accentkleur en veel witruimte. Voor jaarrapportages en raden van toezicht."
+ },
+ "jaarverslag-donker": {
+  "family": "jaarverslag",
+  "dark": true,
+  "bg": "#0E1217",
+  "accent": "#2EC4B6",
+  "accent_soft": "#143234",
+  "palette": "editorial_teal",
+  "body_font": "Inter",
+  "kicker_upper": false,
+  "description": "Rustig en helder: grote kerncijfers, één accentkleur en veel witruimte. Voor jaarrapportages en raden van toezicht."
+ },
+ "swiss-licht": {
+  "family": "swiss",
+  "dark": false,
+  "bg": "#FFFFFF",
+  "accent": "#1D4ED8",
+  "accent_soft": "#E4EAFA",
+  "palette": "civic_navy",
+  "body_font": "Inter",
+  "kicker_upper": true,
+  "description": "Gedurfd en grafisch: enorme cijfers, strak raster, vlakken in volle accentkleur. Voor keynotes en strategiesessies."
+ },
+ "swiss-donker": {
+  "family": "swiss",
+  "dark": true,
+  "bg": "#0A0A0A",
+  "accent": "#60A5FA",
+  "accent_soft": "#192635",
+  "palette": "civic_navy",
+  "body_font": "Inter",
+  "kicker_upper": true,
+  "description": "Gedurfd en grafisch: enorme cijfers, strak raster, vlakken in volle accentkleur. Voor keynotes en strategiesessies."
+ },
+ "consulting-licht": {
+  "family": "consulting",
+  "dark": false,
+  "bg": "#FFFFFF",
+  "accent": "#166534",
+  "accent_soft": "#E3EDE7",
+  "palette": "forest_ink",
+  "body_font": "IBM Plex Sans",
+  "kicker_upper": true,
+  "description": "Adviesrapport-stijl: conclusie als titel, rustige dichte opbouw, kaders en voetnoten. Voor bestuur, directie en opdrachtgevers."
+ },
+ "consulting-donker": {
+  "family": "consulting",
+  "dark": true,
+  "bg": "#0B1621",
+  "accent": "#4ADE80",
+  "accent_soft": "#163A32",
+  "palette": "forest_ink",
+  "body_font": "IBM Plex Sans",
+  "kicker_upper": true,
+  "description": "Adviesrapport-stijl: conclusie als titel, rustige dichte opbouw, kaders en voetnoten. Voor bestuur, directie en opdrachtgevers."
+ },
+ "editorial-licht": {
+  "family": "editorial",
+  "dark": false,
+  "bg": "#FBF8F3",
+  "accent": "#881337",
+  "accent_soft": "#EDDDDC",
+  "palette": "burgundy_editorial",
+  "body_font": "Inter",
+  "kicker_upper": true,
+  "description": "Tijdschriftstijl: serif koppen, grote citaten, dunne lijnen en warm papier. Voor verhalende analyses en publieksrapporten."
+ },
+ "editorial-donker": {
+  "family": "editorial",
+  "dark": true,
+  "bg": "#15130F",
+  "accent": "#FB7185",
+  "accent_soft": "#3E2424",
+  "palette": "burgundy_editorial",
+  "body_font": "Inter",
+  "kicker_upper": true,
+  "description": "Tijdschriftstijl: serif koppen, grote citaten, dunne lijnen en warm papier. Voor verhalende analyses en publieksrapporten."
+ },
+ "zorg-licht": {
+  "family": "zorg",
+  "dark": false,
+  "bg": "#FFFBF6",
+  "accent": "#B45309",
+  "accent_soft": "#F6E7DA",
+  "palette": "warm_paper",
+  "body_font": "Plus Jakarta Sans",
+  "kicker_upper": false,
+  "description": "Warm en menselijk: zachte ronde vormen, warme tinten, uitnodigend. Voor zorginstellingen, gemeenten en publieke verantwoording."
+ },
+ "zorg-donker": {
+  "family": "zorg",
+  "dark": true,
+  "bg": "#1C1714",
+  "accent": "#F59E0B",
+  "accent_soft": "#432F12",
+  "palette": "warm_paper",
+  "body_font": "Plus Jakarta Sans",
+  "kicker_upper": false,
+  "description": "Warm en menselijk: zachte ronde vormen, warme tinten, uitnodigend. Voor zorginstellingen, gemeenten en publieke verantwoording."
+ }
+}

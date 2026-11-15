@@ -19,7 +19,17 @@ Outside Compose, set `PRESENTON_URL` and `PRESENTON_PASSWORD` on the API, and co
 
 ## Design
 
-New decks use the app's own Presenton templates `jaarverslag-licht` (default: reports, boards, print) and `jaarverslag-donker` (on screen). Both are generated from one set of eleven layouts in `presenton/build_templates.py`: cover, statement, one large figure, three figures, chart with findings, multi-year trend, comparison, breakdown, table, points and closing slide. Compose mounts `presenton/templates/` into the Presenton container, which imports the templates at startup. Edit the generator, run `uv run python presenton/build_templates.py`, and restart Presenton; `tests/test_presenton_templates.py` fails when the committed JSON is out of date or a text slot cannot hold its `max_length`.
+New decks use the app's own Presenton templates: five design families, each in a light (`-licht`: reports, print) and a dark (`-donker`: on screen) theme.
+
+| Family | Look | For |
+| --- | --- | --- |
+| `jaarverslag` (default) | Inter, large key figures, soft cards | annual reports, supervisory boards |
+| `consulting` | IBM Plex Sans, action titles, rules and outlines | boards, management, clients |
+| `swiss` | Inter Tight, full accent blocks, huge figures | keynotes, strategy sessions |
+| `editorial` | Fraunces serif, big quotes, warm paper | narrative analyses, public reports |
+| `zorg` | Plus Jakarta Sans, soft rounded shapes | care providers, municipalities |
+
+`presenton/build_templates.py` generates all ten from the same eleven layouts with the same slot names: cover, statement, one large figure, three figures, chart with findings, multi-year trend, comparison, breakdown, table, points and closing slide. Each family has its own cover, statement, hero and closing design plus abstract SVG art in `static/` (one variant per palette, swapped by `style_deck`). The generator also writes `presenton/templates/manifest.json`, which the API reads for template names, colours and fonts. Compose mounts each template folder into the Presenton container, which imports the templates at startup. Edit the generator, run `uv run python presenton/build_templates.py`, and restart Presenton; `tests/test_presenton_templates.py` fails when the committed JSON is out of date or a text slot cannot hold its `max_length`.
 
 The 16 built-in Presenton templates stay available by name. After generation the API applies the deck palette (`palette` or `accent_color`, with brighter accents on dark), highlights one bar per chart, tidies tables and adds a footer with the real `/bron/` links from the supplied content. `general` also gets layout fixes; other built-in templates keep their own colours.
 

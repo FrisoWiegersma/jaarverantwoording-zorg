@@ -2,7 +2,7 @@
 
 Run inside the api container (Presenton must be up):
   sudo docker compose cp scripts/render_samples.py api:/tmp/render_samples.py
-  sudo docker compose exec -w /app/api api /app/.venv/bin/python /tmp/render_samples.py [template,...]
+  sudo docker compose exec -w /app/api api /app/.venv/bin/python /tmp/render_samples.py [template,...] [sample,...]
 Copy /tmp/samples out and look at the PDFs. The figures below are FICTITIOUS test data, not real
 annual-report figures; the test decks are deleted again afterwards.
 """
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     os.makedirs("/tmp/samples")
     try:
         # One at a time: Presenton fails requests when several decks generate at once.
-        for name in SAMPLES:
+        for name in sys.argv[2].split(",") if len(sys.argv) > 2 else SAMPLES:
             for template in templates:
                 render(name, template)
     finally:

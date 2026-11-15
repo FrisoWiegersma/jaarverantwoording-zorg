@@ -419,7 +419,7 @@ class PresentationsTest(unittest.TestCase):
             "content": "- Baten: Zvw € 99,96 mln; overig € 5,92 mln. Bron: /bron/x/baten",
             "theme": {"data": {"colors": {"primary": "#2EC4B6", "background": "#0E1217"}}},
             "slides": [
-                {"index": 0, "ui": {"components": [{"id": "x", "elements": [{"type": "text", "name": "title", "runs": [{"text": "Titel"}]}]}]}},
+                {"index": 0, "ui": {"components": [{"id": "x", "elements": [{"type": "text", "name": "title", "runs": [{"text": "Zvw levert €99,96 mln"}]}]}]}},
                 {"index": 1, "ui": {"components": [{"id": "b", "elements": [
                     {"type": "text", "name": "highlight_value", "font": {"size": 72, "color": "#2EC4B6"}, "size": {"width": 308, "height": 90}, "runs": [{"text": "93%"}]},
                     {"type": "chart", "name": "breakdown_chart", "chart_type": "horizontal_bar", "colors": ["#3A4A5A", "#2EC4B6"],
@@ -433,9 +433,20 @@ class PresentationsTest(unittest.TestCase):
         self.assertEqual(els[0]["font"]["color"], amber)
         self.assertEqual(els[1]["colors"], [presentations._DARK_NEUTRALS["context"], amber])
         self.assertEqual(deck["theme"]["data"]["colors"]["primary"], amber)
+        self.assertEqual(presentations._text_of(deck["slides"][0]["ui"]["components"][0]["elements"][0]), "Zvw levert €\u00a099,96\u00a0mln")
         footer = next(c for c in deck["slides"][1]["ui"]["components"] if c["id"] == "editorial_footer")
         self.assertEqual(presentations._text_of(footer["elements"][1]), "Bron: /bron/x/baten")
         self.assertEqual(footer["elements"][1]["font"]["color"], presentations._DARK_NEUTRALS["muted"])
+
+    def test_chart_highlight_prefers_realisation_then_latest_year(self):
+        pal = presentations._resolve_palette({}, "editorial_teal", None)
+        budget = {"categories": ["Begroot 2025", "Realisatie 2025"], "series": [{"values": [2.15, 1.84]}]}
+        years = {"categories": ["2024", "2025"], "series": [{"values": [9.8, 7.1]}]}
+        mix = {"categories": ["Zvw", "Overig"], "series": [{"values": [5.9, 99.9]}]}
+        for node, pick in ((budget, 1), (years, 1), (mix, 1)):
+            presentations._highlight_colors(node, pal)
+            self.assertEqual(node["colors"][pick], pal["accent"])
+            self.assertEqual(node["colors"][1 - pick], pal["context"])
 
     def test_builtin_templates_keep_their_own_colours(self):
         deck = {
