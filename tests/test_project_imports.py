@@ -65,7 +65,14 @@ class ProjectImportsTest(unittest.TestCase):
             (b"\x00text", "txt"),
             (b" ", "txt"),
             (office({}), "docx"),
-            (office({"word/document.xml": '<!DOCTYPE d [<!ENTITY x "boom">]><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">&x;</w:document>'}), "docx"),
+            (
+                office(
+                    {
+                        "word/document.xml": '<!DOCTYPE d [<!ENTITY x "boom">]><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">&x;</w:document>'
+                    }
+                ),
+                "docx",
+            ),
             (
                 office(
                     {

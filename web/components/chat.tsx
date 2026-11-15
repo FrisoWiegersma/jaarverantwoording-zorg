@@ -32,8 +32,7 @@ import { missingAnswer, SKIPPED } from "@/lib/chat-policy";
 import { conversationId, reconnectOnReturn, rememberConversation } from "@/lib/chat-session";
 import { type AnswerMeta, answerLabel, MODELS, type ModelOption, type ModelSelection, pickModel } from "@/lib/models";
 import {
-  extractPluginArtifacts,
-  mergePluginArtifacts,
+  extractMessagePluginArtifacts,
   extractPluginMentions,
   parseMcpToolKey,
   type Plugin,
@@ -50,9 +49,13 @@ const richOf = (m: UIMessage) => m.parts.filter(isToolUIPart).flatMap((p) =>
 );
 
 const pluginArtifactsOf = (m: UIMessage): PluginArtifact[] =>
-  mergePluginArtifacts(m.parts
-    .filter(isToolUIPart)
-    .flatMap((p) => (p.state === "output-available" ? extractPluginArtifacts(p.toolCallId, getToolName(p), p.output) : []))
+  extractMessagePluginArtifacts(
+    m.parts.filter(isToolUIPart).map((p) => ({
+      toolCallId: p.toolCallId,
+      toolName: getToolName(p),
+      state: p.state,
+      output: p.state === "output-available" ? p.output : undefined,
+    }))
   );
 
 const textOf = (m: UIMessage) =>
@@ -445,8 +448,15 @@ function ChatSession({ projectId, projectName, projectDocuments, conversation, i
     refreshPlugins();
   }, [refreshPlugins]);
   const togglePlugin = useCallback((handle: string) => {
+    const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const mentionRe = new RegExp(`(^|[\\s([{"'«“])@${escaped}\\b\\s*`, "gi");
+    if (mentionRe.test(draft)) {
+      setDraft((d) => d.replace(new RegExp(`(^|[\\s([{"'«“])@${escaped}\\b\\s*`, "gi"), "$1").replace(/^\s+/, ""));
+      setSelectedPlugins((prev) => prev.filter((h) => h !== handle));
+      return;
+    }
     setSelectedPlugins((prev) => (prev.includes(handle) ? prev.filter((h) => h !== handle) : [...prev, handle]));
-  }, []);
+  }, [draft, setDraft]);
   const activePlugins = useMemo(() => {
     const mentioned = extractPluginMentions(
       draft,
@@ -476,6 +486,7 @@ function ChatSession({ projectId, projectName, projectDocuments, conversation, i
         ),
       ])
     );
+    setSelectedPlugins([]);
     rememberConversation(chat.id);
     return sendMessage({ text }, { body: { projectId, plugins: pluginsForTurn, ...choice } });
   };

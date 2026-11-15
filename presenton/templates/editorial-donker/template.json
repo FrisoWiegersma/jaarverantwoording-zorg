@@ -1,0 +1,4720 @@
+{
+ "id": "editorial-donker",
+ "name": "Editorial donker",
+ "description": "Tijdschriftstijl: serif koppen, grote citaten, dunne lijnen en warm papier. Voor verhalende analyses en publieksrapporten.",
+ "fonts": {
+  "Fraunces": "https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap",
+  "Inter": "https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
+ },
+ "theme": {
+  "colors": {
+   "primary": "#FB7185",
+   "background": "#15130F",
+   "card": "#201D18",
+   "stroke": "#3A342C",
+   "primary_text": "#F4EFE7",
+   "background_text": "#F4EFE7",
+   "graph_0": "#FB7185",
+   "graph_1": "#F4EFE7",
+   "graph_2": "#958C80",
+   "graph_3": "#4A4238",
+   "graph_4": "#D2CBC0",
+   "graph_5": "#3E2424",
+   "graph_6": "#201D18",
+   "graph_7": "#3A342C",
+   "graph_8": "#15130F",
+   "graph_9": "#15130F"
+  },
+  "fonts": {
+   "textFont": {
+    "name": "Inter",
+    "url": "https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
+   }
+  }
+ },
+ "layouts": [
+  {
+   "id": "cover",
+   "description": "Openingsslide: grote titel met de kernboodschap van het hele deck, organisatie en jaar, één ondertitelzin. Alleen als eerste slide.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "cover_text",
+     "description": "Tijdschriftomslag met serif titel en contourlijnen.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "image",
+       "position": {
+        "x": 0,
+        "y": 0
+       },
+       "size": {
+        "width": 1280,
+        "height": 720
+       },
+       "data": "static/editorial-contours-donker-burgundy_editorial.svg",
+       "fit": "fill",
+       "decorative": true,
+       "name": "decorative_art",
+       "is_icon": false
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 120
+       },
+       "size": {
+        "width": 900,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zorginstelling · jaarverslag 2025",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 48,
+       "min_length": 3
+      },
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 80,
+         "y": 156
+        },
+        {
+         "x": 1200,
+         "y": 156
+        },
+        {
+         "x": 1200,
+         "y": 157
+        },
+        {
+         "x": 80,
+         "y": 157
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#F4EFE7"
+       },
+       "name": "top_rule"
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 196
+       },
+       "size": {
+        "width": 1000,
+        "height": 260
+       },
+       "font": {
+        "size": 76,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.04,
+        "letter_spacing": -2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Omzet groeit met 10% naar € 108,2 mln",
+         "font": {
+          "size": 76,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.04,
+          "letter_spacing": -2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 52,
+       "min_length": 10
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 490
+       },
+       "size": {
+        "width": 720,
+        "height": 112
+       },
+       "font": {
+        "size": 26,
+        "family": "Fraunces",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": true,
+        "line_height": 1.4,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Kerncijfers over baten, personeel, resultaat en vermogen in 2025.",
+         "font": {
+          "size": 26,
+          "family": "Fraunces",
+          "color": "#D2CBC0",
+          "bold": false,
+          "italic": true,
+          "line_height": 1.4,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "subtitle",
+       "max_length": 110,
+       "min_length": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "statement",
+   "description": "Eén krachtige conclusie of sectie-overgang in grote tekst, met één korte toelichting. Geen cijferreeks.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "statement_text",
+     "description": "Groot citaat in serif met aanhalingsteken.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 72,
+        "y": 70
+       },
+       "size": {
+        "width": 200,
+        "height": 220
+       },
+       "font": {
+        "size": 220,
+        "family": "Fraunces",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.0,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "“",
+         "font": {
+          "size": 220,
+          "family": "Fraunces",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.0,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": true,
+       "name": "quote_mark",
+       "max_length": 1,
+       "min_length": 1
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 200,
+        "y": 150
+       },
+       "size": {
+        "width": 900,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Conclusie",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 200,
+        "y": 190
+       },
+       "size": {
+        "width": 960,
+        "height": 270
+       },
+       "font": {
+        "size": 54,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": false,
+        "italic": true,
+        "line_height": 1.12,
+        "letter_spacing": -1.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "De groei komt vrijwel volledig uit Zvw-revalidatiezorg.",
+         "font": {
+          "size": 54,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": false,
+          "italic": true,
+          "line_height": 1.12,
+          "letter_spacing": -1.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "statement",
+       "max_length": 96,
+       "min_length": 20
+      },
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 200,
+         "y": 486
+        },
+        {
+         "x": 280,
+         "y": 486
+        },
+        {
+         "x": 280,
+         "y": 488
+        },
+        {
+         "x": 200,
+         "y": 488
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FB7185"
+       },
+       "name": "accent_rule"
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 200,
+        "y": 506
+       },
+       "size": {
+        "width": 800,
+        "height": 100
+       },
+       "font": {
+        "size": 22,
+        "family": "Inter",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.45,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overige zorgbaten en subsidies zijn samen minder dan 8% van de baten.",
+         "font": {
+          "size": 22,
+          "family": "Inter",
+          "color": "#D2CBC0",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.45,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "supporting",
+       "max_length": 140,
+       "min_length": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "hero_metric",
+   "description": "Eén kerncijfer heel groot met wat het is en de vergelijking met vorig jaar; een korte duiding ernaast. Voor het belangrijkste getal van een onderwerp.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "heading",
+     "description": "Kleine bovenregel (organisatie · onderwerp) en een slidetitel die de conclusie geeft.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 52
+       },
+       "size": {
+        "width": 1120,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zorginstelling · jaarverslag 2025",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 84
+       },
+       "size": {
+        "width": 1120,
+        "height": 109
+       },
+       "font": {
+        "size": 46,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "letter_spacing": -0.8
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Bedrijfsopbrengsten stijgen naar recordniveau",
+         "font": {
+          "size": 46,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12,
+          "letter_spacing": -0.8
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 64,
+       "min_length": 12
+      }
+     ]
+    },
+    {
+     "id": "hero_value",
+     "description": "Groot kerncijfer met label en vergelijking.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 240
+       },
+       "size": {
+        "width": 720,
+        "height": 160
+       },
+       "font": {
+        "size": 124,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.0,
+        "letter_spacing": -3.5
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "€ 108,2 mln",
+         "font": {
+          "size": 124,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.0,
+          "letter_spacing": -3.5
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "metric_value",
+       "max_length": 11,
+       "min_length": 1
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 412
+       },
+       "size": {
+        "width": 640,
+        "height": 76
+       },
+       "font": {
+        "size": 28,
+        "family": "Inter",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Totale bedrijfsopbrengsten 2025",
+         "font": {
+          "size": 28,
+          "family": "Inter",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "metric_label",
+       "max_length": 52,
+       "min_length": 3
+      },
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 80,
+         "y": 504
+        },
+        {
+         "x": 380,
+         "y": 504
+        },
+        {
+         "x": 380,
+         "y": 552
+        },
+        {
+         "x": 80,
+         "y": 552
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#3E2424"
+       },
+       "name": "comparison_pill"
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 100,
+        "y": 514
+       },
+       "size": {
+        "width": 268,
+        "height": 28
+       },
+       "font": {
+        "size": 20,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "+10,0% t.o.v. 2024",
+         "font": {
+          "size": 20,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "comparison",
+       "max_length": 22,
+       "min_length": 3
+      }
+     ]
+    },
+    {
+     "id": "hero_context",
+     "description": "Duidingskolom rechts met scheidingslijn.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 840,
+         "y": 236
+        },
+        {
+         "x": 841,
+         "y": 236
+        },
+        {
+         "x": 841,
+         "y": 566
+        },
+        {
+         "x": 840,
+         "y": 566
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#F4EFE7"
+       },
+       "name": "divider"
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 872,
+        "y": 236
+       },
+       "size": {
+        "width": 328,
+        "height": 330
+       },
+       "font": {
+        "size": 22,
+        "family": "Fraunces",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": true,
+        "line_height": 1.45,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "In 2024 waren de opbrengsten € 98,3 mln. De groei van € 9,9 mln komt vooral uit revalidatiezorg via de Zorgverzekeringswet.",
+         "font": {
+          "size": 22,
+          "family": "Fraunces",
+          "color": "#D2CBC0",
+          "bold": false,
+          "italic": true,
+          "line_height": 1.45,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "context",
+       "max_length": 190,
+       "min_length": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "metric_trio",
+   "description": "Drie kerncijfers naast elkaar, elk met label en één korte toelichting. Voor drie samenhangende cijfers zoals omzet, resultaat en solvabiliteit.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "heading",
+     "description": "Kleine bovenregel (organisatie · onderwerp) en een slidetitel die de conclusie geeft.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 52
+       },
+       "size": {
+        "width": 1120,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zorginstelling · jaarverslag 2025",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 84
+       },
+       "size": {
+        "width": 1120,
+        "height": 109
+       },
+       "font": {
+        "size": 46,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "letter_spacing": -0.8
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Groei, winst en buffer nemen alle drie toe",
+         "font": {
+          "size": 46,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12,
+          "letter_spacing": -0.8
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 64,
+       "min_length": 12
+      }
+     ]
+    },
+    {
+     "id": "metric_columns",
+     "description": "Drie kolommen met elk een kerncijfer.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "grid",
+       "position": {
+        "x": 80,
+        "y": 250
+       },
+       "size": {
+        "width": 1120,
+        "height": 330
+       },
+       "columns": 3,
+       "rows": 1,
+       "gap": 48,
+       "align_items": "stretch",
+       "justify_items": "stretch",
+       "children": [
+        {
+         "type": "group",
+         "size": {
+          "width": 341,
+          "height": 330
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 1
+            },
+            {
+             "x": 0,
+             "y": 1
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F4EFE7"
+           },
+           "name": "metric_card"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 28
+           },
+           "size": {
+            "width": 341,
+            "height": 76
+           },
+           "font": {
+            "size": 56,
+            "family": "Fraunces",
+            "color": "#F4EFE7",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.05,
+            "letter_spacing": -1.8
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "€ 108,2 mln",
+             "font": {
+              "size": 56,
+              "family": "Fraunces",
+              "color": "#F4EFE7",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.05,
+              "letter_spacing": -1.8
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "value",
+           "max_length": 11,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 120
+           },
+           "size": {
+            "width": 341,
+            "height": 64
+           },
+           "font": {
+            "size": 22,
+            "family": "Inter",
+            "color": "#FB7185",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Bedrijfsopbrengsten",
+             "font": {
+              "size": 22,
+              "family": "Inter",
+              "color": "#FB7185",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "label",
+           "max_length": 40,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 192
+           },
+           "size": {
+            "width": 341,
+            "height": 120
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#D2CBC0",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Tegen € 98,3 mln in 2024, een stijging van 10,0%.",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#D2CBC0",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "detail",
+           "max_length": 90,
+           "min_length": 0
+          }
+         ],
+         "name": "metric_item"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 341,
+          "height": 330
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 1
+            },
+            {
+             "x": 0,
+             "y": 1
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F4EFE7"
+           },
+           "name": "metric_card"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 28
+           },
+           "size": {
+            "width": 341,
+            "height": 76
+           },
+           "font": {
+            "size": 56,
+            "family": "Fraunces",
+            "color": "#F4EFE7",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.05,
+            "letter_spacing": -1.8
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "€ 6,8 mln",
+             "font": {
+              "size": 56,
+              "family": "Fraunces",
+              "color": "#F4EFE7",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.05,
+              "letter_spacing": -1.8
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "value",
+           "max_length": 11,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 120
+           },
+           "size": {
+            "width": 341,
+            "height": 64
+           },
+           "font": {
+            "size": 22,
+            "family": "Inter",
+            "color": "#FB7185",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Nettoresultaat",
+             "font": {
+              "size": 22,
+              "family": "Inter",
+              "color": "#FB7185",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "label",
+           "max_length": 40,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 192
+           },
+           "size": {
+            "width": 341,
+            "height": 120
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#D2CBC0",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Tegen € 4,4 mln in 2024.",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#D2CBC0",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "detail",
+           "max_length": 90,
+           "min_length": 0
+          }
+         ],
+         "name": "metric_item"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 341,
+          "height": 330
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 1
+            },
+            {
+             "x": 0,
+             "y": 1
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F4EFE7"
+           },
+           "name": "metric_card"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 28
+           },
+           "size": {
+            "width": 341,
+            "height": 76
+           },
+           "font": {
+            "size": 56,
+            "family": "Fraunces",
+            "color": "#F4EFE7",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.05,
+            "letter_spacing": -1.8
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "37,6%",
+             "font": {
+              "size": 56,
+              "family": "Fraunces",
+              "color": "#F4EFE7",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.05,
+              "letter_spacing": -1.8
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "value",
+           "max_length": 11,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 120
+           },
+           "size": {
+            "width": 341,
+            "height": 64
+           },
+           "font": {
+            "size": 22,
+            "family": "Inter",
+            "color": "#FB7185",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Solvabiliteit",
+             "font": {
+              "size": 22,
+              "family": "Inter",
+              "color": "#FB7185",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "label",
+           "max_length": 40,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 192
+           },
+           "size": {
+            "width": 341,
+            "height": 120
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#D2CBC0",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Tegen 34,1% in 2024; current ratio 2,07.",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#D2CBC0",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "detail",
+           "max_length": 90,
+           "min_length": 0
+          }
+         ],
+         "name": "metric_item"
+        }
+       ],
+       "name": "metrics",
+       "max_children": 3,
+       "min_children": 3
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "chart_commentary",
+   "description": "Staafdiagram links met twee korte bevindingen rechts. Voor een vergelijking van enkele waarden (jaren, posten) met duiding.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "heading",
+     "description": "Kleine bovenregel (organisatie · onderwerp) en een slidetitel die de conclusie geeft.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 52
+       },
+       "size": {
+        "width": 1120,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zorginstelling · jaarverslag 2025",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 84
+       },
+       "size": {
+        "width": 1120,
+        "height": 109
+       },
+       "font": {
+        "size": 46,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "letter_spacing": -0.8
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Nettoresultaat stijgt met € 2,4 mln",
+         "font": {
+          "size": 46,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12,
+          "letter_spacing": -0.8
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 64,
+       "min_length": 12
+      }
+     ]
+    },
+    {
+     "id": "chart_panel",
+     "description": "Grafiekvlak links.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "chart",
+       "position": {
+        "x": 80,
+        "y": 220
+       },
+       "size": {
+        "width": 700,
+        "height": 390
+       },
+       "chart_type": "bar",
+       "colors": [
+        "#4A4238",
+        "#FB7185"
+       ],
+       "text_color": "#958C80",
+       "x_axis": true,
+       "y_axis": false,
+       "axis_color": "#958C80",
+       "categories": [
+        "2024",
+        "2025"
+       ],
+       "series": [
+        {
+         "name": "Nettoresultaat (€ mln)",
+         "values": [
+          4.4,
+          6.8
+         ]
+        }
+       ],
+       "data_labels": "outside",
+       "legend": false,
+       "x_axis_grid": false,
+       "y_axis_grid": false,
+       "grid_color": "#3A342C",
+       "decorative": false,
+       "name": "main_chart"
+      }
+     ]
+    },
+    {
+     "id": "findings",
+     "description": "Twee korte bevindingen rechts, gestapeld.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "flex",
+       "position": {
+        "x": 828,
+        "y": 236
+       },
+       "size": {
+        "width": 372,
+        "height": 374
+       },
+       "direction": "column",
+       "gap": 28,
+       "align_items": "stretch",
+       "justify_content": "flex-start",
+       "children": [
+        {
+         "type": "group",
+         "size": {
+          "width": 372,
+          "height": 150
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 4,
+             "y": 0
+            },
+            {
+             "x": 4,
+             "y": 150
+            },
+            {
+             "x": 0,
+             "y": 150
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#FB7185"
+           },
+           "name": "finding_rule"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 0
+           },
+           "size": {
+            "width": 348,
+            "height": 34
+           },
+           "font": {
+            "size": 24,
+            "family": "Fraunces",
+            "color": "#F4EFE7",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.2,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "+€ 2,4 mln",
+             "font": {
+              "size": 24,
+              "family": "Fraunces",
+              "color": "#F4EFE7",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.2,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "finding_title",
+           "max_length": 22,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 42
+           },
+           "size": {
+            "width": 348,
+            "height": 104
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#D2CBC0",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Van € 4,4 mln in 2024 naar € 6,8 mln in 2025.",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#D2CBC0",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "finding_body",
+           "max_length": 76,
+           "min_length": 0
+          }
+         ],
+         "name": "finding"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 372,
+          "height": 150
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 4,
+             "y": 0
+            },
+            {
+             "x": 4,
+             "y": 150
+            },
+            {
+             "x": 0,
+             "y": 150
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#FB7185"
+           },
+           "name": "finding_rule"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 0
+           },
+           "size": {
+            "width": 348,
+            "height": 34
+           },
+           "font": {
+            "size": 24,
+            "family": "Fraunces",
+            "color": "#F4EFE7",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.2,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Groei uit zorg",
+             "font": {
+              "size": 24,
+              "family": "Fraunces",
+              "color": "#F4EFE7",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.2,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "finding_title",
+           "max_length": 22,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 42
+           },
+           "size": {
+            "width": 348,
+            "height": 104
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#D2CBC0",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Hogere baten zorgverlening dragen het resultaat.",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#D2CBC0",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "finding_body",
+           "max_length": 76,
+           "min_length": 0
+          }
+         ],
+         "name": "finding"
+        }
+       ],
+       "name": "finding_list",
+       "max_children": 2,
+       "min_children": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "trend",
+   "description": "Brede lijn- of kolomgrafiek over meerdere jaren met één bijschrift. Voor ontwikkelingen over drie of meer jaren.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "heading",
+     "description": "Kleine bovenregel (organisatie · onderwerp) en een slidetitel die de conclusie geeft.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 52
+       },
+       "size": {
+        "width": 1120,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zorginstelling · jaarverslag 2025",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 84
+       },
+       "size": {
+        "width": 1120,
+        "height": 109
+       },
+       "font": {
+        "size": 46,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "letter_spacing": -0.8
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Personeelskosten stijgen vijf jaar op rij",
+         "font": {
+          "size": 46,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12,
+          "letter_spacing": -0.8
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 64,
+       "min_length": 12
+      }
+     ]
+    },
+    {
+     "id": "trend_caption",
+     "description": "Eén bijschrift onder de titel.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 212
+       },
+       "size": {
+        "width": 1120,
+        "height": 34
+       },
+       "font": {
+        "size": 22,
+        "family": "Inter",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Personeelskosten in € mln per boekjaar.",
+         "font": {
+          "size": 22,
+          "family": "Inter",
+          "color": "#D2CBC0",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "caption",
+       "max_length": 90,
+       "min_length": 0
+      }
+     ]
+    },
+    {
+     "id": "trend_chart",
+     "description": "Brede grafiek over de volle breedte.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "chart",
+       "position": {
+        "x": 80,
+        "y": 252
+       },
+       "size": {
+        "width": 1120,
+        "height": 360
+       },
+       "chart_type": "line",
+       "colors": [
+        "#FB7185"
+       ],
+       "text_color": "#958C80",
+       "x_axis": true,
+       "y_axis": true,
+       "axis_color": "#958C80",
+       "categories": [
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025"
+       ],
+       "series": [
+        {
+         "name": "Personeelskosten (€ mln)",
+         "values": [
+          58.2,
+          61.0,
+          64.7,
+          68.9,
+          74.1
+         ]
+        }
+       ],
+       "data_labels": "top",
+       "legend": false,
+       "x_axis_grid": false,
+       "y_axis_grid": true,
+       "grid_color": "#3A342C",
+       "decorative": false,
+       "name": "trend_chart"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "comparison",
+   "description": "Twee waarden naast elkaar (bijvoorbeeld 2024 tegenover 2025, of begroting tegenover realisatie) met het verschil in het midden.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "heading",
+     "description": "Kleine bovenregel (organisatie · onderwerp) en een slidetitel die de conclusie geeft.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 52
+       },
+       "size": {
+        "width": 1120,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zorginstelling · jaarverslag 2025",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 84
+       },
+       "size": {
+        "width": 1120,
+        "height": 109
+       },
+       "font": {
+        "size": 46,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "letter_spacing": -0.8
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Personeelsbestand groeit naar 1.012 fte",
+         "font": {
+          "size": 46,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12,
+          "letter_spacing": -0.8
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 64,
+       "min_length": 12
+      }
+     ]
+    },
+    {
+     "id": "comparison_panels",
+     "description": "Twee panelen met periode, groot cijfer en toelichting.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 80,
+         "y": 236
+        },
+        {
+         "x": 580,
+         "y": 236
+        },
+        {
+         "x": 580,
+         "y": 237
+        },
+        {
+         "x": 80,
+         "y": 237
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#F4EFE7"
+       },
+       "name": "left_panel"
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 264
+       },
+       "size": {
+        "width": 420,
+        "height": 30
+       },
+       "font": {
+        "size": 22,
+        "family": "Inter",
+        "color": "#958C80",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "2024",
+         "font": {
+          "size": 22,
+          "family": "Inter",
+          "color": "#958C80",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "left_label",
+       "max_length": 24,
+       "min_length": 1
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 304
+       },
+       "size": {
+        "width": 440,
+        "height": 96
+       },
+       "font": {
+        "size": 64,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.05,
+        "letter_spacing": -2.2
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "968 fte",
+         "font": {
+          "size": 64,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.05,
+          "letter_spacing": -2.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "left_value",
+       "max_length": 12,
+       "min_length": 1
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 414
+       },
+       "size": {
+        "width": 420,
+        "height": 110
+       },
+       "font": {
+        "size": 20,
+        "family": "Inter",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.45,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Gemiddelde formatie in het voorgaande boekjaar.",
+         "font": {
+          "size": 20,
+          "family": "Inter",
+          "color": "#D2CBC0",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.45,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "left_detail",
+       "max_length": 90,
+       "min_length": 0
+      },
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 700,
+         "y": 236
+        },
+        {
+         "x": 1200,
+         "y": 236
+        },
+        {
+         "x": 1200,
+         "y": 237
+        },
+        {
+         "x": 700,
+         "y": 237
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FB7185"
+       },
+       "name": "right_panel"
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 700,
+        "y": 264
+       },
+       "size": {
+        "width": 420,
+        "height": 30
+       },
+       "font": {
+        "size": 22,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "2025",
+         "font": {
+          "size": 22,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "right_label",
+       "max_length": 24,
+       "min_length": 1
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 700,
+        "y": 304
+       },
+       "size": {
+        "width": 440,
+        "height": 96
+       },
+       "font": {
+        "size": 64,
+        "family": "Fraunces",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.05,
+        "letter_spacing": -2.2
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "1.012 fte",
+         "font": {
+          "size": 64,
+          "family": "Fraunces",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.05,
+          "letter_spacing": -2.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "right_value",
+       "max_length": 12,
+       "min_length": 1
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 700,
+        "y": 414
+       },
+       "size": {
+        "width": 420,
+        "height": 110
+       },
+       "font": {
+        "size": 20,
+        "family": "Inter",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.45,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Gemiddelde formatie in 2025.",
+         "font": {
+          "size": 20,
+          "family": "Inter",
+          "color": "#D2CBC0",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.45,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "right_detail",
+       "max_length": 90,
+       "min_length": 0
+      },
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 700,
+         "y": 536
+        },
+        {
+         "x": 860,
+         "y": 536
+        },
+        {
+         "x": 860,
+         "y": 596
+        },
+        {
+         "x": 700,
+         "y": 596
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FB7185"
+       },
+       "name": "delta_badge"
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 710,
+        "y": 551
+       },
+       "size": {
+        "width": 140,
+        "height": 30
+       },
+       "font": {
+        "size": 22,
+        "family": "Inter",
+        "color": "#15130F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "center",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "+44 fte",
+         "font": {
+          "size": 22,
+          "family": "Inter",
+          "color": "#15130F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "delta",
+       "max_length": 10,
+       "min_length": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "breakdown",
+   "description": "Horizontale balken van groot naar klein met directe labels, plus één uitgelicht aandeel rechts. Voor de opbouw van baten of kosten.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "heading",
+     "description": "Kleine bovenregel (organisatie · onderwerp) en een slidetitel die de conclusie geeft.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 52
+       },
+       "size": {
+        "width": 1120,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zorginstelling · jaarverslag 2025",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 84
+       },
+       "size": {
+        "width": 1120,
+        "height": 109
+       },
+       "font": {
+        "size": 46,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "letter_spacing": -0.8
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zvw-revalidatiezorg levert 93% van de baten",
+         "font": {
+          "size": 46,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12,
+          "letter_spacing": -0.8
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 64,
+       "min_length": 12
+      }
+     ]
+    },
+    {
+     "id": "breakdown_chart",
+     "description": "Gesorteerde horizontale balken.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "chart",
+       "position": {
+        "x": 80,
+        "y": 220
+       },
+       "size": {
+        "width": 760,
+        "height": 390
+       },
+       "chart_type": "horizontal_bar",
+       "colors": [
+        "#4A4238",
+        "#FB7185"
+       ],
+       "text_color": "#958C80",
+       "x_axis": false,
+       "y_axis": true,
+       "axis_color": "#958C80",
+       "categories": [
+        "Zvw-revalidatiezorg",
+        "Overige zorgbaten",
+        "Wlz en VWS",
+        "Beschikbaarheidbijdrage"
+       ],
+       "series": [
+        {
+         "name": "Baten (€ mln)",
+         "values": [
+          99.96,
+          5.92,
+          1.54,
+          0.55
+         ]
+        }
+       ],
+       "data_labels": "outside",
+       "legend": false,
+       "x_axis_grid": false,
+       "y_axis_grid": false,
+       "grid_color": "#3A342C",
+       "decorative": false,
+       "name": "breakdown_chart"
+      }
+     ]
+    },
+    {
+     "id": "breakdown_highlight",
+     "description": "Uitgelicht aandeel met toelichting.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 892,
+        "y": 250
+       },
+       "size": {
+        "width": 308,
+        "height": 90
+       },
+       "font": {
+        "size": 72,
+        "family": "Fraunces",
+        "color": "#FB7185",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.0,
+        "letter_spacing": -2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "93%",
+         "font": {
+          "size": 72,
+          "family": "Fraunces",
+          "color": "#FB7185",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.0,
+          "letter_spacing": -2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "highlight_value",
+       "max_length": 8,
+       "min_length": 1
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 892,
+        "y": 350
+       },
+       "size": {
+        "width": 308,
+        "height": 64
+       },
+       "font": {
+        "size": 22,
+        "family": "Inter",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "aandeel Zvw in de baten",
+         "font": {
+          "size": 22,
+          "family": "Inter",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "highlight_label",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 892,
+        "y": 426
+       },
+       "size": {
+        "width": 308,
+        "height": 150
+       },
+       "font": {
+        "size": 20,
+        "family": "Inter",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.45,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "€ 99,96 mln van de € 108,0 mln baten zorgverlening.",
+         "font": {
+          "size": 20,
+          "family": "Inter",
+          "color": "#D2CBC0",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.45,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "highlight_body",
+       "max_length": 110,
+       "min_length": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "table",
+   "description": "Strakke tabel met hoogstens zes rijen en vier kolommen, getallen rechts uitgelijnd. Alleen voor rijen met aangeleverde cijfers.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "heading",
+     "description": "Kleine bovenregel (organisatie · onderwerp) en een slidetitel die de conclusie geeft.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 52
+       },
+       "size": {
+        "width": 1120,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zorginstelling · jaarverslag 2025",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 84
+       },
+       "size": {
+        "width": 1120,
+        "height": 109
+       },
+       "font": {
+        "size": 46,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "letter_spacing": -0.8
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Kosten stijgen minder hard dan de opbrengsten",
+         "font": {
+          "size": 46,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12,
+          "letter_spacing": -0.8
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 64,
+       "min_length": 12
+      }
+     ]
+    },
+    {
+     "id": "table_intro",
+     "description": "Eén inleidende zin boven de tabel.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 212
+       },
+       "size": {
+        "width": 1120,
+        "height": 34
+       },
+       "font": {
+        "size": 22,
+        "family": "Inter",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Bedragen in € mln, boekjaar 2024 en 2025.",
+         "font": {
+          "size": 22,
+          "family": "Inter",
+          "color": "#D2CBC0",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "intro",
+       "max_length": 90,
+       "min_length": 0
+      }
+     ]
+    },
+    {
+     "id": "data_table",
+     "description": "Tabel over de volle breedte.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "table",
+       "position": {
+        "x": 80,
+        "y": 256
+       },
+       "size": {
+        "width": 1120,
+        "height": 300
+       },
+       "font": {
+        "size": 20,
+        "family": "Inter",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 0.0
+       },
+       "columns": [
+        {
+         "color": {
+          "color": "#15130F",
+          "opacity": 1
+         },
+         "font": {
+          "size": 20,
+          "family": "Inter",
+          "color": "#958C80",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         },
+         "alignment": "left",
+         "borders": {
+          "top": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "left": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "right": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "bottom": {
+           "color": "#FB7185",
+           "width": 2
+          }
+         },
+         "runs": [
+          {
+           "text": "Post"
+          }
+         ]
+        },
+        {
+         "color": {
+          "color": "#15130F",
+          "opacity": 1
+         },
+         "font": {
+          "size": 20,
+          "family": "Inter",
+          "color": "#958C80",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         },
+         "alignment": "right",
+         "borders": {
+          "top": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "left": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "right": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "bottom": {
+           "color": "#FB7185",
+           "width": 2
+          }
+         },
+         "runs": [
+          {
+           "text": "2024"
+          }
+         ]
+        },
+        {
+         "color": {
+          "color": "#15130F",
+          "opacity": 1
+         },
+         "font": {
+          "size": 20,
+          "family": "Inter",
+          "color": "#958C80",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         },
+         "alignment": "right",
+         "borders": {
+          "top": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "left": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "right": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "bottom": {
+           "color": "#FB7185",
+           "width": 2
+          }
+         },
+         "runs": [
+          {
+           "text": "2025"
+          }
+         ]
+        },
+        {
+         "color": {
+          "color": "#15130F",
+          "opacity": 1
+         },
+         "font": {
+          "size": 20,
+          "family": "Inter",
+          "color": "#958C80",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 0.0
+         },
+         "alignment": "right",
+         "borders": {
+          "top": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "left": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "right": {
+           "color": "#15130F",
+           "width": 0
+          },
+          "bottom": {
+           "color": "#FB7185",
+           "width": 2
+          }
+         },
+         "runs": [
+          {
+           "text": "Verschil"
+          }
+         ]
+        }
+       ],
+       "rows": [
+        [
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#F4EFE7",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Personeelskosten"
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#D2CBC0",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "right",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "€ 68,9 mln"
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#D2CBC0",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "right",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "€ 74,1 mln"
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#D2CBC0",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "right",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "+€ 5,2 mln"
+           }
+          ]
+         }
+        ],
+        [
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#F4EFE7",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Nettoresultaat"
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#D2CBC0",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "right",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "€ 4,4 mln"
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#D2CBC0",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "right",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "€ 6,8 mln"
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#D2CBC0",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "right",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "+€ 2,4 mln"
+           }
+          ]
+         }
+        ],
+        [
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#F4EFE7",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Bedrijfsopbrengsten"
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#D2CBC0",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "right",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "€ 98,3 mln"
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#D2CBC0",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "right",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "€ 108,2 mln"
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#15130F",
+           "opacity": 1
+          },
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#D2CBC0",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.2,
+           "letter_spacing": 0.0
+          },
+          "alignment": "right",
+          "borders": {
+           "top": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "left": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "right": {
+            "color": "#15130F",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#3A342C",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "+€ 9,9 mln"
+           }
+          ]
+         }
+        ]
+       ],
+       "decorative": false,
+       "name": "data_table",
+       "max_columns": 4,
+       "min_columns": 2,
+       "max_rows": 6,
+       "min_rows": 2
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "points",
+   "description": "Korte inleiding met drie of vier puntsgewijze bevindingen. Voor context, aanpak of kwalitatieve punten zonder cijferreeks.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "heading",
+     "description": "Kleine bovenregel (organisatie · onderwerp) en een slidetitel die de conclusie geeft.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 52
+       },
+       "size": {
+        "width": 1120,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Zorginstelling · jaarverslag 2025",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 84
+       },
+       "size": {
+        "width": 1120,
+        "height": 109
+       },
+       "font": {
+        "size": 46,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "letter_spacing": -0.8
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Drie ontwikkelingen bepalen 2025",
+         "font": {
+          "size": 46,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12,
+          "letter_spacing": -0.8
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 64,
+       "min_length": 12
+      }
+     ]
+    },
+    {
+     "id": "points_body",
+     "description": "Inleiding links, puntenlijst rechts.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 236
+       },
+       "size": {
+        "width": 400,
+        "height": 300
+       },
+       "font": {
+        "size": 26,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.35,
+        "letter_spacing": 0.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "De groei is breed gedragen, maar leunt op één financieringsstroom.",
+         "font": {
+          "size": 26,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.35,
+          "letter_spacing": 0.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "lead",
+       "max_length": 110,
+       "min_length": 0
+      },
+      {
+       "type": "text-list",
+       "position": {
+        "x": 560,
+        "y": 236
+       },
+       "size": {
+        "width": 640,
+        "height": 360
+       },
+       "font": {
+        "size": 22,
+        "family": "Inter",
+        "color": "#D2CBC0",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.4,
+        "letter_spacing": 0.0
+       },
+       "marker": "bullet",
+       "gap": 22,
+       "marker_gap": 14,
+       "items": [
+        [
+         {
+          "text": "Zvw-revalidatiezorg groeit en levert het grootste deel van de baten."
+         }
+        ],
+        [
+         {
+          "text": "Personeel groeit naar 1.012 fte, de kosten stijgen mee."
+         }
+        ],
+        [
+         {
+          "text": "Solvabiliteit en liquiditeit verbeteren."
+         }
+        ]
+       ],
+       "decorative": false,
+       "name": "point_list",
+       "max_items": 4,
+       "min_items": 2,
+       "max_item_length": 90,
+       "min_item_length": 10
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "conclusion",
+   "description": "Afsluiting met drie kernconclusies naast elkaar. Alleen als laatste slide.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Vaste achtergrond van de slide.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#15130F"
+       },
+       "name": "slide_background"
+      }
+     ]
+    },
+    {
+     "id": "heading",
+     "description": "Kleine bovenregel (organisatie · onderwerp) en een slidetitel die de conclusie geeft.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 52
+       },
+       "size": {
+        "width": 1120,
+        "height": 24
+       },
+       "font": {
+        "size": 15,
+        "family": "Inter",
+        "color": "#FB7185",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.2,
+        "letter_spacing": 2.0
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Samenvatting",
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#FB7185",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.2,
+          "letter_spacing": 2.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "kicker",
+       "max_length": 40,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 80,
+        "y": 84
+       },
+       "size": {
+        "width": 1120,
+        "height": 109
+       },
+       "font": {
+        "size": 46,
+        "family": "Fraunces",
+        "color": "#F4EFE7",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "letter_spacing": -0.8
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Wat de cijfers over 2025 laten zien",
+         "font": {
+          "size": 46,
+          "family": "Fraunces",
+          "color": "#F4EFE7",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12,
+          "letter_spacing": -0.8
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 64,
+       "min_length": 12
+      }
+     ]
+    },
+    {
+     "id": "takeaways",
+     "description": "Drie kernconclusies naast elkaar.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "grid",
+       "position": {
+        "x": 80,
+        "y": 250
+       },
+       "size": {
+        "width": 1120,
+        "height": 330
+       },
+       "columns": 3,
+       "rows": 1,
+       "gap": 48,
+       "align_items": "stretch",
+       "justify_items": "stretch",
+       "children": [
+        {
+         "type": "group",
+         "size": {
+          "width": 341,
+          "height": 330
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 1
+            },
+            {
+             "x": 0,
+             "y": 1
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F4EFE7"
+           },
+           "name": "takeaway_rule"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 24
+           },
+           "size": {
+            "width": 341,
+            "height": 110
+           },
+           "font": {
+            "size": 30,
+            "family": "Fraunces",
+            "color": "#F4EFE7",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.15,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Omzet +10%",
+             "font": {
+              "size": 30,
+              "family": "Fraunces",
+              "color": "#F4EFE7",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.15,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "takeaway_title",
+           "max_length": 40,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 150
+           },
+           "size": {
+            "width": 341,
+            "height": 160
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#D2CBC0",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Bedrijfsopbrengsten stijgen naar € 108,2 mln.",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#D2CBC0",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "takeaway_body",
+           "max_length": 100,
+           "min_length": 0
+          }
+         ],
+         "name": "takeaway"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 341,
+          "height": 330
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 1
+            },
+            {
+             "x": 0,
+             "y": 1
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F4EFE7"
+           },
+           "name": "takeaway_rule"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 24
+           },
+           "size": {
+            "width": 341,
+            "height": 110
+           },
+           "font": {
+            "size": 30,
+            "family": "Fraunces",
+            "color": "#F4EFE7",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.15,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Resultaat € 6,8 mln",
+             "font": {
+              "size": 30,
+              "family": "Fraunces",
+              "color": "#F4EFE7",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.15,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "takeaway_title",
+           "max_length": 40,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 150
+           },
+           "size": {
+            "width": 341,
+            "height": 160
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#D2CBC0",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Een stijging van € 2,4 mln ten opzichte van 2024.",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#D2CBC0",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "takeaway_body",
+           "max_length": 100,
+           "min_length": 0
+          }
+         ],
+         "name": "takeaway"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 341,
+          "height": 330
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 0
+            },
+            {
+             "x": 341,
+             "y": 1
+            },
+            {
+             "x": 0,
+             "y": 1
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F4EFE7"
+           },
+           "name": "takeaway_rule"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 24
+           },
+           "size": {
+            "width": 341,
+            "height": 110
+           },
+           "font": {
+            "size": 30,
+            "family": "Fraunces",
+            "color": "#F4EFE7",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.15,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Sterkere buffer",
+             "font": {
+              "size": 30,
+              "family": "Fraunces",
+              "color": "#F4EFE7",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.15,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "takeaway_title",
+           "max_length": 40,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 150
+           },
+           "size": {
+            "width": 341,
+            "height": 160
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#D2CBC0",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "letter_spacing": 0.0
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Solvabiliteit stijgt naar 37,6%.",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#D2CBC0",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45,
+              "letter_spacing": 0.0
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "takeaway_body",
+           "max_length": 100,
+           "min_length": 0
+          }
+         ],
+         "name": "takeaway"
+        }
+       ],
+       "name": "takeaway_grid",
+       "max_children": 3,
+       "min_children": 3
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

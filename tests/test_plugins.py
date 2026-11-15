@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 
 import digimv
 import main
+import presentations
 from fastapi.testclient import TestClient
 
 
@@ -35,12 +36,15 @@ class PluginsTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.data = patch.object(digimv, "DATA", Path(self.tmp.name))
         self.data.start()
+        self.no_presenton = patch.object(presentations, "configured", return_value=False)
+        self.no_presenton.start()
         self.client = TestClient(main.app)
         self.alice = {"cf-access-authenticated-user-email": "alice@example.test"}
         self.bob = {"cf-access-authenticated-user-email": "bob@example.test"}
 
     def tearDown(self):
         self.client.close()
+        self.no_presenton.stop()
         self.data.stop()
         self.tmp.cleanup()
 
@@ -97,7 +101,16 @@ class PluginsTest(unittest.TestCase):
                                         "description": "Maak een Canva-presentatie op basis van dia-inhoud.",
                                         "inputSchema": {
                                             "type": "object",
-                                            "properties": {"title": {"type": "string"}, "slides": {"type": "array"}},
+                                            "properties": {
+                                                "title": {"type": "string"},
+                                                "slides": {"type": "array"},
+                                                "operation": {
+                                                    "anyOf": [
+                                                        {"type": "object", "properties": {"type": {"type": "string", "const": "update_title"}}},
+                                                        {"type": "object", "properties": {"type": {"type": "string", "const": "replace_text"}}},
+                                                    ]
+                                                },
+                                            },
                                             "required": ["title"],
                                         },
                                     }
@@ -152,6 +165,9 @@ class PluginsTest(unittest.TestCase):
             self.assertEqual(plugin["header_keys"], ["X-Workspace"])
             self.assertEqual(len(plugin["tools"]), 1)
             self.assertEqual(plugin["tools"][0]["name"], "create_presentation")
+            op_anyof = plugin["tools"][0]["inputSchema"]["properties"]["operation"]["anyOf"]
+            self.assertEqual(op_anyof[0]["properties"]["type"]["enum"], ["update_title"])
+            self.assertEqual(op_anyof[1]["properties"]["type"]["enum"], ["replace_text"])
 
             # Owner isolation: Bob cannot see or call Alice's plugin.
             self.assertEqual(self.call("GET", "/plugins", headers=self.bob).json(), [])

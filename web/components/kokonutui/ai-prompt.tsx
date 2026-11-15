@@ -176,9 +176,6 @@ export default function AI_Prompt({
       value.slice(activeMention.end).replace(/^\s+/, "");
     const nextCaret = activeMention.start + replacement.length;
     setValue(nextText);
-    if (opt.kind === "plugin" && onTogglePlugin && !selectedPlugins.includes(opt.plugin.handle)) {
-      onTogglePlugin(opt.plugin.handle);
-    }
     setDismissedAt(null);
     requestAnimationFrame(() => {
       const el = textareaRef.current;

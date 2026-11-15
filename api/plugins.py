@@ -206,6 +206,18 @@ def env_token(handle: str) -> str:
     return ""
 
 
+def _normalize_schema(node):
+    """Ensure JSON Schema 'const' literals also expose single-value 'enum' for Gemini/OpenAI tool calling."""
+    if isinstance(node, list):
+        return [_normalize_schema(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    out = {k: _normalize_schema(v) for k, v in node.items()}
+    if "const" in out and "enum" not in out and isinstance(out["const"], (str, int, float, bool)):
+        out["enum"] = [out["const"]]
+    return out
+
+
 def unpack(row) -> dict:
     d = dict(row)
     try:
@@ -221,7 +233,9 @@ def unpack(row) -> dict:
     d["enabled"] = bool(d["enabled"])
     d["has_token"] = bool(token)
     d["header_keys"] = sorted(headers.keys())
-    d["tools"] = tools if isinstance(tools, list) else []
+    d["tools"] = [
+        {**t, "inputSchema": _normalize_schema(t.get("inputSchema"))} if isinstance(t, dict) else t for t in (tools if isinstance(tools, list) else [])
+    ]
     return d
 
 
@@ -439,6 +453,8 @@ def discover_tools(url: str, transport: str, token: str, custom_headers: dict[st
         schema = item.get("inputSchema")
         if not isinstance(schema, dict) or schema.get("type") != "object":
             schema = {"type": "object", "properties": {}}
+        else:
+            schema = _normalize_schema(schema)
         cleaned.append(
             {
                 "name": name,
@@ -479,12 +495,14 @@ def call_mcp_tool(url: str, transport: str, token: str, custom_headers: dict[str
             else:
                 items.append(block)
     structured = result.get("structuredContent")
+    joined_text = "\n\n".join(texts).strip()
     if is_error:
-        msg = "\n".join(texts).strip() or "De plugin gaf een foutmelding terug."
+        msg = joined_text or "De plugin gaf een foutmelding terug."
         raise RuntimeError(msg)
+    compact_items = [b for b in items if b.get("type") != "text"] if len(joined_text) > 10_000 else items
     return {
-        "text": "\n\n".join(texts).strip(),
-        "content": items,
+        "text": joined_text,
+        "content": compact_items,
         **({"structuredContent": structured} if structured is not None else {}),
     }
 
