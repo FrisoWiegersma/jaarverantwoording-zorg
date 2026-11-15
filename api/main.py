@@ -13,6 +13,8 @@ from typing import Annotated
 import datasets
 import digimv
 import documents
+import plugins
+import presentations
 import project_files
 import projects
 import sources
@@ -42,6 +44,7 @@ def _refresh(stop):
 async def lifespan(app):
     # A copied index can open on older SQLite even when its trigram tokenizer cannot run.
     digimv.search("zorg", limit=1)
+    presentations.recover_operations()
     stop = projects.start_worker()
     threading.Thread(target=_refresh, args=(stop,), daemon=True).start()
     yield
@@ -49,6 +52,8 @@ async def lifespan(app):
 
 
 app = FastAPI(title="DigiMV jaarverantwoording", lifespan=lifespan)
+app.include_router(plugins.router)
+app.include_router(presentations.router)
 app.include_router(projects.router)
 app.include_router(project_files.router)
 
@@ -59,7 +64,7 @@ async def private_boundary(request: Request, call_next):
 
     from fastapi.responses import JSONResponse
 
-    private = request.url.path.startswith(("/projects", "/chats"))
+    private = request.url.path.startswith(("/projects", "/chats", "/plugins", "/presentations"))
     if private and request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("origin")
         expected = os.environ.get("APP_ORIGIN", "http://localhost:3210").rstrip("/")
@@ -70,7 +75,7 @@ async def private_boundary(request: Request, call_next):
         if not length.isdigit():
             return JSONResponse({"detail": "Content-Length vereist voor uploads"}, status_code=411)
         if int(length) > projects.MAX_FILE + 1024 * 1024:
-            return JSONResponse({"detail": "Maximaal 25 MB per PDF"}, status_code=413)
+            return JSONResponse({"detail": "Maximaal 25 MB per bestand"}, status_code=413)
     response = await call_next(request)
     if private:
         response.headers["Cache-Control"] = "private, no-store"
