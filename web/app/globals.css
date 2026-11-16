@@ -107,12 +107,6 @@
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  html:has([data-landing]) {
-    scroll-behavior: smooth;
-  }
-}
-
 /* Answer prose: what the model writes, in Markdown. */
 .answer > * + * {
   margin-top: 0.85em;
