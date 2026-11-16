@@ -6,6 +6,8 @@ import "./globals.css";
 const atkinson = Atkinson_Hyperlegible_Next({
   variable: "--font-atkinson",
   subsets: ["latin"],
+  adjustFontFallback: false,
+  fallback: ["Arial", "sans-serif"],
 });
 
 export const metadata: Metadata = {
@@ -18,7 +20,7 @@ const THEME_SCRIPT = `(function(){var r=document.documentElement,m=matchMedia("(
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="nl" className={`${atkinson.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="nl" className={`${atkinson.variable} h-full antialiased`} data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
