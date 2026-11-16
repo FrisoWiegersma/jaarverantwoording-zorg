@@ -14,7 +14,7 @@
  * The trigger sits in the prompt footer, so the surrounding bar of the original is gone.
  */
 
-import { Check, ChevronDown } from "lucide-react";
+import { Bot, Check, ChevronDown } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { type EffortLevel, type ModelOption, type ModelSelection, PROVIDER_NAMES } from "@/lib/models";
@@ -208,14 +208,16 @@ export default function AIModelSelector({
           aria-expanded={open}
           aria-label={`Model: ${model.name}${effort ? `, nadenken ${effort.label.toLowerCase()}` : ""}. Wijzigen`}
           className={cn(
-            "flex h-11 items-center gap-2 rounded-full px-3 text-sm text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+            "flex h-11 min-w-11 items-center justify-center gap-2 rounded-full px-3 text-sm text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
             open && "bg-muted text-foreground"
           )}
           onClick={() => setOpen((current) => !current)}
           ref={triggerRef}
           type="button"
         >
-          <span className="font-medium text-foreground">{model.name}</span>
+          {/* Phones get icons only; the name stays in the aria-label and the open panel. */}
+          <Bot aria-hidden="true" className="size-[18px] text-foreground sm:hidden" />
+          <span className="hidden font-medium text-foreground sm:inline">{model.name}</span>
           {effort && (
             <span className="flex items-center gap-1.5">
               <EffortGlyph count={model.efforts.length} level={level} />
@@ -224,7 +226,7 @@ export default function AIModelSelector({
           )}
           <ChevronDown
             aria-hidden="true"
-            className={cn("size-3.5 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]", open && "rotate-180")}
+            className={cn("hidden size-3.5 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] sm:block", open && "rotate-180")}
           />
         </button>
         {/* After the trigger in the DOM, so Tab moves from it into the panel, which still opens above. */}

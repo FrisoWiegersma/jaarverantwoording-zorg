@@ -370,16 +370,18 @@ export default function AIPluginSelector({
           aria-expanded={open}
           aria-label={`MCP-plugins (${triggerLabel}). Openen`}
           className={cn(
-            "flex h-11 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+            "flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
             (open || activeCount > 0) && "bg-muted text-foreground"
           )}
           type="button"
         >
-          <AtSign aria-hidden="true" className="size-3.5 text-foreground" />
-          <span className="font-medium text-foreground">{triggerLabel}</span>
+          <AtSign aria-hidden="true" className="size-[18px] text-foreground sm:size-3.5" />
+          {/* Phones show only the count of active plugins; the label stays in the aria-label. */}
+          <span className="hidden font-medium text-foreground sm:inline">{triggerLabel}</span>
+          {activeCount > 0 && <span className="font-medium text-foreground tabular-nums sm:hidden">{activeCount}</span>}
           <ChevronDown
             aria-hidden="true"
-            className={cn("size-3.5 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]", open && "rotate-180")}
+            className={cn("hidden size-3.5 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] sm:block", open && "rotate-180")}
           />
         </button></PopoverTrigger>
 
