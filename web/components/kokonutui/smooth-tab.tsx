@@ -286,7 +286,7 @@ export default function SmoothTab({
 
   const tabId = (i: number) => `${baseId}-tab-${i}`;
   const panelId = (i: number) => `${baseId}-panel-${i}`;
-  const tab = "flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 font-semibold text-[0.9rem]";
+  const tab = "flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-2.5 font-semibold text-[0.85rem] sm:px-3.5 sm:text-[0.9rem]";
 
   return (
     <div className={cn("flex w-full flex-col gap-3", className)}>
