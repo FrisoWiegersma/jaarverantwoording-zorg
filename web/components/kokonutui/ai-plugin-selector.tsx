@@ -170,6 +170,8 @@ export default function AIPluginSelector({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [armedDelete, setArmedDelete] = useState<string | null>(null);
+  const [oauthPending, setOauthPending] = useState(false);
+  const [callbackUrl, setCallbackUrl] = useState("");
 
 
   useEffect(() => {
@@ -204,6 +206,7 @@ export default function AIPluginSelector({
       if (event.origin !== window.location.origin) return;
       const data = event.data as { type?: string; handle?: string } | null;
       if (data?.type !== "mcp-oauth-complete") return;
+      setOauthPending(false);
       setError("");
       setNotice(data.handle ? `${data.handle} verbonden` : "Plugin verbonden");
       onChanged();
@@ -212,18 +215,36 @@ export default function AIPluginSelector({
     return () => window.removeEventListener("message", onMessage);
   }, [onChanged]);
 
-  const startOAuth = (p: Plugin) => {
-    setError("");
-    setNotice(`Log in bij ${p.name} in het geopende venster…`);
+  const openOAuthWindow = (path: string) => {
     const width = 520;
     const height = 680;
     const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
     const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
-    window.open(
-      `/digimv/plugins/${encodeURIComponent(p.id)}/oauth/start`,
-      "mcp-oauth",
-      `popup=yes,width=${width},height=${height},left=${left},top=${top}`
-    );
+    window.open(path, "mcp-oauth", `popup=yes,width=${width},height=${height},left=${left},top=${top}`);
+  };
+
+  const startOAuth = (p: Plugin) => {
+    setError("");
+    setNotice(`Log in bij ${p.name} in het geopende venster…`);
+    setCallbackUrl("");
+    setOauthPending(true);
+    openOAuthWindow(`/digimv/plugins/${encodeURIComponent(p.id)}/oauth/start`);
+  };
+
+  // Canva, Asana and Intercom only redirect to 127.0.0.1, which doesn't load outside a local install; the pasted
+  // address carries the code and state to the real callback.
+  const finishOAuth = (e: React.FormEvent) => {
+    e.preventDefault();
+    let params: URLSearchParams | null = null;
+    try {
+      params = new URL(callbackUrl.trim()).searchParams;
+    } catch {}
+    if (!params?.get("state") || !(params.get("code") || params.get("error"))) {
+      setError("Dit adres bevat geen inlogcode. Kopieer de hele adresregel van het inlogvenster.");
+      return;
+    }
+    setError("");
+    openOAuthWindow(`/digimv/plugins/oauth/callback?${params.toString()}`);
   };
 
   const qLower = query.trim().toLowerCase();
@@ -623,6 +644,31 @@ export default function AIPluginSelector({
                 >
                   {error || notice}
                 </p>
+              )}
+
+              {oauthPending && (
+                <form className="mx-1.5 mb-1.5 space-y-1" onSubmit={finishOAuth}>
+                  <label className="block space-y-1">
+                    <span className="block text-muted-foreground text-xs">
+                      Laadt het inlogvenster na het inloggen niet (127.0.0.1)? Plak het adres van dat venster hier.
+                    </span>
+                    <input
+                      autoComplete="off"
+                      className="h-9 w-full rounded-lg border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      maxLength={4000}
+                      onChange={(e) => setCallbackUrl(e.target.value)}
+                      placeholder="http://127.0.0.1/digimv/plugins/oauth/callback?code=…"
+                      required
+                      value={callbackUrl}
+                    />
+                  </label>
+                  <div className="flex justify-end">
+                    <CommandButton className="h-9 min-h-9 px-3.5 text-xs" global={false} keysClassName="hidden sm:flex" shortcut="enter" type="submit">
+                      <Check aria-hidden="true" className="size-3.5" />
+                      <span>Inloggen afronden</span>
+                    </CommandButton>
+                  </div>
+                </form>
               )}
         </PopoverContent>
       </div>

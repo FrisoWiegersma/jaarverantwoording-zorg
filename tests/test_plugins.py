@@ -309,6 +309,26 @@ class PluginsTest(unittest.TestCase):
             self.assertEqual(len(plugins_list), 1)
             self.assertTrue(plugins_list[0]["has_token"])
             self.assertEqual(plugins_list[0]["tools"][0]["name"], "create_deck")
+            self.assertEqual(qs["redirect_uri"], ["http://localhost:3210/digimv/plugins/oauth/callback"])
+
+            # 5. Canva rejects public redirect URIs, so a public install sends its login to loopback and the
+            # pasted address completes it with the same redirect URI.
+            with patch.dict("os.environ", {"APP_ORIGIN": "https://zorg.example"}):
+                start = self.call("GET", f"/plugins/{pid}/oauth/start", follow_redirects=False)
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(start.headers["location"]).query)
+            self.assertEqual(qs["redirect_uri"], ["http://127.0.0.1/digimv/plugins/oauth/callback"])
+            seen_redirect = {}
+            plain_open = fake_open
+
+            def capture_open(req, timeout=45):
+                if req.full_url == "https://api.canva.com/rest/v1/oauth/token":
+                    seen_redirect.update(urllib.parse.parse_qs(req.data.decode("utf-8")))
+                return plain_open(req, timeout)
+
+            with patch("urllib.request.OpenerDirector.open", side_effect=capture_open):
+                cb = self.call("GET", f"/plugins/oauth/callback?code=auth-code-123&state={qs['state'][0]}")
+            self.assertIn("mcp-oauth-complete", cb.text)
+            self.assertEqual(seen_redirect["redirect_uri"], ["http://127.0.0.1/digimv/plugins/oauth/callback"])
 
     def test_mcp_registry_search_combines_verified_and_live_registry(self):
         def fake_open(req, timeout=45):

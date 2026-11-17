@@ -29,6 +29,10 @@ FORBIDDEN_HEADERS = {"host", "content-length", "transfer-encoding", "connection"
 TRANSPORTS = {"auto", "streamable_http", "sse"}
 MCP_TIMEOUT = 45
 OAUTH_TTL = 600
+# These logins reject any redirect URI that is not on loopback (checked 2026-11: Canva at authorize, Asana and
+# Intercom at client registration).
+LOOPBACK_REDIRECT_HOSTS = {"mcp.canva.com", "mcp.asana.com", "mcp.intercom.com"}
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 # In-memory pending PKCE OAuth flows: state -> {pid, owner, code_verifier, token_endpoint, client_id, client_secret, redirect_uri, expires}
 _PENDING_OAUTH: dict[str, dict] = {}
@@ -700,6 +704,10 @@ def oauth_start(pid: str, request: Request):
         row = dict(get_row(db, pid, user))
     url = validate_url(row["url"])
     app_origin = os.environ.get("APP_ORIGIN", "http://localhost:3210").rstrip("/")
+    if urllib.parse.urlsplit(url).hostname in LOOPBACK_REDIRECT_HOSTS and urllib.parse.urlsplit(app_origin).hostname not in LOOPBACK_HOSTS:
+        # The login then ends on a page that doesn't load; the user pastes its address into the app, which opens
+        # the callback below with the same code and state.
+        app_origin = "http://127.0.0.1"
     redirect_uri = f"{app_origin}/digimv/plugins/oauth/callback"
     meta = discover_oauth_metadata(url)
     auth_endpoint = meta.get("authorization_endpoint")
