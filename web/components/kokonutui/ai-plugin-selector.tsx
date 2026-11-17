@@ -420,7 +420,7 @@ export default function AIPluginSelector({
                       aria-label="Zoek een plugin"
                       className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Zoek plugin (Canva, Notion, Figma…)"
+                      placeholder="Zoek plugin (Canva, Notion, Linear…)"
                       ref={searchRef}
                       value={query}
                     />

@@ -63,22 +63,6 @@ PRESETS = [
         "transport": "streamable_http",
     },
     {
-        "id": "figma",
-        "handle": "figma",
-        "name": "Figma",
-        "description": "Designs, frames en componenten uit Figma ophalen of inspecteren.",
-        "url": "https://mcp.figma.com/mcp",
-        "transport": "streamable_http",
-    },
-    {
-        "id": "github",
-        "handle": "github",
-        "name": "GitHub",
-        "description": "Repositories, issues, pull requests en documentatie doorzoeken.",
-        "url": "https://api.githubcopilot.com/mcp/",
-        "transport": "streamable_http",
-    },
-    {
         "id": "atlassian",
         "handle": "atlassian",
         "name": "Atlassian (Jira & Confluence)",
